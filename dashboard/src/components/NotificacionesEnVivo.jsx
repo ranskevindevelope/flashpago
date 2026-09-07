@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 import { createApiClient } from '../services/api';
 import { formatearMonto } from '../utils/formato';
+import { notificarSistema } from '../utils/notificaciones';
 
 /**
  * NotificacionesEnVivo — Muestra en la esquina superior derecha una notificación
@@ -55,8 +56,15 @@ function NotificacionesEnVivo({ onLogout }) {
     }
   }, []);
 
-  // Mostrar un toast (y sonar/anunciar en voz para pagos REAL verificados)
+  // Con la pestaña oculta el toast no se ve y el navegador bloquea el audio,
+  // así que ahí se avisa por notificación del sistema. Con la pestaña al
+  // frente se usa el toast de siempre, con campana y voz.
   const mostrarNotificacion = useCallback(({ tipo, titulo, detalle, monto, nombreCliente }) => {
+    if (document.hidden) {
+      notificarSistema({ titulo, cuerpo: detalle, tag: `flashpago-${tipo}` });
+      return;
+    }
+
     const id = Date.now() + Math.random();
     setNotificaciones((prev) => [...prev, { id, tipo, titulo, detalle }]);
     if (tipo === 'real') {
@@ -69,8 +77,10 @@ function NotificacionesEnVivo({ onLogout }) {
     }, 5000);
   }, [reproducirSonido, anunciarPagoEnVoz]);
 
-  // Detección de novedades
-  const revisarNovedades = useCallback(async () => {
+  // Detección de novedades.
+  // `modoResumen` se usa al volver a la pestaña: en vez de un aviso por cada
+  // pago que entró mientras nadie miraba, se muestra uno solo con el total.
+  const revisarNovedades = useCallback(async (modoResumen = false) => {
     try {
       // 1. Pagos REAL recientes (detectar nuevos por id)
       const pagos = await api.request('/api/dashboard/pagos?limite=10');
@@ -81,15 +91,27 @@ function NotificacionesEnVivo({ onLogout }) {
           const nuevos = pagos
             .filter((p) => p.id > ultimoPagoId.current)
             .sort((a, b) => a.id - b.id);
-          nuevos.forEach((p) => {
+
+          if (modoResumen && nuevos.length > 1) {
+            const total = nuevos.reduce((suma, p) => suma + (p.monto || 0), 0);
+            // Sin `monto`: suena la campana pero no se dispara la voz, que
+            // encimaría un anuncio por pago.
             mostrarNotificacion({
               tipo: 'real',
-              titulo: 'Nuevo pago verificado',
-              detalle: `${p.nombre_cliente || 'Cliente'} pagó ${formatearMonto(p.monto)} · ${p.banco || ''}`,
-              monto: p.monto,
-              nombreCliente: p.nombre_cliente,
+              titulo: `${nuevos.length} pagos mientras no estabas`,
+              detalle: `${formatearMonto(total)} en total · revisa la lista de pagos`,
             });
-          });
+          } else {
+            nuevos.forEach((p) => {
+              mostrarNotificacion({
+                tipo: 'real',
+                titulo: 'Nuevo pago verificado',
+                detalle: `${p.nombre_cliente || 'Cliente'} pagó ${formatearMonto(p.monto)} · ${p.banco || ''}`,
+                monto: p.monto,
+                nombreCliente: p.nombre_cliente,
+              });
+            });
+          }
         }
         ultimoPagoId.current = nuevoMax;
       }
@@ -156,9 +178,62 @@ function NotificacionesEnVivo({ onLogout }) {
     };
     inicial();
 
+    // Este ciclo NO se pausa con la pestaña oculta: es justamente ahí donde
+    // hace falta, para poder mandar la notificación del sistema. El navegador
+    // igual lo frena a ~1 vez por minuto en segundo plano, que para avisar de
+    // un pago está bien.
     const intervalo = setInterval(revisarNovedades, 8000);
-    return () => clearInterval(intervalo);
+
+    // Al volver se avisa lo que haya quedado sin ver (por ejemplo si el
+    // permiso de notificaciones está denegado), resumido en un solo toast:
+    // 30 anuncios de voz encimados no le sirven a nadie.
+    const alVolver = () => {
+      if (document.hidden) return;
+      revisarNovedades(true);
+    };
+    document.addEventListener('visibilitychange', alVolver);
+
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
   }, [api, revisarNovedades]);
+
+  // Canal en vivo: el servidor avisa apenas verifica un pago, así el anuncio
+  // suena en el momento y no cuando toque el ciclo de consulta. El polling de
+  // arriba se mantiene como respaldo por si la conexión se cae o un proxy la
+  // bloquea; `ultimoPagoId` evita que el mismo pago se anuncie dos veces.
+  useEffect(() => {
+    const token = localStorage.getItem('fp_token');
+    if (!token || typeof EventSource === 'undefined') return undefined;
+
+    const fuente = new EventSource(`/api/eventos?token=${encodeURIComponent(token)}`);
+
+    fuente.addEventListener('pago', (evento) => {
+      try {
+        const pago = JSON.parse(evento.data);
+        mostrarNotificacion({
+          tipo: 'real',
+          titulo: 'Nuevo pago verificado',
+          detalle: `${pago.nombre_cliente || 'Cliente'} pagó ${formatearMonto(pago.monto)} · ${pago.banco || ''}`,
+          monto: pago.monto,
+          nombreCliente: pago.nombre_cliente,
+        });
+        // Se adelanta el marcador para que el ciclo de respaldo no lo tome
+        // como nuevo y lo anuncie una segunda vez.
+        if (pago.id) ultimoPagoId.current = Math.max(ultimoPagoId.current, pago.id);
+      } catch (err) {
+        console.debug('Evento de pago ilegible');
+      }
+    });
+
+    fuente.onerror = () => {
+      // EventSource reintenta solo; si no lo logra, queda el polling.
+      console.debug('Canal en vivo interrumpido, se reintenta solo');
+    };
+
+    return () => fuente.close();
+  }, [mostrarNotificacion]);
 
   // Estilo e icono según tipo (usa los mismos iconos de lucide-react del dashboard)
   const estilo = (tipo) => {

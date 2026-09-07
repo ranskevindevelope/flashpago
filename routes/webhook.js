@@ -12,6 +12,7 @@ const {
   marcarNegocioPagado, actualizarPagoPlataforma, obtenerAdminDeNegocio,
 } = require('../db');
 const { enviarMensaje, descargarMediaMeta } = require('../bot/openwa');
+const eventos = require('../eventos');
 const { formatearResultado, guardarFoto } = require('../bot/utils');
 const { pagosPendientes, historialPagos } = require('../bot/state');
 const comandos = require('../bot/comandos');
@@ -397,7 +398,7 @@ router.post('/', async (req, res) => {
     // ─── Guardar el pago en la base de datos ────────────
     if (verificacion.estado === 'REAL') {
       try {
-        await guardarPago({
+        const pagoId = await guardarPago({
           monto: montoNum,
           referencia: datos.referencia || null,
           banco: datos.banco || null,
@@ -411,6 +412,16 @@ router.post('/', async (req, res) => {
           foto: nombreFoto,
         });
         console.log('[DB] Pago guardado (negocio:', negocio_id, ')');
+
+        // Aviso inmediato a los dashboards abiertos de este negocio, para que
+        // el anuncio suene ahora y no cuando le toque preguntar. Va el id para
+        // que el ciclo de consulta no lo vuelva a anunciar.
+        eventos.emitir(negocio_id, 'pago', {
+          id: pagoId,
+          monto: montoNum,
+          banco: datos.banco || null,
+          nombre_cliente: pagoGmail?.nombre || null,
+        });
       } catch (err) {
         console.error('[DB] Error guardando pago:', err.message);
       }

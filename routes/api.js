@@ -42,6 +42,7 @@ const {
   gastosPorCategoria,
   eliminarGasto,
 } = require('../db');
+const eventos = require('../eventos');
 
 // ─── Google OAuth config ────────────────────────────────
 const CREDENTIALS_PATH = path.join(__dirname, '..', 'credentials.json');
@@ -565,6 +566,7 @@ router.get('/negocios/uso/plan', verificarToken, async (req, res) => {
       limite: negocio.limite_comprobantes,
       usados,
       porcentaje: Math.round((usados / negocio.limite_comprobantes) * 100),
+      horario_configurado: !!negocio.horario_actualizado_en,
       trial: {
         activo: trial.activo,
         pagado: trial.pagado || false,
@@ -1471,6 +1473,48 @@ router.delete('/ventas/gasto/:id', verificarToken, soloAdmin, async (req, res) =
     res.json({ ok: true, mensaje: 'Gasto eliminado' });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ─── Canal en vivo (SSE) ────────────────────────────────
+// El dashboard se suscribe y recibe el aviso apenas se verifica un pago, sin
+// esperar al ciclo de consulta. EventSource no permite mandar cabeceras, por
+// eso el token va en la query (verificarToken ya lo acepta así).
+router.get('/eventos', verificarToken, (req, res) => {
+  const nid = req.user.negocio_id;
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    // Evita que un proxy (nginx) acumule la respuesta en un buffer y retrase
+    // los eventos, que es justo lo que estamos tratando de eliminar.
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('retry: 5000\n\n');
+
+  eventos.agregarConexion(nid, res);
+
+  // Latido: mantiene viva la conexión frente a proxies que cortan por
+  // inactividad. Es un comentario SSE, el navegador lo ignora.
+  const latido = setInterval(() => {
+    try { res.write(': latido\n\n'); } catch { /* la conexión ya murió */ }
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(latido);
+    eventos.quitarConexion(nid, res);
+  });
+});
+
+// ─── Estado de la sesión de WhatsApp del bot ────────────
+router.get('/bot/estado', verificarToken, async (req, res) => {
+  try {
+    const { estadoSesionWhatsapp } = require('../bot/openwa');
+    const estado = await estadoSesionWhatsapp();
+    res.json({ ok: true, ...estado });
+  } catch (err) {
+    res.json({ ok: true, estado: 'desconocido', detalle: 'No se pudo consultar el estado' });
   }
 });
 

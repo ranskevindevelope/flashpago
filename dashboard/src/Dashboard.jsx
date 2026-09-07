@@ -5,6 +5,7 @@ import { createApiClient } from './services/api';
 import Sidebar from './components/Sidebar';
 import DashboardHeader from './components/DashboardHeader';
 import NotificacionesEnVivo from './components/NotificacionesEnVivo';
+import IndicadorActualizacion from './components/IndicadorActualizacion';
 import Button from './components/ui/Button';
 import { FilaSkeleton, TarjetaSkeleton } from './components/ui/Skeleton';
 import SeccionBuscar from './secciones/SeccionBuscar';
@@ -14,6 +15,7 @@ import CierreCaja from './secciones/CierreCaja';
 import { useUsuarios } from './hooks/useUsuarios';
 import { formatearMonto, formatearMiles, soloDigitos } from './utils/formato';
 import { getBancoBadge, getPlanLabel, getPlanColor } from './utils/bancos';
+import { permisoNotificaciones, pedirPermisoNotificaciones } from './utils/notificaciones';
 
 // Recharts pesa ~366 KB: se carga solo cuando el usuario abre una sección
 // que realmente muestra una gráfica, no al entrar al dashboard.
@@ -92,6 +94,18 @@ function Dashboard({ onLogout }) {
   const [cargandoConfig, setCargandoConfig] = useState(false);
   const [guardandoConfig, setGuardandoConfig] = useState(false);
 
+  // ─── Avisos del sistema operativo ──────────────────────
+  const [permisoAvisos, setPermisoAvisos] = useState(() => permisoNotificaciones());
+  const activarAvisos = async () => {
+    const resultado = await pedirPermisoNotificaciones();
+    setPermisoAvisos(resultado);
+    if (resultado === 'granted') {
+      toast.success('Listo, te avisaremos aunque el panel no esté al frente');
+    } else if (resultado === 'denied') {
+      toast.error('El navegador bloqueó los avisos');
+    }
+  };
+
   // ─── Estado para la voz de las notificaciones de pago ───
   const [vocesDisponibles, setVocesDisponibles] = useState([]);
   const [vozSeleccionada, setVozSeleccionada] = useState(() => localStorage.getItem('fp_voz_notificacion') || '');
@@ -106,6 +120,9 @@ function Dashboard({ onLogout }) {
   const [planInfo, setPlanInfo] = useState(null);
   const [pagandoPlan, setPagandoPlan] = useState(null);
   const [gmailEstado, setGmailEstado] = useState(null);
+  const [botEstado, setBotEstado] = useState(null);
+  const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
+  const [errorActualizacion, setErrorActualizacion] = useState(false);
   const [gmailCargando, setGmailCargando] = useState(false);
   const [modalPagoPlan, setModalPagoPlan] = useState(null);
   const [transferenciaInfo, setTransferenciaInfo] = useState(null);
@@ -211,8 +228,18 @@ function Dashboard({ onLogout }) {
 
   useEffect(() => {
     cargarDatos();
-    const intervalo = setInterval(() => cargarDatos(), 30000);
-    return () => clearInterval(intervalo);
+    // Con la pestaña en segundo plano nadie está mirando: seguir pidiendo
+    // cada 30 s solo gasta batería y carga el servidor. Al volver se
+    // refresca de inmediato para no mostrar datos viejos.
+    const intervalo = setInterval(() => {
+      if (!document.hidden) cargarDatos();
+    }, 30000);
+    const alVolver = () => { if (!document.hidden) cargarDatos(); };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
   }, [diasGrafica, api]);
 
   useEffect(() => {
@@ -229,7 +256,7 @@ function Dashboard({ onLogout }) {
 
   const cargarDatos = async () => {
     try {
-      const [resTotales, resPagos, resStats, resPendientes, resDuplicados, resPlan, resGmail, resVentasHora, resVentasResumen] = await Promise.all([
+      const [resTotales, resPagos, resStats, resPendientes, resDuplicados, resPlan, resGmail, resVentasHora, resVentasResumen, resBot] = await Promise.all([
         api.request('/api/dashboard/totales'),
         api.request('/api/dashboard/pagos?limite=20'),
         api.request(`/api/dashboard/stats?dias=${diasGrafica}`),
@@ -239,6 +266,7 @@ function Dashboard({ onLogout }) {
         api.request('/api/gmail/estado').catch(() => null),
         api.request('/api/dashboard/ventas-hoy-por-hora').catch(() => null),
         api.request('/api/ventas/resumen').catch(() => null),
+        api.request('/api/bot/estado').catch(() => null),
       ]);
 
       setTotales(resTotales || { dia: { total: 0, cantidad: 0 }, mes: { total: 0, cantidad: 0 } });
@@ -248,11 +276,17 @@ function Dashboard({ onLogout }) {
       setDuplicadosPendientes(Array.isArray(resDuplicados) ? resDuplicados : []);
       if (resPlan?.ok) setPlanInfo(resPlan);
       if (resGmail?.ok) setGmailEstado(resGmail);
+      if (resBot?.ok) setBotEstado(resBot);
       if (resVentasHora?.ok) setVentasPorHora(resVentasHora.datos);
       if (resVentasResumen?.ok) setVentasResumen(resVentasResumen);
+      setUltimaActualizacion(Date.now());
+      setErrorActualizacion(false);
       setCargando(false);
     } catch (err) {
       console.error('Error cargando datos:', err);
+      // No se toca ultimaActualizacion: el indicador debe seguir mostrando
+      // de cuándo son los datos que estás viendo, no la hora del fallo.
+      setErrorActualizacion(true);
       setCargando(false);
     }
   };
@@ -868,22 +902,49 @@ function Dashboard({ onLogout }) {
                       {gmailEstado.conectado ? `Gmail: ${gmailEstado.email}` : 'Conectar Gmail'}
                     </button>
                   )}
-                  <div className="dashboard-live"><Activity size={15} /> Actualización automática</div>
+                  <IndicadorActualizacion ultima={ultimaActualizacion} hayError={errorActualizacion} />
                 </div>
               </div>
 
+              {/* ─── Alerta: WhatsApp caído ───────────── */}
+              {/* Va de primero y no se puede ocultar: mientras la sesión esté
+                  caída no entra ningún comprobante, y esa falla es silenciosa
+                  — el negocio se entera cuando un cliente reclama. */}
+              {(botEstado?.estado === 'desconectado' || botEstado?.estado === 'iniciando') && (
+                <div className={`bot-alerta ${botEstado.estado === 'iniciando' ? 'bot-alerta--aviso' : ''}`}>
+                  <div className="bot-alerta-icono">
+                    {botEstado.estado === 'iniciando' ? <Clock size={20} /> : <WifiOff size={20} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div className="bot-alerta-titulo">
+                      {botEstado.estado === 'iniciando'
+                        ? 'Reconectando la verificación automática'
+                        : 'La verificación automática está caída'}
+                    </div>
+                    <div className="bot-alerta-texto">
+                      {botEstado.estado === 'iniciando'
+                        ? 'En un momento vuelve a la normalidad. Los comprobantes que lleguen mientras tanto se procesan apenas se restablezca.'
+                        : 'Los comprobantes que te envíen por WhatsApp no se están verificando en este momento. Revísalos a mano antes de entregar un pedido. Ya estamos trabajando para restablecerlo.'}
+                      {/* El detalle técnico (QR pendiente, servidor caído) solo
+                          le sirve a quien administra el servidor, no al negocio. */}
+                      {esSuperAdmin && botEstado.detalle && (
+                        <span className="bot-alerta-detalle"> · {botEstado.detalle}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* ─── Primeros pasos (onboarding) ─────── */}
               {esAdmin && !onboardingOculto && (() => {
+                // El orden sigue las dependencias reales: no puedes recibir un
+                // pago verificado sin bot, sin Gmail y sin equipo. Por eso ese
+                // paso va último — además es el momento en que todo se prueba.
                 const pasos = [
                   {
                     id: 'gmail', icon: Mail, titulo: 'Conecta tu Gmail',
                     desc: 'Verifica los pagos automáticamente comparando con las notificaciones de tu banco.',
-                    hecho: !!gmailEstado?.conectado, accion: () => cambiarSeccion('panel'),
-                  },
-                  {
-                    id: 'pago', icon: CreditCard, titulo: 'Recibe tu primer pago verificado',
-                    desc: 'Pide a un empleado que envíe un comprobante por WhatsApp para probar el flujo.',
-                    hecho: (totales?.mes?.cantidad || 0) > 0, accion: () => cambiarSeccion('pagos'),
+                    hecho: !!gmailEstado?.conectado, accion: conectarGmail,
                   },
                   {
                     id: 'equipo', icon: Users, titulo: 'Agrega a tu equipo',
@@ -893,7 +954,12 @@ function Dashboard({ onLogout }) {
                   {
                     id: 'horario', icon: Settings, titulo: 'Configura tu horario',
                     desc: 'Define cuándo cierra tu negocio para los reportes y verificaciones automáticas.',
-                    hecho: configVisitada, accion: () => cambiarSeccion('configuracion'),
+                    hecho: !!planInfo?.horario_configurado, accion: () => cambiarSeccion('configuracion'),
+                  },
+                  {
+                    id: 'pago', icon: CreditCard, titulo: 'Recibe tu primer pago verificado',
+                    desc: 'Pide a un empleado que envíe un comprobante por WhatsApp para probar el flujo.',
+                    hecho: (totales?.mes?.cantidad || 0) > 0, accion: () => cambiarSeccion('pagos'),
                   },
                 ];
                 const completados = pasos.filter(p => p.hecho).length;
@@ -905,7 +971,7 @@ function Dashboard({ onLogout }) {
                       <div>
                         <h2 className="seccion-titulo" style={{ marginBottom: '0.3rem' }}><Rocket size={18} /> Primeros pasos</h2>
                         <p style={{ fontSize: '0.85rem', color: 'var(--dash-text-muted)' }}>
-                          {completados} de {pasos.length} completados — dejá listo tu negocio en FlashPago.
+                          {completados} de {pasos.length} completados — deja listo tu negocio en FlashPago.
                         </p>
                       </div>
                       <button
@@ -2227,6 +2293,46 @@ function Dashboard({ onLogout }) {
               )}
             </div>
 
+            {/* ─── Avisos fuera del navegador ───────── */}
+            <div className="seccion">
+              <div className="seccion-header">
+                <h2 className="seccion-titulo"><Bell size={18} /> Avisos de pagos</h2>
+              </div>
+              <p style={{ color: 'var(--dash-text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: 1.6, maxWidth: 520 }}>
+                El aviso sonoro solo funciona con el dashboard abierto y al frente. Si activas los avisos
+                del sistema, te llega una notificación en la esquina de la pantalla aunque estés en otra
+                pestaña o con el navegador minimizado.
+              </p>
+              {permisoAvisos === 'no-soportado' ? (
+                <p style={{ color: 'var(--dash-text-faint)', fontSize: '0.85rem' }}>
+                  Este navegador no admite notificaciones del sistema.
+                </p>
+              ) : permisoAvisos === 'granted' ? (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--tint-green-fg)', fontSize: '0.88rem', fontWeight: 600 }}>
+                  <CheckCircle size={17} /> Avisos activados en este dispositivo
+                </div>
+              ) : permisoAvisos === 'denied' ? (
+                <div style={{
+                  display: 'flex', gap: 10, padding: '0.9rem 1.1rem', borderRadius: 10, maxWidth: 520,
+                  background: 'var(--tint-orange-bg)', border: '1px solid var(--tint-orange-fg)',
+                }}>
+                  <AlertTriangle size={16} color="var(--tint-orange-fg)" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <p style={{ fontSize: '0.83rem', color: 'var(--tint-orange-fg)', lineHeight: 1.6, margin: 0 }}>
+                    Bloqueaste los avisos para este sitio. Para reactivarlos, haz clic en el candado 🔒
+                    junto a la dirección web y permite las notificaciones.
+                  </p>
+                </div>
+              ) : (
+                <Button onClick={activarAvisos} icon={<Bell size={15} />}>
+                  Activar avisos en este dispositivo
+                </Button>
+              )}
+              <p style={{ fontSize: '0.78rem', color: 'var(--dash-text-faint)', marginTop: '0.8rem', maxWidth: 520 }}>
+                El permiso se guarda por navegador y dispositivo: si abres el panel en otro computador
+                o celular, hay que activarlo también ahí.
+              </p>
+            </div>
+
             {/* ─── Voz de notificaciones ────────────── */}
             <div className="seccion">
               <div className="seccion-header">
@@ -2568,7 +2674,7 @@ function Dashboard({ onLogout }) {
                 }}>
                   Después de transferir, envía la <strong>foto del comprobante</strong> por WhatsApp al{' '}
                   <strong>+{transferenciaInfo.whatsapp}</strong>. El sistema lo lee y activa tu plan automáticamente —
-                  tenés 30 minutos.
+                  tienes 30 minutos.
                 </div>
                 <button onClick={() => setTransferenciaInfo(null)} style={{
                   alignSelf: 'flex-start', background: 'none', border: 'none', color: 'var(--dash-text-faint)',

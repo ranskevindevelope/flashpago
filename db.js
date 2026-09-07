@@ -65,6 +65,13 @@ db.run(`
         console.error('[DB] Error migrando plan_ilimitado:', err.message);
       }
     });
+    // Migración: marca si el negocio guardó su horario alguna vez. Sin esto
+    // no se puede distinguir un horario elegido de los valores por defecto.
+    db.run(`ALTER TABLE negocios ADD COLUMN horario_actualizado_en TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('[DB] Error migrando horario_actualizado_en:', err.message);
+      }
+    });
     // Migración: horario del negocio (hora de cierre + días que opera)
     db.run(`ALTER TABLE negocios ADD COLUMN hora_cierre TEXT DEFAULT '21:00'`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
@@ -377,7 +384,7 @@ function horaCierreDelDia(horaCierreRaw, dia) {
 function actualizarHorarioNegocio(id, { hora_cierre, dias_operacion }) {
   return new Promise((resolve, reject) => {
     db.run(
-      `UPDATE negocios SET hora_cierre = ?, dias_operacion = ? WHERE id = ?`,
+      `UPDATE negocios SET hora_cierre = ?, dias_operacion = ?, horario_actualizado_en = datetime('now','localtime') WHERE id = ?`,
       [hora_cierre, JSON.stringify(dias_operacion), id],
       function (err) {
         if (err) reject(err);
