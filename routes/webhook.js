@@ -310,6 +310,15 @@ router.post('/', async (req, res) => {
       console.log(`[Trial] Negocio ${negocio_id} trial expirado`);
       return;
     }
+    if (!trial.activo && trial.razon === 'plan_vencido') {
+      await enviarMensaje(from,
+        `🔒 *Tu plan venció*\n\n` +
+        `Renueva tu pago para que el bot siga verificando comprobantes automáticamente:\n\n` +
+        `🔗 https://flashpago.co/panel`
+      );
+      console.log(`[Trial] Negocio ${negocio_id} plan vencido`);
+      return;
+    }
   } catch (err) {
     console.error('[Trial] Error verificando:', err.message);
   }

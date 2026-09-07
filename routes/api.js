@@ -528,7 +528,7 @@ router.post('/negocios', verificarToken, soloSuperAdmin, async (req, res) => {
 });
 
 router.put('/negocios/:id', verificarToken, soloSuperAdmin, (req, res) => {
-  const { nombre, whatsapp, plan, activo } = req.body;
+  const { nombre, whatsapp, plan, activo, plan_ilimitado } = req.body;
   const sets = []; const vals = [];
   if (nombre) { sets.push('nombre=?'); vals.push(nombre); }
   if (whatsapp !== undefined) { sets.push('whatsapp=?'); vals.push(whatsapp); }
@@ -538,6 +538,7 @@ router.put('/negocios/:id', verificarToken, soloSuperAdmin, (req, res) => {
     vals.push(plan, LIMITES_PLAN[plan]);
   }
   if (activo !== undefined) { sets.push('activo=?'); vals.push(activo); }
+  if (plan_ilimitado !== undefined) { sets.push('plan_ilimitado=?'); vals.push(plan_ilimitado ? 1 : 0); }
   if (!sets.length) return res.json({ ok: false, error: 'Nada que actualizar' });
   vals.push(req.params.id);
 
@@ -565,8 +566,10 @@ router.get('/negocios/uso/plan', verificarToken, async (req, res) => {
       trial: {
         activo: trial.activo,
         pagado: trial.pagado || false,
+        ilimitado: trial.ilimitado || false,
         dias: trial.dias || 0,
         trial_fin: trial.trial_fin || null,
+        plan_vence: trial.plan_vence || null,
         razon: trial.razon || null,
       },
     });

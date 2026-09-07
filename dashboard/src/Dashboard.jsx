@@ -12,6 +12,12 @@ import confetti from 'canvas-confetti';
 const PASSWORD_VALIDA = /^(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
 const PASSWORD_ERROR = 'La contraseña debe tener mínimo 8 caracteres, con mayúsculas y minúsculas';
 
+const PLANES_INFO = {
+  basico: { id: 'basico', nombre: 'Básico', precio: '$39.900' },
+  premium: { id: 'premium', nombre: 'Premium', precio: '$79.900' },
+  premium_plus: { id: 'premium_plus', nombre: 'Premium Plus', precio: '$109.900' },
+};
+
 function Dashboard({ onLogout }) {
   const getInitialSection = () => {
     if (typeof window === 'undefined') return 'panel';
@@ -35,6 +41,7 @@ function Dashboard({ onLogout }) {
   const [stats, setStats] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState(null);
+  const [buscando, setBuscando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [fotoActiva, setFotoActiva] = useState(null);
   const [seccionActiva, setSeccionActiva] = useState(getInitialSection);
@@ -91,7 +98,7 @@ function Dashboard({ onLogout }) {
   // negocios/cargandoNegocios: ver useQuery mas abajo, junto a `api` (ensayo con TanStack Query)
   const [mostrarFormNegocio, setMostrarFormNegocio] = useState(false);
   const [editandoNegocio, setEditandoNegocio] = useState(null);
-  const [formNegocio, setFormNegocio] = useState({ nombre: '', whatsapp: '', plan: 'basico' });
+  const [formNegocio, setFormNegocio] = useState({ nombre: '', whatsapp: '', plan: 'basico', plan_ilimitado: false });
 
   // ─── Estado para Plan y Gmail ──────────────────────────
   const [planInfo, setPlanInfo] = useState(null);
@@ -277,13 +284,34 @@ function Dashboard({ onLogout }) {
 
   const buscarCliente = async () => {
     if (!busqueda.trim()) return;
+    setBuscando(true);
     try {
       const data = await api.request(`/api/dashboard/buscar/${encodeURIComponent(busqueda.trim())}`);
       setResultados(data);
     } catch (err) {
       console.error('Error buscando:', err);
     }
+    setBuscando(false);
   };
+
+  const FilaSkeleton = ({ columnas }) => (
+    <tr>
+      {columnas.map((ancho, i) => (
+        <td key={i}><span className="skeleton-bar" style={{ width: ancho }} /></td>
+      ))}
+    </tr>
+  );
+
+  const TarjetaSkeleton = () => (
+    <div className="tarjeta">
+      <div className="skeleton-block" style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0 }} />
+      <div className="tarjeta-info" style={{ gap: 6, width: '100%' }}>
+        <span className="skeleton-bar" style={{ width: '55%' }} />
+        <span className="skeleton-bar" style={{ width: '75%', height: '1.3em' }} />
+        <span className="skeleton-bar" style={{ width: '40%' }} />
+      </div>
+    </div>
+  );
 
   // ─── Funciones de Usuarios ─────────────────────────────
   const cargarUsuarios = async () => {
@@ -396,7 +424,7 @@ function Dashboard({ onLogout }) {
       });
       if (data.ok) {
         toast.success(`Negocio "${formNegocio.nombre}" creado exitosamente`);
-        setFormNegocio({ nombre: '', whatsapp: '', plan: 'basico' });
+        setFormNegocio({ nombre: '', whatsapp: '', plan: 'basico', plan_ilimitado: false });
         setMostrarFormNegocio(false);
         refrescarNegocios();
       } else {
@@ -411,13 +439,13 @@ function Dashboard({ onLogout }) {
     try {
       const data = await api.request(`/api/negocios/${editandoNegocio}`, {
         method: 'PUT',
-        body: JSON.stringify({ nombre: formNegocio.nombre, whatsapp: formNegocio.whatsapp, plan: formNegocio.plan }),
+        body: JSON.stringify({ nombre: formNegocio.nombre, whatsapp: formNegocio.whatsapp, plan: formNegocio.plan, plan_ilimitado: formNegocio.plan_ilimitado }),
       });
       if (data.ok) {
         toast.success('Negocio actualizado');
         setEditandoNegocio(null);
         setMostrarFormNegocio(false);
-        setFormNegocio({ nombre: '', whatsapp: '', plan: 'basico' });
+        setFormNegocio({ nombre: '', whatsapp: '', plan: 'basico', plan_ilimitado: false });
         refrescarNegocios();
       } else {
         toast.error(data.error || 'Error actualizando');
@@ -429,14 +457,14 @@ function Dashboard({ onLogout }) {
 
   const iniciarEdicionNegocio = (n) => {
     setEditandoNegocio(n.id);
-    setFormNegocio({ nombre: n.nombre, whatsapp: n.whatsapp || '', plan: n.plan });
+    setFormNegocio({ nombre: n.nombre, whatsapp: n.whatsapp || '', plan: n.plan, plan_ilimitado: !!n.plan_ilimitado });
     setMostrarFormNegocio(true);
   };
 
   const cancelarFormNegocio = () => {
     setMostrarFormNegocio(false);
     setEditandoNegocio(null);
-    setFormNegocio({ nombre: '', whatsapp: '', plan: 'basico' });
+    setFormNegocio({ nombre: '', whatsapp: '', plan: 'basico', plan_ilimitado: false });
   };
 
   const alternarActivoNegocio = async (n) => {
@@ -455,7 +483,14 @@ function Dashboard({ onLogout }) {
   };
 
   const estadoNegocioInfo = (n) => {
-    if (n.pagado) return { label: 'Pagado', clase: 'badge-nequi' };
+    if (n.plan_ilimitado) return { label: 'Ilimitado', clase: 'badge-nequi' };
+    if (n.pagado) {
+      if (!n.plan_vence) return { label: 'Pagado', clase: 'badge-nequi' };
+      const diasRestantes = Math.ceil((new Date(n.plan_vence) - new Date()) / (1000 * 60 * 60 * 24));
+      if (diasRestantes <= 0) return { label: 'Plan vencido', clase: 'badge-avvillas' };
+      if (diasRestantes <= 5) return { label: `Pagado (${diasRestantes}d)`, clase: 'badge-transfiya' };
+      return { label: 'Pagado', clase: 'badge-nequi' };
+    }
     if (!n.trial_fin) return { label: 'Activo', clase: 'badge-nequi' };
     const diasRestantes = Math.ceil((new Date(n.trial_fin) - new Date()) / (1000 * 60 * 60 * 24));
     if (diasRestantes <= 0) return { label: 'Trial vencido', clase: 'badge-avvillas' };
@@ -930,7 +965,7 @@ function Dashboard({ onLogout }) {
 
         <div className="main-body">
           {/* ─── PANTALLA BLOQUEADA (trial expirado) ─── */}
-          {planInfo?.trial && !planInfo.trial.activo && !planInfo.trial.pagado ? (
+          {planInfo?.trial && !planInfo.trial.activo ? (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', minHeight: '80vh', textAlign: 'center', padding: '2rem',
@@ -953,11 +988,12 @@ function Dashboard({ onLogout }) {
                 <Clock size={34} color="#fff" strokeWidth={2} />
               </div>
               <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '1.7rem', fontWeight: 700, color: 'var(--dash-text)', marginBottom: '0.6rem' }}>
-                Tu prueba gratuita terminó
+                {planInfo.trial.razon === 'plan_vencido' ? 'Tu plan venció' : 'Tu prueba gratuita terminó'}
               </h2>
               <p style={{ fontSize: '0.95rem', color: 'var(--dash-text-muted)', maxWidth: 460, lineHeight: 1.6, marginBottom: '2.5rem' }}>
-                El bot dejó de verificar comprobantes y el dashboard está suspendido. Elige un plan para
-                reactivar tu cuenta al instante — tu historial de pagos queda intacto.
+                {planInfo.trial.razon === 'plan_vencido'
+                  ? 'El bot dejó de verificar comprobantes y el dashboard está suspendido. Renueva tu pago para reactivar tu cuenta al instante — tu historial de pagos queda intacto.'
+                  : 'El bot dejó de verificar comprobantes y el dashboard está suspendido. Elige un plan para reactivar tu cuenta al instante — tu historial de pagos queda intacto.'}
               </p>
 
               {/* Cards de planes */}
@@ -973,7 +1009,7 @@ function Dashboard({ onLogout }) {
                   { id: 'premium_plus', nombre: 'Premium Plus', precio: '$109.900', comprobantes: 'Comprobantes ilimitados', Icono: Zap,
                     features: ['Todo lo de Premium', 'Comprobantes ilimitados', 'Soporte prioritario'] },
                 ].map((p) => (
-                  <div key={p.nombre} style={{
+                  <div key={p.nombre} className={`plan-card-bloqueo ${p.popular ? 'plan-card-bloqueo-popular' : ''}`} style={{
                     display: 'flex', flexDirection: 'column',
                     border: p.popular ? `2px solid #F57C00` : '1px solid var(--dash-border)',
                     borderRadius: 18, padding: '1.75rem 1.25rem', position: 'relative',
@@ -1007,6 +1043,7 @@ function Dashboard({ onLogout }) {
                       ))}
                     </div>
                     <button
+                      className="plan-card-bloqueo-btn"
                       onClick={() => setModalPagoPlan(p)}
                       style={{
                         width: '100%', padding: '0.75rem', borderRadius: 10, border: 'none',
@@ -1030,116 +1067,6 @@ function Dashboard({ onLogout }) {
                 </span>
               </div>
 
-              {modalPagoPlan && (
-            <div onClick={cerrarModalPago} style={{
-              position: 'fixed', inset: 0, background: 'rgba(20,20,40,0.55)', zIndex: 1000,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
-            }}>
-              <div onClick={(e) => e.stopPropagation()} style={{
-                background: 'var(--dash-surface)', borderRadius: 18, padding: '1.75rem',
-                width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
-                  <div>
-                    <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--dash-text)' }}>
-                      Activar {modalPagoPlan.nombre}
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--dash-text-faint)' }}>{modalPagoPlan.precio} / mes</div>
-                  </div>
-                  <button onClick={cerrarModalPago} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-                    <X size={20} color="var(--dash-text-faint)" />
-                  </button>
-                </div>
-
-                {!transferenciaInfo ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <button
-                      onClick={() => { cerrarModalPago(); pagarConWompi(modalPagoPlan.id, modalPagoPlan.nombre); }}
-                      disabled={pagandoPlan === modalPagoPlan.id}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '0.9rem 1rem',
-                        borderRadius: 12, border: '1px solid var(--dash-border)', background: 'var(--dash-surface-2)',
-                        cursor: 'pointer', textAlign: 'left',
-                      }}
-                    >
-                      <CreditCard size={20} color="#F57C00" />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--dash-text)' }}>PSE / Tarjeta</div>
-                        <div style={{ fontSize: 12, color: 'var(--dash-text-faint)' }}>Pago inmediato con Wompi</div>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => iniciarTransferencia(modalPagoPlan.id)}
-                      disabled={cargandoTransferencia}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '0.9rem 1rem',
-                        borderRadius: 12, border: '2px solid #F57C00',
-                        background: 'linear-gradient(135deg, rgba(245,124,0,0.08), rgba(245,124,0,0.02))',
-                        cursor: 'pointer', textAlign: 'left', opacity: cargandoTransferencia ? 0.7 : 1,
-                        position: 'relative', boxShadow: '0 4px 16px rgba(245,124,0,0.12)',
-                      }}
-                    >
-                      <div style={{
-                        position: 'absolute', top: -10, right: 14, background: '#F57C00', color: '#fff',
-                        fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
-                        padding: '2px 10px', borderRadius: 50,
-                      }}>
-                        Recomendado
-                      </div>
-                      <Building2 size={20} color="#F57C00" />
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dash-text)' }}>Transferencia bancaria</div>
-                        <div style={{ fontSize: 12, color: 'var(--dash-text-faint)' }}>
-                          {cargandoTransferencia ? 'Generando datos...' : 'Nequi, Bancolombia u otro banco'}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: '#F57C00', fontWeight: 600, marginTop: 3 }}>
-                          Sin comisiones · Confirmación automática
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ fontSize: 13, color: 'var(--dash-text-muted)' }}>
-                      Transfiere <strong>${transferenciaInfo.montoPesos.toLocaleString('es-CO')}</strong> a esta cuenta:
-                    </div>
-
-                    <img
-                      src="/qr-flashpago.jpeg"
-                      alt="QR para pagar con Bre-B / Bancolombia"
-                      style={{ width: '100%', maxWidth: 260, alignSelf: 'center', borderRadius: 12, display: 'block' }}
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
-
-                    <div style={{
-                      background: 'var(--dash-surface-2)', borderRadius: 12, padding: '1rem',
-                      display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13.5,
-                    }}>
-                      {transferenciaInfo.cuenta.banco && <div><strong>Banco:</strong> {transferenciaInfo.cuenta.banco}</div>}
-                      {transferenciaInfo.cuenta.tipo && <div><strong>Tipo:</strong> {transferenciaInfo.cuenta.tipo}</div>}
-                      {transferenciaInfo.cuenta.numero && <div><strong>Número:</strong> {transferenciaInfo.cuenta.numero}</div>}
-                      {transferenciaInfo.cuenta.titular && <div><strong>Titular:</strong> {transferenciaInfo.cuenta.titular}</div>}
-                      {transferenciaInfo.cuenta.nit && <div><strong>NIT:</strong> {transferenciaInfo.cuenta.nit}</div>}
-                    </div>
-                    <div style={{
-                      background: 'var(--tint-orange-bg)', borderRadius: 12, padding: '0.9rem 1rem', fontSize: 13, color: 'var(--dash-text)',
-                    }}>
-                      Después de transferir, envía la <strong>foto del comprobante</strong> por WhatsApp al{' '}
-                      <strong>+{transferenciaInfo.whatsapp}</strong>. El sistema lo lee y activa tu plan automáticamente —
-                      tenés 30 minutos.
-                    </div>
-                    <button onClick={() => setTransferenciaInfo(null)} style={{
-                      alignSelf: 'flex-start', background: 'none', border: 'none', color: 'var(--dash-text-faint)',
-                      fontSize: 12.5, cursor: 'pointer', textDecoration: 'underline', padding: 0,
-                    }}>
-                      ← Volver a las opciones de pago
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-              )}
             </div>
           ) : (
           <>
@@ -1228,6 +1155,7 @@ function Dashboard({ onLogout }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   {gmailEstado && (
                     <button
+                      className="btn-gmail-pill"
                       onClick={gmailEstado.conectado ? desconectarGmail : conectarGmail}
                       disabled={gmailCargando}
                       style={{
@@ -1401,7 +1329,8 @@ function Dashboard({ onLogout }) {
                   </div>
                   {(planInfo.trial.dias <= 3 || !planInfo.trial.activo) && (
                     <button
-                      onClick={() => window.open('https://app.flashpago.co', '_self')}
+                      className="plan-card-bloqueo-btn"
+                      onClick={() => setModalPagoPlan(PLANES_INFO[planInfo.plan] || PLANES_INFO.basico)}
                       style={{
                         padding: '0.6rem 1.25rem', borderRadius: 10, border: 'none',
                         background: !planInfo.trial.activo ? '#E53935' : '#F57C00',
@@ -1411,6 +1340,40 @@ function Dashboard({ onLogout }) {
                       Elegir plan
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* ─── Banner de plan pagado próximo a vencer ────── */}
+              {planInfo?.trial?.pagado && !planInfo.trial.ilimitado && planInfo.trial.plan_vence && planInfo.trial.dias <= 5 && (
+                <div style={{
+                  background: 'var(--tint-orange-bg)', border: '1px solid var(--tint-orange-fg)',
+                  borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1rem',
+                  display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
+                }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                    background: '#F57C00', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Clock size={20} color="#fff" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--tint-orange-fg)' }}>
+                      Tu plan vence en {planInfo.trial.dias} día{planInfo.trial.dias === 1 ? '' : 's'}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', marginTop: 2, color: 'var(--tint-orange-fg)' }}>
+                      Renueva antes del {new Date(planInfo.trial.plan_vence).toLocaleDateString('es-CO')} para que el bot no deje de verificar comprobantes.
+                    </div>
+                  </div>
+                  <button
+                    className="plan-card-bloqueo-btn"
+                    onClick={() => setModalPagoPlan(PLANES_INFO[planInfo.plan] || PLANES_INFO.basico)}
+                    style={{
+                      padding: '0.6rem 1.25rem', borderRadius: 10, border: 'none',
+                      background: '#F57C00', color: '#fff', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
+                    }}
+                  >
+                    Renovar plan
+                  </button>
                 </div>
               )}
 
@@ -1471,12 +1434,14 @@ function Dashboard({ onLogout }) {
                     </div>
                   </div>
                   <button
+                    className="btn-conectar-gmail"
                     onClick={conectarGmail}
                     disabled={gmailCargando}
                     style={{
                       padding: '0.6rem 1.25rem', borderRadius: 10, border: 'none',
                       background: '#F57C00', color: '#fff', fontWeight: 600, fontSize: '0.85rem',
                       cursor: gmailCargando ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem',
+                      transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                     }}
                   >
                     <Mail size={15} /> {gmailCargando ? 'Conectando...' : 'Conectar Gmail'}
@@ -1844,7 +1809,11 @@ function Dashboard({ onLogout }) {
                   <table className="tabla-pagos">
                     <thead><tr><th>Cliente</th><th>Monto</th><th>Banco</th><th>Fecha</th><th>Hora</th><th>Fuente</th><th>Foto</th></tr></thead>
                     <tbody>
-                      {pagosPeriodo.length === 0 ? (
+                      {cargandoPeriodo ? (
+                        Array.from({ length: 6 }).map((_, i) => (
+                          <FilaSkeleton key={`skeleton-${i}`} columnas={['75%', '55%', 60, 55, 40, 65, 30]} />
+                        ))
+                      ) : pagosPeriodo.length === 0 ? (
                         <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'var(--dash-text-faint)' }}>No hay pagos en {mesesNombres[periodoMes - 1]} {periodoAnio}</td></tr>
                       ) : (
                         pagosPeriodo.map((pago) => {
@@ -1906,51 +1875,59 @@ function Dashboard({ onLogout }) {
                     <span style={{ fontSize: '1.1rem' }}>›</span>
                   </button>
                 </div>
-                {cargandoPeriodo && (
-                  <span style={{ fontSize: '0.8rem', color: 'var(--dash-text-faint)' }}>Cargando...</span>
-                )}
               </div>
 
               {/* Cards del periodo */}
               <div className="tarjetas-grid">
-                <div className="tarjeta tarjeta-accent">
-                  <div className="tarjeta-icon-box tarjeta-icon-naranja"><DollarSign size={22} /></div>
-                  <div className="tarjeta-info">
-                    <span className="tarjeta-label">Total {mesesNombres[periodoMes - 1]}</span>
-                    <span className="tarjeta-valor">{formatearMonto(resumenPeriodo?.total || 0)}</span>
-                    <span className="tarjeta-sub">{resumenPeriodo?.cantidad || 0} transacciones</span>
-                  </div>
-                </div>
-                <div className="tarjeta">
-                  <div className="tarjeta-icon-box tarjeta-icon-azul"><BarChart3 size={22} /></div>
-                  <div className="tarjeta-info">
-                    <span className="tarjeta-label">Promedio diario</span>
-                    <span className="tarjeta-valor">
-                      {resumenPeriodo?.dias_con_ventas > 0 ? formatearMonto(Math.round(resumenPeriodo.total / resumenPeriodo.dias_con_ventas)) : '$0'}
-                    </span>
-                    <span className="tarjeta-sub">{resumenPeriodo?.dias_con_ventas || 0} días con ventas</span>
-                  </div>
-                </div>
-                <div className="tarjeta">
-                  <div className="tarjeta-icon-box tarjeta-icon-verde"><Trophy size={22} /></div>
-                  <div className="tarjeta-info">
-                    <span className="tarjeta-label">Pago más alto</span>
-                    <span className="tarjeta-valor">
-                      {formatearMonto(resumenPeriodo?.pago_mas_alto || 0)}
-                    </span>
-                    <span className="tarjeta-sub">En una sola transacción</span>
-                  </div>
-                </div>
-                <div className="tarjeta">
-                  <div className="tarjeta-icon-box tarjeta-icon-morado"><Shield size={22} /></div>
-                  <div className="tarjeta-info">
-                    <span className="tarjeta-label">Ticket promedio</span>
-                    <span className="tarjeta-valor">
-                      {formatearMonto(resumenPeriodo?.ticket_promedio || 0)}
-                    </span>
-                    <span className="tarjeta-sub">Por transacción</span>
-                  </div>
-                </div>
+                {cargandoPeriodo ? (
+                  <>
+                    <TarjetaSkeleton />
+                    <TarjetaSkeleton />
+                    <TarjetaSkeleton />
+                    <TarjetaSkeleton />
+                  </>
+                ) : (
+                  <>
+                    <div className="tarjeta tarjeta-accent">
+                      <div className="tarjeta-icon-box tarjeta-icon-naranja"><DollarSign size={22} /></div>
+                      <div className="tarjeta-info">
+                        <span className="tarjeta-label">Total {mesesNombres[periodoMes - 1]}</span>
+                        <span className="tarjeta-valor">{formatearMonto(resumenPeriodo?.total || 0)}</span>
+                        <span className="tarjeta-sub">{resumenPeriodo?.cantidad || 0} transacciones</span>
+                      </div>
+                    </div>
+                    <div className="tarjeta">
+                      <div className="tarjeta-icon-box tarjeta-icon-azul"><BarChart3 size={22} /></div>
+                      <div className="tarjeta-info">
+                        <span className="tarjeta-label">Promedio diario</span>
+                        <span className="tarjeta-valor">
+                          {resumenPeriodo?.dias_con_ventas > 0 ? formatearMonto(Math.round(resumenPeriodo.total / resumenPeriodo.dias_con_ventas)) : '$0'}
+                        </span>
+                        <span className="tarjeta-sub">{resumenPeriodo?.dias_con_ventas || 0} días con ventas</span>
+                      </div>
+                    </div>
+                    <div className="tarjeta">
+                      <div className="tarjeta-icon-box tarjeta-icon-verde"><Trophy size={22} /></div>
+                      <div className="tarjeta-info">
+                        <span className="tarjeta-label">Pago más alto</span>
+                        <span className="tarjeta-valor">
+                          {formatearMonto(resumenPeriodo?.pago_mas_alto || 0)}
+                        </span>
+                        <span className="tarjeta-sub">En una sola transacción</span>
+                      </div>
+                    </div>
+                    <div className="tarjeta">
+                      <div className="tarjeta-icon-box tarjeta-icon-morado"><Shield size={22} /></div>
+                      <div className="tarjeta-info">
+                        <span className="tarjeta-label">Ticket promedio</span>
+                        <span className="tarjeta-valor">
+                          {formatearMonto(resumenPeriodo?.ticket_promedio || 0)}
+                        </span>
+                        <span className="tarjeta-sub">Por transacción</span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Gráfica del periodo */}
@@ -1958,7 +1935,11 @@ function Dashboard({ onLogout }) {
                 <div className="seccion-header">
                   <h2 className="seccion-titulo"><TrendingUp size={18} /> Ventas por día — {mesesNombres[periodoMes - 1]} {periodoAnio}</h2>
                 </div>
-                {statsPeriodo.length === 0 ? (
+                {cargandoPeriodo ? (
+                  <div className="grafica-container">
+                    <div className="skeleton-block" style={{ width: '100%', height: '100%' }} />
+                  </div>
+                ) : statsPeriodo.length === 0 ? (
                   <p className="empty-state">No hay ventas registradas en este mes.</p>
                 ) : (
                   <div className="grafica-container">
@@ -2028,7 +2009,20 @@ function Dashboard({ onLogout }) {
                 />
                 <button onClick={buscarCliente}><Search size={16} /> Buscar</button>
               </div>
-              {resultados && (
+              {buscando ? (
+                <div className="resultados-busqueda">
+                  <div className="tabla-container">
+                    <table className="tabla-pagos">
+                      <thead><tr><th>Monto</th><th>Banco</th><th>Fecha</th><th>Hora</th></tr></thead>
+                      <tbody>
+                        {Array.from({ length: 4 }).map((_, i) => (
+                          <FilaSkeleton key={`skeleton-${i}`} columnas={['50%', 60, 55, 40]} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : resultados && (
                 <div className="resultados-busqueda">
                   {resultados.length === 0 ? (
                     <p className="sin-resultados">No se encontraron pagos para "{busqueda}"</p>
@@ -2104,46 +2098,57 @@ function Dashboard({ onLogout }) {
                 <>
                   {/* Cards resumen del día */}
                   <div className="tarjetas-grid">
-                    <div className="tarjeta tarjeta-accent">
-                      <div className="tarjeta-icon-box tarjeta-icon-naranja"><ArrowDownUp size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Transferencias hoy</span>
-                        <span className="tarjeta-valor">{formatearMonto(ventasResumen?.transferencias?.total || 0)}</span>
-                        <span className="tarjeta-sub">{ventasResumen?.transferencias?.cantidad || 0} verificadas</span>
-                      </div>
-                    </div>
-                    <div className="tarjeta">
-                      <div className="tarjeta-icon-box tarjeta-icon-rojo"><MinusCircle size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Gastos hoy</span>
-                        <span className="tarjeta-valor" style={{ color: '#E53935' }}>{formatearMonto(ventasResumen?.gastos?.total || 0)}</span>
-                        <span className="tarjeta-sub">{ventasResumen?.gastos?.cantidad || 0} registrados</span>
-                      </div>
-                    </div>
-                    <div className="tarjeta">
-                      <div className="tarjeta-icon-box tarjeta-icon-verde"><Wallet size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Efectivo esperado</span>
-                        <span className="tarjeta-valor" style={{ color: '#43A047' }}>
-                          {ventasResumen?.cierre
-                            ? formatearMonto(ventasResumen.cierre.total_efectivo)
-                            : '—'}
-                        </span>
-                        <span className="tarjeta-sub">{ventasResumen?.cierre ? 'Cierre registrado' : 'Sin cierre aún'}</span>
-                      </div>
-                    </div>
-                    <div className="tarjeta">
-                      <div className="tarjeta-icon-box tarjeta-icon-morado"><ShoppingBag size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Total ventas</span>
-                        <span className="tarjeta-valor">
-                          {ventasResumen?.cierre
-                            ? formatearMonto(ventasResumen.cierre.total_ventas)
-                            : '—'}
-                        </span>
-                        <span className="tarjeta-sub">{ventasResumen?.cierre ? 'Del cierre de caja' : 'Pendiente de cierre'}</span>
-                      </div>
-                    </div>
+                    {!ventasResumen ? (
+                      <>
+                        <TarjetaSkeleton />
+                        <TarjetaSkeleton />
+                        <TarjetaSkeleton />
+                        <TarjetaSkeleton />
+                      </>
+                    ) : (
+                      <>
+                        <div className="tarjeta tarjeta-accent">
+                          <div className="tarjeta-icon-box tarjeta-icon-naranja"><ArrowDownUp size={22} /></div>
+                          <div className="tarjeta-info">
+                            <span className="tarjeta-label">Transferencias hoy</span>
+                            <span className="tarjeta-valor">{formatearMonto(ventasResumen?.transferencias?.total || 0)}</span>
+                            <span className="tarjeta-sub">{ventasResumen?.transferencias?.cantidad || 0} verificadas</span>
+                          </div>
+                        </div>
+                        <div className="tarjeta">
+                          <div className="tarjeta-icon-box tarjeta-icon-rojo"><MinusCircle size={22} /></div>
+                          <div className="tarjeta-info">
+                            <span className="tarjeta-label">Gastos hoy</span>
+                            <span className="tarjeta-valor" style={{ color: '#E53935' }}>{formatearMonto(ventasResumen?.gastos?.total || 0)}</span>
+                            <span className="tarjeta-sub">{ventasResumen?.gastos?.cantidad || 0} registrados</span>
+                          </div>
+                        </div>
+                        <div className="tarjeta">
+                          <div className="tarjeta-icon-box tarjeta-icon-verde"><Wallet size={22} /></div>
+                          <div className="tarjeta-info">
+                            <span className="tarjeta-label">Efectivo esperado</span>
+                            <span className="tarjeta-valor" style={{ color: '#43A047' }}>
+                              {ventasResumen?.cierre
+                                ? formatearMonto(ventasResumen.cierre.total_efectivo)
+                                : '—'}
+                            </span>
+                            <span className="tarjeta-sub">{ventasResumen?.cierre ? 'Cierre registrado' : 'Sin cierre aún'}</span>
+                          </div>
+                        </div>
+                        <div className="tarjeta">
+                          <div className="tarjeta-icon-box tarjeta-icon-morado"><ShoppingBag size={22} /></div>
+                          <div className="tarjeta-info">
+                            <span className="tarjeta-label">Total ventas</span>
+                            <span className="tarjeta-valor">
+                              {ventasResumen?.cierre
+                                ? formatearMonto(ventasResumen.cierre.total_ventas)
+                                : '—'}
+                            </span>
+                            <span className="tarjeta-sub">{ventasResumen?.cierre ? 'Del cierre de caja' : 'Pendiente de cierre'}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   <div className="dashboard-overview-grid">
@@ -2362,7 +2367,14 @@ function Dashboard({ onLogout }) {
               {ventasTab === 'historial' && (
                 <>
                   {/* Resumen semanal cards */}
-                  {ventasSemanal && (
+                  {!ventasResumen ? (
+                    <div className="tarjetas-grid">
+                      <TarjetaSkeleton />
+                      <TarjetaSkeleton />
+                      <TarjetaSkeleton />
+                      <TarjetaSkeleton />
+                    </div>
+                  ) : ventasSemanal && (
                     <div className="tarjetas-grid">
                       <div className="tarjeta tarjeta-accent">
                         <div className="tarjeta-icon-box tarjeta-icon-naranja"><ShoppingBag size={22} /></div>
@@ -2435,7 +2447,27 @@ function Dashboard({ onLogout }) {
                       <h2 className="seccion-titulo"><Calendar size={18} /> Historial de cierres</h2>
                       <span style={{ fontSize: '0.8rem', color: 'var(--dash-text-faint)' }}>{ventasCierres.length} cierres</span>
                     </div>
-                    {ventasCierres.length === 0 ? (
+                    {!ventasResumen ? (
+                      <div className="tabla-container">
+                        <table className="tabla-pagos">
+                          <thead>
+                            <tr>
+                              <th>Fecha</th>
+                              <th>Ventas</th>
+                              <th>Transferencias</th>
+                              <th>Efectivo</th>
+                              <th>Gastos</th>
+                              <th>Cerrado por</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <FilaSkeleton key={`skeleton-${i}`} columnas={[70, '55%', '55%', '55%', '45%', '50%']} />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : ventasCierres.length === 0 ? (
                       <p className="empty-state">No hay cierres registrados aún.</p>
                     ) : (
                       <div className="tabla-container">
@@ -2562,38 +2594,49 @@ function Dashboard({ onLogout }) {
           {seccionActiva === 'usuarios' && (
             <>
               <div className="tarjetas-grid">
-                <div className="tarjeta tarjeta-accent">
-                  <div className="tarjeta-icon-box tarjeta-icon-naranja"><Users size={22} /></div>
-                  <div className="tarjeta-info">
-                    <span className="tarjeta-label">Total usuarios</span>
-                    <span className="tarjeta-valor">{usuarios.length}</span>
-                    <span className="tarjeta-sub">Registrados</span>
-                  </div>
-                </div>
-                <div className="tarjeta">
-                  <div className="tarjeta-icon-box tarjeta-icon-verde"><UserCheck size={22} /></div>
-                  <div className="tarjeta-info">
-                    <span className="tarjeta-label">Activos</span>
-                    <span className="tarjeta-valor">{usuarios.filter(u => u.activo).length}</span>
-                    <span className="tarjeta-sub">Con acceso al sistema</span>
-                  </div>
-                </div>
-                <div className="tarjeta">
-                  <div className="tarjeta-icon-box tarjeta-icon-azul"><Shield size={22} /></div>
-                  <div className="tarjeta-info">
-                    <span className="tarjeta-label">Administradores</span>
-                    <span className="tarjeta-valor">{usuarios.filter(u => u.rol === 'admin').length}</span>
-                    <span className="tarjeta-sub">Acceso total</span>
-                  </div>
-                </div>
-                <div className="tarjeta">
-                  <div className="tarjeta-icon-box tarjeta-icon-morado"><CreditCard size={22} /></div>
-                  <div className="tarjeta-info">
-                    <span className="tarjeta-label">Empleados</span>
-                    <span className="tarjeta-valor">{usuarios.filter(u => u.rol === 'empleado').length}</span>
-                    <span className="tarjeta-sub">Acceso limitado</span>
-                  </div>
-                </div>
+                {cargandoUsuarios ? (
+                  <>
+                    <TarjetaSkeleton />
+                    <TarjetaSkeleton />
+                    <TarjetaSkeleton />
+                    <TarjetaSkeleton />
+                  </>
+                ) : (
+                  <>
+                    <div className="tarjeta tarjeta-accent">
+                      <div className="tarjeta-icon-box tarjeta-icon-naranja"><Users size={22} /></div>
+                      <div className="tarjeta-info">
+                        <span className="tarjeta-label">Total usuarios</span>
+                        <span className="tarjeta-valor">{usuarios.length}</span>
+                        <span className="tarjeta-sub">Registrados</span>
+                      </div>
+                    </div>
+                    <div className="tarjeta">
+                      <div className="tarjeta-icon-box tarjeta-icon-verde"><UserCheck size={22} /></div>
+                      <div className="tarjeta-info">
+                        <span className="tarjeta-label">Activos</span>
+                        <span className="tarjeta-valor">{usuarios.filter(u => u.activo).length}</span>
+                        <span className="tarjeta-sub">Con acceso al sistema</span>
+                      </div>
+                    </div>
+                    <div className="tarjeta">
+                      <div className="tarjeta-icon-box tarjeta-icon-azul"><Shield size={22} /></div>
+                      <div className="tarjeta-info">
+                        <span className="tarjeta-label">Administradores</span>
+                        <span className="tarjeta-valor">{usuarios.filter(u => u.rol === 'admin').length}</span>
+                        <span className="tarjeta-sub">Acceso total</span>
+                      </div>
+                    </div>
+                    <div className="tarjeta">
+                      <div className="tarjeta-icon-box tarjeta-icon-morado"><CreditCard size={22} /></div>
+                      <div className="tarjeta-info">
+                        <span className="tarjeta-label">Empleados</span>
+                        <span className="tarjeta-valor">{usuarios.filter(u => u.rol === 'empleado').length}</span>
+                        <span className="tarjeta-sub">Acceso limitado</span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
 
@@ -2653,7 +2696,26 @@ function Dashboard({ onLogout }) {
                 )}
 
                 {cargandoUsuarios ? (
-                  <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--dash-text-faint)' }}>Cargando usuarios...</p>
+                  <div className="tabla-container">
+                    <table className="tabla-pagos">
+                      <thead>
+                        <tr>
+                          <th>Nombre</th>
+                          <th>Usuario</th>
+                          <th>Rol</th>
+                          <th>WhatsApp</th>
+                          <th>Estado</th>
+                          <th>Último login</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <FilaSkeleton key={`skeleton-${i}`} columnas={['65%', '50%', 55, '50%', 55, '45%', 50]} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 ) : (
                   <div className="tabla-container">
                     <table className="tabla-pagos">
@@ -2721,7 +2783,26 @@ function Dashboard({ onLogout }) {
 
 
               {cargandoConfig ? (
-                <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--dash-text-faint)' }}>Cargando configuración...</p>
+                <div style={{ maxWidth: 480 }}>
+                  <span className="skeleton-bar" style={{ width: '100%', height: '0.9rem', marginBottom: 6 }} />
+                  <span className="skeleton-bar" style={{ width: '85%', height: '0.9rem', marginBottom: '1.5rem' }} />
+
+                  <span className="skeleton-bar" style={{ width: 140, marginBottom: '0.5rem' }} />
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <span key={i} className="skeleton-block" style={{ width: 44, height: 38, borderRadius: 10 }} />
+                    ))}
+                  </div>
+
+                  <span className="skeleton-bar" style={{ width: 160, marginBottom: '0.5rem' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '1.5rem' }}>
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <span key={i} className="skeleton-block" style={{ width: '100%', height: 40, borderRadius: 10 }} />
+                    ))}
+                  </div>
+
+                  <span className="skeleton-block" style={{ width: 190, height: 40, borderRadius: 10, display: 'block' }} />
+                </div>
               ) : (
                 <div style={{ maxWidth: 480 }}>
                   <p style={{ color: 'var(--dash-text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.6 }}>
@@ -2971,6 +3052,16 @@ function Dashboard({ onLogout }) {
                         </select>
                       </div>
                     </div>
+                    {editandoNegocio && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: '1rem', fontSize: '0.85rem', color: 'var(--dash-text-muted)', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={formNegocio.plan_ilimitado}
+                          onChange={(e) => setFormNegocio({ ...formNegocio, plan_ilimitado: e.target.checked })}
+                        />
+                        Plan ilimitado (nunca vence, sin importar pagos ni trial — para cuentas internas)
+                      </label>
+                    )}
                     <div className="usuario-form-acciones">
                       <button className="usuario-btn-guardar" onClick={editandoNegocio ? actualizarNegocio : crearNegocio}>
                         <Save size={15} /> {editandoNegocio ? 'Guardar cambios' : 'Crear negocio'}
@@ -3069,6 +3160,118 @@ function Dashboard({ onLogout }) {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setFotoActiva(null)}><X size={16} /></button>
             <img src={`/api/comprobantes/${fotoActiva}?token=${localStorage.getItem('fp_token')}`} alt="Comprobante" />
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE PAGO/RENOVACIÓN DE PLAN — disponible desde cualquier vista */}
+      {modalPagoPlan && (
+        <div onClick={cerrarModalPago} style={{
+          position: 'fixed', inset: 0, background: 'rgba(20,20,40,0.55)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: 'var(--dash-surface)', borderRadius: 18, padding: '1.75rem',
+            width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+              <div>
+                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--dash-text)' }}>
+                  Activar {modalPagoPlan.nombre}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--dash-text-faint)' }}>{modalPagoPlan.precio} / mes</div>
+              </div>
+              <button onClick={cerrarModalPago} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                <X size={20} color="var(--dash-text-faint)" />
+              </button>
+            </div>
+
+            {!transferenciaInfo ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button
+                  onClick={() => { cerrarModalPago(); pagarConWompi(modalPagoPlan.id, modalPagoPlan.nombre); }}
+                  disabled={pagandoPlan === modalPagoPlan.id}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '0.9rem 1rem',
+                    borderRadius: 12, border: '1px solid var(--dash-border)', background: 'var(--dash-surface-2)',
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <CreditCard size={20} color="#F57C00" />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--dash-text)' }}>PSE / Tarjeta</div>
+                    <div style={{ fontSize: 12, color: 'var(--dash-text-faint)' }}>Pago inmediato con Wompi</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => iniciarTransferencia(modalPagoPlan.id)}
+                  disabled={cargandoTransferencia}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '0.9rem 1rem',
+                    borderRadius: 12, border: '2px solid #F57C00',
+                    background: 'linear-gradient(135deg, rgba(245,124,0,0.08), rgba(245,124,0,0.02))',
+                    cursor: 'pointer', textAlign: 'left', opacity: cargandoTransferencia ? 0.7 : 1,
+                    position: 'relative', boxShadow: '0 4px 16px rgba(245,124,0,0.12)',
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: -10, right: 14, background: '#F57C00', color: '#fff',
+                    fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                    padding: '2px 10px', borderRadius: 50,
+                  }}>
+                    Recomendado
+                  </div>
+                  <Building2 size={20} color="#F57C00" />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dash-text)' }}>Transferencia bancaria</div>
+                    <div style={{ fontSize: 12, color: 'var(--dash-text-faint)' }}>
+                      {cargandoTransferencia ? 'Generando datos...' : 'Nequi, Bancolombia u otro banco'}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#F57C00', fontWeight: 600, marginTop: 3 }}>
+                      Sin comisiones · Confirmación automática
+                    </div>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: 13, color: 'var(--dash-text-muted)' }}>
+                  Transfiere <strong>${transferenciaInfo.montoPesos.toLocaleString('es-CO')}</strong> a esta cuenta:
+                </div>
+
+                <img
+                  src="/qr-flashpago.jpeg"
+                  alt="QR para pagar con Bre-B / Bancolombia"
+                  style={{ width: '100%', maxWidth: 260, alignSelf: 'center', borderRadius: 12, display: 'block' }}
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+
+                <div style={{
+                  background: 'var(--dash-surface-2)', borderRadius: 12, padding: '1rem',
+                  display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13.5,
+                }}>
+                  {transferenciaInfo.cuenta.banco && <div><strong>Banco:</strong> {transferenciaInfo.cuenta.banco}</div>}
+                  {transferenciaInfo.cuenta.tipo && <div><strong>Tipo:</strong> {transferenciaInfo.cuenta.tipo}</div>}
+                  {transferenciaInfo.cuenta.numero && <div><strong>Número:</strong> {transferenciaInfo.cuenta.numero}</div>}
+                  {transferenciaInfo.cuenta.titular && <div><strong>Titular:</strong> {transferenciaInfo.cuenta.titular}</div>}
+                  {transferenciaInfo.cuenta.nit && <div><strong>NIT:</strong> {transferenciaInfo.cuenta.nit}</div>}
+                </div>
+                <div style={{
+                  background: 'var(--tint-orange-bg)', borderRadius: 12, padding: '0.9rem 1rem', fontSize: 13, color: 'var(--dash-text)',
+                }}>
+                  Después de transferir, envía la <strong>foto del comprobante</strong> por WhatsApp al{' '}
+                  <strong>+{transferenciaInfo.whatsapp}</strong>. El sistema lo lee y activa tu plan automáticamente —
+                  tenés 30 minutos.
+                </div>
+                <button onClick={() => setTransferenciaInfo(null)} style={{
+                  alignSelf: 'flex-start', background: 'none', border: 'none', color: 'var(--dash-text-faint)',
+                  fontSize: 12.5, cursor: 'pointer', textDecoration: 'underline', padding: 0,
+                }}>
+                  ← Volver a las opciones de pago
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -50,6 +50,21 @@ db.run(`
         console.error('[DB] Error migrando pagado:', err.message);
       }
     });
+    // Migración: vencimiento del plan pagado (renovación mensual). Sin esta
+    // columna, "pagado" era una bandera permanente que nunca expiraba.
+    db.run(`ALTER TABLE negocios ADD COLUMN plan_vence TEXT`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('[DB] Error migrando plan_vence:', err.message);
+      }
+    });
+    // Migración: plan ilimitado (nunca vence, sin importar plan_vence). Para
+    // cuentas internas o casos especiales que el superadmin exime del cobro
+    // mensual — no depende de "pagado" ni de dejar plan_vence vacío.
+    db.run(`ALTER TABLE negocios ADD COLUMN plan_ilimitado INTEGER DEFAULT 0`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('[DB] Error migrando plan_ilimitado:', err.message);
+      }
+    });
     // Migración: horario del negocio (hora de cierre + días que opera)
     db.run(`ALTER TABLE negocios ADD COLUMN hora_cierre TEXT DEFAULT '21:00'`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
@@ -418,14 +433,24 @@ function actualizarPagoPlataforma(referencia, { estado, wompi_transaction_id }) 
 function marcarNegocioPagado(negocio_id, plan) {
   const limite = LIMITES_PLAN[plan] || 300;
   return new Promise((resolve, reject) => {
-    db.run(
-      `UPDATE negocios SET pagado = 1, plan = ?, limite_comprobantes = ? WHERE id = ?`,
-      [plan, limite, negocio_id],
-      function (err) {
-        if (err) reject(err);
-        else resolve({ changes: this.changes });
-      }
-    );
+    // Si renueva antes de que venza el plan actual, se suman los 30 días
+    // desde el vencimiento vigente en vez de desde hoy, para no perder
+    // los días ya pagados que faltaban por consumir.
+    db.get(`SELECT plan_vence FROM negocios WHERE id = ?`, [negocio_id], (err, row) => {
+      if (err) return reject(err);
+      const venceActual = row?.plan_vence ? new Date(row.plan_vence).getTime() : 0;
+      const base = Math.max(Date.now(), venceActual);
+      const nuevoVence = new Date(base + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      db.run(
+        `UPDATE negocios SET pagado = 1, plan = ?, limite_comprobantes = ?, plan_vence = ? WHERE id = ?`,
+        [plan, limite, nuevoVence, negocio_id],
+        function (err2) {
+          if (err2) reject(err2);
+          else resolve({ changes: this.changes, plan_vence: nuevoVence });
+        }
+      );
+    });
   });
 }
 
@@ -512,14 +537,27 @@ function contarComprobantesDelMes(negocio_id) {
 function verificarTrialActivo(negocio_id) {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT trial_fin, pagado, plan FROM negocios WHERE id = ? AND activo = 1`,
+      `SELECT trial_fin, pagado, plan, plan_vence, plan_ilimitado FROM negocios WHERE id = ? AND activo = 1`,
       [negocio_id],
       (err, row) => {
         if (err) return reject(err);
         if (!row) return resolve({ activo: false, razon: 'negocio_no_encontrado' });
 
-        // Si ya pagó, siempre activo
-        if (row.pagado) return resolve({ activo: true, pagado: true, plan: row.plan });
+        if (row.plan_ilimitado) return resolve({ activo: true, pagado: true, ilimitado: true, plan: row.plan });
+
+        if (row.pagado) {
+          // Pago legado, de antes de que existiera plan_vence: se considera
+          // activo indefinidamente hasta que se procese su próximo pago.
+          if (!row.plan_vence) return resolve({ activo: true, pagado: true, plan: row.plan });
+
+          const hoy = new Date().toISOString().split('T')[0];
+          const diasRestantes = Math.ceil((new Date(row.plan_vence) - new Date(hoy)) / (1000 * 60 * 60 * 24));
+
+          if (diasRestantes <= 0) {
+            return resolve({ activo: false, pagado: true, razon: 'plan_vencido', plan_vence: row.plan_vence, dias: 0, plan: row.plan });
+          }
+          return resolve({ activo: true, pagado: true, plan_vence: row.plan_vence, dias: diasRestantes, plan: row.plan });
+        }
 
         // Si no tiene trial_fin (negocio viejo), está activo
         if (!row.trial_fin) return resolve({ activo: true, pagado: false, plan: row.plan });
