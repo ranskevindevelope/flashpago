@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 import { createApiClient } from '../services/api';
+import { formatearMonto } from '../utils/formato';
 
 /**
  * NotificacionesEnVivo — Muestra en la esquina superior derecha una notificación
@@ -21,9 +22,6 @@ function NotificacionesEnVivo({ onLogout }) {
   const ultimaCantPend = useRef(0);      // cantidad de pendientes (NO_ENCONTRADO) vistos
   const ultimasDupIds = useRef(new Set()); // ids de duplicados vistos
   const iniciado = useRef(false);        // ¿ya cargamos el estado base?
-
-  // formatear monto
-  const formatearMonto = (monto) => '$' + Number(monto).toLocaleString('es-CO');
 
   // Reproducir sonido cuando llega una notificación de pago verificado
   const reproducirSonido = useCallback(async () => {

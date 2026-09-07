@@ -257,4 +257,4 @@ async function listarIngresosDelDia(negocio_id = 1) {
   }
 }
 
-module.exports = { verificarPorGmail, listarIngresosDelDia };
+module.exports = { verificarPorGmail, listarIngresosDelDia, extraerMontoYNombre };

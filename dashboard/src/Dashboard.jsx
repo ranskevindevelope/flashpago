@@ -1,16 +1,32 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, AreaChart, Area, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
-import { CreditCard, TrendingUp, Search, Download, DollarSign, Calendar, CheckCircle, Shield, Trophy, BarChart3, Eye, X, Moon, Mail, Users, UserPlus, UserX, UserCheck, Edit, Trash2, Save, XCircle, AlertTriangle, Clock, Bell, Activity, Zap, Wifi, WifiOff, ShoppingBag, Receipt, Wallet, PlusCircle, MinusCircle, ArrowDownUp, Settings, Building2, MailCheck, ChevronDown, ChevronUp, Volume2, Package, Rocket, Lock, Inbox, Circle, ChevronRight } from 'lucide-react';
+import { CreditCard, TrendingUp, Download, DollarSign, Calendar, CheckCircle, Shield, Trophy, BarChart3, Eye, X, Moon, Mail, Users, UserX, UserCheck, Edit, Trash2, Save, AlertTriangle, Clock, Bell, Activity, Zap, Wifi, WifiOff, ShoppingBag, Receipt, Wallet, PlusCircle, MinusCircle, ArrowDownUp, Settings, Building2, MailCheck, ChevronDown, ChevronUp, Volume2, Package, Rocket, Lock, Inbox, Circle, ChevronRight } from 'lucide-react';
 import { createApiClient } from './services/api';
 import Sidebar from './components/Sidebar';
 import DashboardHeader from './components/DashboardHeader';
 import NotificacionesEnVivo from './components/NotificacionesEnVivo';
+import Button from './components/ui/Button';
+import { FilaSkeleton, TarjetaSkeleton } from './components/ui/Skeleton';
+import SeccionBuscar from './secciones/SeccionBuscar';
+import SeccionUsuarios from './secciones/SeccionUsuarios';
+import SeccionDuplicados from './secciones/SeccionDuplicados';
+import CierreCaja from './secciones/CierreCaja';
+import { useUsuarios } from './hooks/useUsuarios';
+import { formatearMonto, formatearMiles, soloDigitos } from './utils/formato';
+import { getBancoBadge, getPlanLabel, getPlanColor } from './utils/bancos';
+
+// Recharts pesa ~366 KB: se carga solo cuando el usuario abre una sección
+// que realmente muestra una gráfica, no al entrar al dashboard.
+const VentasPorDiaChart = lazy(() => import('./components/charts/VentasPorDiaChart'));
+const VentasPorHoraChart = lazy(() => import('./components/charts/VentasPorHoraChart'));
+const VentasVsEfectivoChart = lazy(() => import('./components/charts/VentasVsEfectivoChart'));
+const GastosPorCategoriaChart = lazy(() => import('./components/charts/GastosPorCategoriaChart'));
+
+const GraficaCargando = ({ alto = '100%' }) => (
+  <div className="skeleton-block" style={{ width: '100%', height: alto }} />
+);
 import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
-
-const PASSWORD_VALIDA = /^(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
-const PASSWORD_ERROR = 'La contraseña debe tener mínimo 8 caracteres, con mayúsculas y minúsculas';
 
 const PLANES_INFO = {
   basico: { id: 'basico', nombre: 'Básico', precio: '$39.900' },
@@ -35,13 +51,9 @@ function Dashboard({ onLogout }) {
   const esAdmin = userGuardado.rol === 'admin' || esSuperAdmin;
   const [pagos, setPagos] = useState([]);
   const [ventasPorHora, setVentasPorHora] = useState([]);
-  const [duplicados, setDuplicados] = useState([]);
   const [duplicadosPendientes, setDuplicadosPendientes] = useState([]);
   const [pendientes, setPendientes] = useState({ cantidad: 0, total: 0 });
   const [stats, setStats] = useState([]);
-  const [busqueda, setBusqueda] = useState('');
-  const [resultados, setResultados] = useState(null);
-  const [buscando, setBuscando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [fotoActiva, setFotoActiva] = useState(null);
   const [seccionActiva, setSeccionActiva] = useState(getInitialSection);
@@ -69,16 +81,6 @@ function Dashboard({ onLogout }) {
   const [sidebarFijado, setSidebarFijado] = useState(false);
   const [sidebarHover, setSidebarHover] = useState(false);
   const sidebarExpandido = sidebarFijado || sidebarHover || sidebarAbierto;
-  const [duplicadoSeleccionado, setDuplicadoSeleccionado] = useState(null);
-  const [motivoRevision, setMotivoRevision] = useState('');
-  const [guardandoRevision, setGuardandoRevision] = useState(false);
-
-  // ─── Estado para Usuarios ──────────────────────────────
-  const [usuarios, setUsuarios] = useState([]);
-  const [cargandoUsuarios, setCargandoUsuarios] = useState(false);
-  const [mostrarFormUsuario, setMostrarFormUsuario] = useState(false);
-  const [editandoUsuario, setEditandoUsuario] = useState(null);
-  const [formUsuario, setFormUsuario] = useState({ usuario: '', password: '', nombre: '', rol: 'empleado', whatsapp: '', email: '' });
 
   // ─── Estado para Configuración (horario del negocio) ───
   const DIAS_SEMANA = [
@@ -134,12 +136,10 @@ function Dashboard({ onLogout }) {
   const [ventasCierres, setVentasCierres] = useState([]);
   const [ventasSemanal, setVentasSemanal] = useState(null);
   const [ventasGastosCategorias, setVentasGastosCategorias] = useState([]);
-  const [montoVentas, setMontoVentas] = useState('');
-  const [notaCierre, setNotaCierre] = useState('');
   const [gastoMonto, setGastoMonto] = useState('');
   const [gastoCategoria, setGastoCategoria] = useState('general');
   const [gastoDescripcion, setGastoDescripcion] = useState('');
-  const [guardandoCierre, setGuardandoCierre] = useState(false);
+  const [gastoMetodo, setGastoMetodo] = useState('efectivo');
   const [guardandoGasto, setGuardandoGasto] = useState(false);
   const [ventasTab, setVentasTab] = useState('hoy');
 
@@ -160,6 +160,11 @@ function Dashboard({ onLogout }) {
     queryFn: () => api.request('/api/negocios').then((d) => (d.ok ? d.negocios || [] : [])),
     enabled: seccionActiva === 'negocios',
   });
+
+  // Los usuarios los administra SeccionUsuarios; acá solo se leen para el
+  // badge del sidebar y el paso de onboarding (misma queryKey, una sola
+  // petición compartida).
+  const { data: usuarios = [] } = useUsuarios(api, { enabled: esAdmin });
 
   const cambiarSeccion = (nuevaSeccion) => {
     if (nuevaSeccion === 'configuracion' && !configVisitada) {
@@ -205,31 +210,10 @@ function Dashboard({ onLogout }) {
   }, [seccionActiva]);
 
   useEffect(() => {
-    if (seccionActiva !== 'duplicados') return undefined;
-
-    const actualizarDuplicados = () => {
-      cargarDuplicados();
-    };
-
-    actualizarDuplicados();
-    const intervalo = setInterval(actualizarDuplicados, 30000);
-    window.addEventListener('focus', actualizarDuplicados);
-
-    return () => {
-      clearInterval(intervalo);
-      window.removeEventListener('focus', actualizarDuplicados);
-    };
-  }, [seccionActiva, api]);
-
-  useEffect(() => {
     cargarDatos();
     const intervalo = setInterval(() => cargarDatos(), 30000);
     return () => clearInterval(intervalo);
   }, [diasGrafica, api]);
-
-  useEffect(() => {
-    if (seccionActiva === 'usuarios') cargarUsuarios();
-  }, [seccionActiva]);
 
   useEffect(() => {
     if (seccionActiva === 'configuracion') cargarConfiguracion();
@@ -271,58 +255,6 @@ function Dashboard({ onLogout }) {
       console.error('Error cargando datos:', err);
       setCargando(false);
     }
-  };
-
-  const cargarDuplicados = async () => {
-    try {
-      const data = await api.request('/api/dashboard/duplicados');
-      setDuplicados(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Error cargando duplicados:', err);
-    }
-  };
-
-  const buscarCliente = async () => {
-    if (!busqueda.trim()) return;
-    setBuscando(true);
-    try {
-      const data = await api.request(`/api/dashboard/buscar/${encodeURIComponent(busqueda.trim())}`);
-      setResultados(data);
-    } catch (err) {
-      console.error('Error buscando:', err);
-    }
-    setBuscando(false);
-  };
-
-  const FilaSkeleton = ({ columnas }) => (
-    <tr>
-      {columnas.map((ancho, i) => (
-        <td key={i}><span className="skeleton-bar" style={{ width: ancho }} /></td>
-      ))}
-    </tr>
-  );
-
-  const TarjetaSkeleton = () => (
-    <div className="tarjeta">
-      <div className="skeleton-block" style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0 }} />
-      <div className="tarjeta-info" style={{ gap: 6, width: '100%' }}>
-        <span className="skeleton-bar" style={{ width: '55%' }} />
-        <span className="skeleton-bar" style={{ width: '75%', height: '1.3em' }} />
-        <span className="skeleton-bar" style={{ width: '40%' }} />
-      </div>
-    </div>
-  );
-
-  // ─── Funciones de Usuarios ─────────────────────────────
-  const cargarUsuarios = async () => {
-    setCargandoUsuarios(true);
-    try {
-      const data = await api.request('/api/usuarios');
-      if (data.ok) setUsuarios(Array.isArray(data.usuarios) ? data.usuarios : []);
-    } catch (err) {
-      console.error('Error cargando usuarios:', err);
-    }
-    setCargandoUsuarios(false);
   };
 
   // ─── Funciones de Configuración ────────────────────────
@@ -527,124 +459,6 @@ function Dashboard({ onLogout }) {
     }
   };
 
-  const revisarDuplicado = async (estado) => {
-    if (!duplicadoSeleccionado || motivoRevision.trim().length < 3) return;
-    setGuardandoRevision(true);
-    try {
-      await api.request(`/api/dashboard/duplicados/${duplicadoSeleccionado.id}/revision`, {
-        method: 'POST',
-        body: JSON.stringify({ estado, motivo: motivoRevision.trim() }),
-      });
-      setMotivoRevision('');
-      setDuplicadoSeleccionado(null);
-      await cargarDuplicados();
-      await cargarDatos();
-    } catch (err) {
-      console.error('Error guardando revisión de duplicado:', err);
-    } finally {
-      setGuardandoRevision(false);
-    }
-  };
-
-  const crearUsuario = async () => {
-    if (!formUsuario.usuario || !formUsuario.password || !formUsuario.nombre) {
-      toast.error('Usuario, contraseña y nombre son requeridos');
-      return;
-    }
-    if (!PASSWORD_VALIDA.test(formUsuario.password)) {
-      toast.error(PASSWORD_ERROR);
-      return;
-    }
-
-    try {
-      const data = await api.request('/api/usuarios', {
-        method: 'POST',
-        body: JSON.stringify(formUsuario),
-      });
-
-      if (data.ok) {
-        toast.success(`Usuario "${formUsuario.usuario}" creado exitosamente`);
-        setFormUsuario({ usuario: '', password: '', nombre: '', rol: 'empleado', whatsapp: '', email: '' });
-        setMostrarFormUsuario(false);
-        cargarUsuarios();
-      } else {
-        toast.error(data.error || 'Error creando usuario');
-      }
-    } catch (err) {
-      toast.error('Error de conexión');
-    }
-  };
-
-  const actualizarUsuario = async () => {
-    if (formUsuario.password && !PASSWORD_VALIDA.test(formUsuario.password)) {
-      toast.error(PASSWORD_ERROR);
-      return;
-    }
-    try {
-      const body = { nombre: formUsuario.nombre, rol: formUsuario.rol, whatsapp: formUsuario.whatsapp, email: formUsuario.email };
-      if (formUsuario.password) body.password = formUsuario.password;
-
-      const data = await api.request(`/api/usuarios/${editandoUsuario}`, {
-        method: 'PUT',
-        body: JSON.stringify(body),
-      });
-
-      if (data.ok) {
-        toast.success('Usuario actualizado');
-        setEditandoUsuario(null);
-        setMostrarFormUsuario(false);
-        setFormUsuario({ usuario: '', password: '', nombre: '', rol: 'empleado', whatsapp: '', email: '' });
-        cargarUsuarios();
-      } else {
-        toast.error(data.error || 'Error actualizando');
-      }
-    } catch (err) {
-      toast.error('Error de conexión');
-    }
-  };
-
-  const desactivarUsuario = async (id, nombre) => {
-    if (!window.confirm(`¿Desactivar al usuario "${nombre}"?`)) return;
-    try {
-      const data = await api.request(`/api/usuarios/${id}`, { method: 'DELETE' });
-      if (data.ok) {
-        toast.success(`Usuario "${nombre}" desactivado`);
-        cargarUsuarios();
-      } else {
-        toast.error(data.error);
-      }
-    } catch (err) {
-      toast.error('Error de conexión');
-    }
-  };
-
-  const reactivarUsuario = async (id) => {
-    try {
-      const data = await api.request(`/api/usuarios/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ activo: 1 }),
-      });
-      if (data.ok) {
-        toast.success('Usuario reactivado');
-        cargarUsuarios();
-      }
-    } catch (err) {
-      toast.error('Error de conexión');
-    }
-  };
-
-  const iniciarEdicion = (user) => {
-    setEditandoUsuario(user.id);
-    setFormUsuario({ usuario: user.usuario, password: '', nombre: user.nombre, rol: user.rol, whatsapp: user.whatsapp || '', email: user.email || '' });
-    setMostrarFormUsuario(true);
-  };
-
-  const cancelarForm = () => {
-    setMostrarFormUsuario(false);
-    setEditandoUsuario(null);
-    setFormUsuario({ usuario: '', password: '', nombre: '', rol: 'empleado', whatsapp: '', email: '' });
-  };
-
   // ─── Funciones de Gmail ──────────────────────────────────
   const conectarGmail = async () => {
     setGmailCargando(true);
@@ -792,32 +606,6 @@ function Dashboard({ onLogout }) {
     }
   };
 
-  const hacerCierre = async () => {
-    const monto = parseInt(montoVentas.replace(/[.,\s]/g, ''));
-    if (!monto || monto <= 0) {
-      toast.error('Ingresa el total de ventas del día');
-      return;
-    }
-    setGuardandoCierre(true);
-    try {
-      const data = await api.request('/api/ventas/cierre', {
-        method: 'POST',
-        body: JSON.stringify({ total_ventas: monto, nota: notaCierre.trim() || null }),
-      });
-      if (data.ok) {
-        toast.success(`Cierre guardado: $${monto.toLocaleString('es-CO')} en ventas`);
-        setMontoVentas('');
-        setNotaCierre('');
-        cargarVentas();
-      } else {
-        toast.error(data.error);
-      }
-    } catch (err) {
-      toast.error('Error guardando el cierre');
-    }
-    setGuardandoCierre(false);
-  };
-
   const agregarGasto = async () => {
     const monto = parseInt(gastoMonto.replace(/[.,\s]/g, ''));
     if (!monto || monto <= 0) {
@@ -832,13 +620,14 @@ function Dashboard({ onLogout }) {
     try {
       const data = await api.request('/api/ventas/gasto', {
         method: 'POST',
-        body: JSON.stringify({ monto, categoria: gastoCategoria, descripcion: gastoDescripcion.trim() }),
+        body: JSON.stringify({ monto, categoria: gastoCategoria, descripcion: gastoDescripcion.trim(), metodo_pago: gastoMetodo }),
       });
       if (data.ok) {
         toast.success(`Gasto de $${monto.toLocaleString('es-CO')} registrado`);
         setGastoMonto('');
         setGastoDescripcion('');
         setGastoCategoria('general');
+        setGastoMetodo('efectivo');
         cargarVentas();
       } else {
         toast.error(data.error);
@@ -875,30 +664,6 @@ function Dashboard({ onLogout }) {
     return labels[cat] || cat;
   };
 
-  const formatearMonto = (monto) => '$' + Number(monto).toLocaleString('es-CO');
-
-  const getBancoBadge = (banco) => {
-    const b = (banco || '').toLowerCase();
-    if (b.includes('nequi')) return { clase: 'badge-nequi', nombre: 'Nequi' };
-    if (b.includes('bancolombia')) return { clase: 'badge-bancolombia', nombre: 'Bancolombia' };
-    if (b.includes('daviplata') || b.includes('davi')) return { clase: 'badge-daviplata', nombre: 'Daviplata' };
-    if (b.includes('breb') || b.includes('bre-b')) return { clase: 'badge-breb', nombre: 'Bre-B' };
-    if (b.includes('avvillas') || b.includes('av villas')) return { clase: 'badge-avvillas', nombre: 'AV Villas' };
-    if (b.includes('transfiya')) return { clase: 'badge-transfiya', nombre: 'Transfiya' };
-    if (b.includes('nu')) return { clase: 'badge-nu', nombre: 'Nu' };
-    return { clase: 'badge-otro', nombre: banco || 'Otro' };
-  };
-
-  const getPlanLabel = (plan) => {
-    const labels = { basico: 'Básico', premium: 'Premium', premium_plus: 'Premium Plus', empresarial: 'Empresarial' };
-    return labels[plan] || plan;
-  };
-
-  const getPlanColor = (porcentaje) => {
-    if (porcentaje >= 90) return '#E53935';
-    if (porcentaje >= 70) return '#FF9800';
-    return '#43A047';
-  };
 
   const statsFormateados = stats.map(s => ({
     ...s,
@@ -1042,17 +807,13 @@ function Dashboard({ onLogout }) {
                         </div>
                       ))}
                     </div>
-                    <button
-                      className="plan-card-bloqueo-btn"
+                    <Button
+                      variant={p.popular ? 'primary' : 'dark'}
+                      fullWidth
                       onClick={() => setModalPagoPlan(p)}
-                      style={{
-                        width: '100%', padding: '0.75rem', borderRadius: 10, border: 'none',
-                        background: p.popular ? '#F57C00' : '#1a1a2e', color: '#fff',
-                        fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer',
-                      }}
                     >
                       Activar {p.nombre}
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -1071,77 +832,12 @@ function Dashboard({ onLogout }) {
           ) : (
           <>
           {seccionActiva === 'duplicados' && (
-            <div className="duplicados-layout">
-              <div className="seccion duplicados-lista">
-                <div className="seccion-header">
-                  <h2 className="seccion-titulo"><AlertTriangle size={18} /> Casos para revisar</h2>
-                  <span className="duplicados-count">{duplicados.length} casos</span>
-                </div>
-                {duplicados.length === 0 ? (
-                  <p className="empty-state">No se han detectado duplicados. ¡Todo limpio!</p>
-                ) : (
-                  <div className="tabla-container">
-                    <table className="tabla-pagos">
-                      <thead><tr><th>Referencia</th><th>Cliente</th><th>Monto</th><th>Estado</th><th>Acción</th></tr></thead>
-                      <tbody>
-                        {duplicados.map((d) => {
-                          const banco = getBancoBadge(d.banco);
-                          return (
-                            <tr key={d.id} className={duplicadoSeleccionado?.id === d.id ? 'fila-seleccionada' : ''}>
-                              <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{d.referencia || '-'}</td>
-                              <td>{d.nombre_cliente || 'Sin nombre'}<br /><span className="tabla-subtexto">{banco.nombre}</span></td>
-                              <td className="td-monto">{formatearMonto(d.monto)}</td>
-                              <td><span className={`revision-badge revision-${(d.revision_estado || 'PENDIENTE').toLowerCase()}`}>{d.revision_estado || 'PENDIENTE'}</span></td>
-                              <td><button className="ver-foto-btn" onClick={() => setDuplicadoSeleccionado(d)}>Revisar</button></td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-              <div className="seccion duplicado-detalle">
-                <div className="seccion-header">
-                  <h2 className="seccion-titulo"><Eye size={18} /> Detalle del caso</h2>
-                  {duplicadoSeleccionado && <button className="modal-close-inline" onClick={() => setDuplicadoSeleccionado(null)}><X size={15} /></button>}
-                </div>
-                {!duplicadoSeleccionado ? (
-                  <p className="empty-state">Selecciona un caso para revisar sus datos.</p>
-                ) : (
-                  <>
-                    <div className="duplicado-resumen">
-                      <strong>{duplicadoSeleccionado.referencia || 'Sin referencia'}</strong>
-                      <span>{duplicadoSeleccionado.banco || 'Banco no indicado'} · {formatearMonto(duplicadoSeleccionado.monto)}</span>
-                      <span>{duplicadoSeleccionado.fecha || '-'} {duplicadoSeleccionado.hora || ''}</span>
-                    </div>
-                    {duplicadoSeleccionado.foto && (
-                      <button className="ver-foto-btn" onClick={() => setFotoActiva(duplicadoSeleccionado.foto)}>
-                        <Eye size={14} /> Ver comprobante
-                      </button>
-                    )}
-                    <label className="revision-label" htmlFor="motivo-revision">Motivo de la decisión</label>
-                    <textarea
-                      id="motivo-revision"
-                      className="revision-motivo"
-                      value={motivoRevision}
-                      onChange={(event) => setMotivoRevision(event.target.value)}
-                      placeholder="Explica brevemente la revisión..."
-                      maxLength={500}
-                    />
-                    <div className="revision-acciones">
-                      <button className="revision-btn revision-btn-danger" disabled={!esAdmin || guardandoRevision || motivoRevision.trim().length < 3} onClick={() => revisarDuplicado('DUPLICADO')}>
-                        Confirmar duplicado
-                      </button>
-                      <button className="revision-btn revision-btn-success" disabled={!esAdmin || guardandoRevision || motivoRevision.trim().length < 3} onClick={() => revisarDuplicado('LEGITIMO')}>
-                        Marcar como legítimo
-                      </button>
-                      {!esAdmin && <small>Solo un administrador puede guardar decisiones.</small>}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+            <SeccionDuplicados
+              api={api}
+              esAdmin={esAdmin}
+              onVerFoto={setFotoActiva}
+              onRevisionGuardada={cargarDatos}
+            />
           )}
 
           {/* ─── PANEL GENERAL ────────────────────── */}
@@ -1328,17 +1024,9 @@ function Dashboard({ onLogout }) {
                     )}
                   </div>
                   {(planInfo.trial.dias <= 3 || !planInfo.trial.activo) && (
-                    <button
-                      className="plan-card-bloqueo-btn"
-                      onClick={() => setModalPagoPlan(PLANES_INFO[planInfo.plan] || PLANES_INFO.basico)}
-                      style={{
-                        padding: '0.6rem 1.25rem', borderRadius: 10, border: 'none',
-                        background: !planInfo.trial.activo ? '#E53935' : '#F57C00',
-                        color: '#fff', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
-                      }}
-                    >
+                    <Button onClick={() => setModalPagoPlan(PLANES_INFO[planInfo.plan] || PLANES_INFO.basico)}>
                       Elegir plan
-                    </button>
+                    </Button>
                   )}
                 </div>
               )}
@@ -1364,16 +1052,9 @@ function Dashboard({ onLogout }) {
                       Renueva antes del {new Date(planInfo.trial.plan_vence).toLocaleDateString('es-CO')} para que el bot no deje de verificar comprobantes.
                     </div>
                   </div>
-                  <button
-                    className="plan-card-bloqueo-btn"
-                    onClick={() => setModalPagoPlan(PLANES_INFO[planInfo.plan] || PLANES_INFO.basico)}
-                    style={{
-                      padding: '0.6rem 1.25rem', borderRadius: 10, border: 'none',
-                      background: '#F57C00', color: '#fff', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
-                    }}
-                  >
+                  <Button onClick={() => setModalPagoPlan(PLANES_INFO[planInfo.plan] || PLANES_INFO.basico)}>
                     Renovar plan
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -1433,19 +1114,13 @@ function Dashboard({ onLogout }) {
                       FlashPago necesita leer las notificaciones de tu banco para verificar comprobantes automáticamente.
                     </div>
                   </div>
-                  <button
-                    className="btn-conectar-gmail"
+                  <Button
                     onClick={conectarGmail}
-                    disabled={gmailCargando}
-                    style={{
-                      padding: '0.6rem 1.25rem', borderRadius: 10, border: 'none',
-                      background: '#F57C00', color: '#fff', fontWeight: 600, fontSize: '0.85rem',
-                      cursor: gmailCargando ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem',
-                      transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                    }}
+                    loading={gmailCargando}
+                    icon={<Mail size={15} />}
                   >
-                    <Mail size={15} /> {gmailCargando ? 'Conectando...' : 'Conectar Gmail'}
-                  </button>
+                    {gmailCargando ? 'Conectando...' : 'Conectar Gmail'}
+                  </Button>
                 </div>
               )}
 
@@ -1564,19 +1239,16 @@ function Dashboard({ onLogout }) {
                     </div>
                   )}
                   <div className="grafica-container">
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={statsPeriodo.length > 0 ? statsPeriodo.map(s => ({
-                        ...s,
-                        fecha: s.fecha ? s.fecha.slice(8, 10) + '/' + s.fecha.slice(5, 7) : (s.fecha || '').slice(0, 5),
-                        totalK: Math.round(s.total / 1000),
-                      })) : statsFormateados}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-                        <XAxis dataKey="fecha" tick={{ fontSize: 11 }} />
-                        <YAxis tickFormatter={(v) => `$${v}k`} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(value) => [formatearMonto(value * 1000), 'Total']} />
-                        <Bar dataKey="totalK" fill="#F57C00" radius={[6, 6, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <Suspense fallback={<GraficaCargando alto={250} />}>
+                      <VentasPorDiaChart
+                        height={250}
+                        data={statsPeriodo.length > 0 ? statsPeriodo.map(s => ({
+                          ...s,
+                          fecha: s.fecha ? s.fecha.slice(8, 10) + '/' + s.fecha.slice(5, 7) : (s.fecha || '').slice(0, 5),
+                          totalK: Math.round(s.total / 1000),
+                        })) : statsFormateados}
+                      />
+                    </Suspense>
                   </div>
                 </div>
                 <div className="seccion alertas-card">
@@ -1672,38 +1344,9 @@ function Dashboard({ onLogout }) {
                 </div>
                 {ventasPorHora.length > 1 ? (
                   <div style={{ width: '100%', height: 190 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={ventasPorHora} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="ventasHoraFill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#F57C00" stopOpacity={0.35} />
-                            <stop offset="100%" stopColor="#F57C00" stopOpacity={0.02} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                        <XAxis dataKey="etiqueta" tick={{ fontSize: 10, fill: 'var(--dash-text-faint)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                        <YAxis
-                          tickFormatter={(v) => v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${v}`}
-                          tick={{ fontSize: 10, fill: 'var(--dash-text-faint)' }} axisLine={false} tickLine={false} width={44}
-                        />
-                        <Tooltip
-                          formatter={(value) => [formatearMonto(value), 'Ventas']}
-                          labelFormatter={(label) => `Hora ${label}`}
-                          cursor={{ stroke: '#F57C00', strokeWidth: 1, strokeDasharray: '4 4' }}
-                          contentStyle={{ borderRadius: 10, border: '1px solid var(--dash-border)', fontSize: '0.8rem', boxShadow: '0 8px 20px rgba(25,31,62,0.12)' }}
-                        />
-                        <Area
-                          type="monotone" dataKey="total" stroke="#F57C00" strokeWidth={2.5}
-                          fill="url(#ventasHoraFill)"
-                          activeDot={{ r: 5, fill: '#F57C00', stroke: 'var(--dash-surface)', strokeWidth: 2 }}
-                          dot={(dotProps) => {
-                            const { cx, cy, index } = dotProps;
-                            if (index !== ventasPorHora.length - 1) return null;
-                            return <circle key={`vh-dot-${index}`} cx={cx} cy={cy} r={4} fill="#F57C00" stroke="var(--dash-surface)" strokeWidth={2} />;
-                          }}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                    <Suspense fallback={<GraficaCargando />}>
+                      <VentasPorHoraChart data={ventasPorHora} />
+                    </Suspense>
                   </div>
                 ) : (
                   <p style={{ textAlign: 'center', color: 'var(--dash-text-faint)', fontSize: '0.85rem', padding: '1.5rem 0' }}>
@@ -1943,19 +1586,16 @@ function Dashboard({ onLogout }) {
                   <p className="empty-state">No hay ventas registradas en este mes.</p>
                 ) : (
                   <div className="grafica-container">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={statsPeriodo.map(s => ({
-                        ...s,
-                        fecha: s.fecha ? s.fecha.slice(8, 10) + '/' + s.fecha.slice(5, 7) : '',
-                        totalK: Math.round(s.total / 1000),
-                      }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-                        <XAxis dataKey="fecha" tick={{ fontSize: 11 }} />
-                        <YAxis tickFormatter={(v) => `$${v}k`} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(value) => [formatearMonto(value * 1000), 'Total']} />
-                        <Bar dataKey="totalK" fill="#F57C00" radius={[6, 6, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <Suspense fallback={<GraficaCargando alto={300} />}>
+                      <VentasPorDiaChart
+                        height={300}
+                        data={statsPeriodo.map(s => ({
+                          ...s,
+                          fecha: s.fecha ? s.fecha.slice(8, 10) + '/' + s.fecha.slice(5, 7) : '',
+                          totalK: Math.round(s.total / 1000),
+                        }))}
+                      />
+                    </Suspense>
                   </div>
                 )}
               </div>
@@ -1996,66 +1636,7 @@ function Dashboard({ onLogout }) {
           )}
 
           {/* ─── BUSCAR ──────────────────────────── */}
-          {seccionActiva === 'buscar' && (
-            <div className="seccion">
-              <h2 className="seccion-titulo">Buscar pagos por cliente</h2>
-              <div className="buscador">
-                <input
-                  type="text"
-                  placeholder="Nombre del cliente..."
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && buscarCliente()}
-                />
-                <button onClick={buscarCliente}><Search size={16} /> Buscar</button>
-              </div>
-              {buscando ? (
-                <div className="resultados-busqueda">
-                  <div className="tabla-container">
-                    <table className="tabla-pagos">
-                      <thead><tr><th>Monto</th><th>Banco</th><th>Fecha</th><th>Hora</th></tr></thead>
-                      <tbody>
-                        {Array.from({ length: 4 }).map((_, i) => (
-                          <FilaSkeleton key={`skeleton-${i}`} columnas={['50%', 60, 55, 40]} />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : resultados && (
-                <div className="resultados-busqueda">
-                  {resultados.length === 0 ? (
-                    <p className="sin-resultados">No se encontraron pagos para "{busqueda}"</p>
-                  ) : (
-                    <>
-                      <p className="resultados-titulo">
-                        {resultados.length} pago(s) de <strong>{resultados[0].nombre_cliente}</strong> —
-                        Total: <strong>{formatearMonto(resultados.reduce((s, p) => s + p.monto, 0))}</strong>
-                      </p>
-                      <div className="tabla-container">
-                        <table className="tabla-pagos">
-                          <thead><tr><th>Monto</th><th>Banco</th><th>Fecha</th><th>Hora</th></tr></thead>
-                          <tbody>
-                            {resultados.map((p, i) => {
-                              const banco = getBancoBadge(p.banco);
-                              return (
-                                <tr key={i}>
-                                  <td className="td-monto">{formatearMonto(p.monto)}</td>
-                                  <td><span className={`banco-badge ${banco.clase}`}>{banco.nombre}</span></td>
-                                  <td>{p.fecha}</td>
-                                  <td>{p.hora}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          {seccionActiva === 'buscar' && <SeccionBuscar api={api} />}
 
           {/* ─── EXPORTAR ────────────────────────── */}
           {seccionActiva === 'exportar' && (
@@ -2157,108 +1738,12 @@ function Dashboard({ onLogout }) {
                       <div className="seccion-header">
                         <h2 className="seccion-titulo"><Receipt size={18} /> Cierre de caja</h2>
                       </div>
-                      {ventasResumen?.cierre ? (
-                        <div style={{ padding: '0.5rem 0' }}>
-                          <div style={{
-                            background: 'var(--tint-green-bg)', borderRadius: 10, padding: '1rem 1.25rem',
-                            marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
-                          }}>
-                            <CheckCircle size={20} color="#2E7D32" />
-                            <div>
-                              <div style={{ fontWeight: 600, color: '#1B5E20', fontSize: '0.9rem' }}>Cierre registrado hoy</div>
-                              <div style={{ fontSize: '0.8rem', color: '#388E3C' }}>por {ventasResumen.cierre.cerrado_por}</div>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            {[
-                              { label: 'Total ventas', valor: ventasResumen.cierre.total_ventas, color: 'var(--dash-text)' },
-                              { label: 'Transferencias', valor: ventasResumen.cierre.total_transferencias, color: '#1565C0' },
-                              { label: 'Efectivo en caja', valor: ventasResumen.cierre.total_efectivo, color: '#2E7D32' },
-                              { label: 'Gastos del día', valor: ventasResumen.cierre.total_gastos, color: '#E53935' },
-                            ].map((item, i) => (
-                              <div key={i} style={{
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                padding: '0.5rem 0', borderBottom: i < 3 ? '1px solid var(--dash-border-soft)' : 'none',
-                              }}>
-                                <span style={{ fontSize: '0.85rem', color: 'var(--dash-text-muted)' }}>{item.label}</span>
-                                <span style={{ fontSize: '1rem', fontWeight: 700, color: item.color }}>{formatearMonto(item.valor)}</span>
-                              </div>
-                            ))}
-                          </div>
-                          {ventasResumen.cierre.nota && (
-                            <div style={{
-                              marginTop: '0.75rem', padding: '0.6rem 0.8rem', background: 'var(--dash-surface-2)',
-                              borderRadius: 8, fontSize: '0.82rem', color: 'var(--dash-text-muted)',
-                            }}>
-                              📝 {ventasResumen.cierre.nota}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div style={{ padding: '0.5rem 0' }}>
-                          <p style={{ fontSize: '0.85rem', color: 'var(--dash-text-muted)', marginBottom: '1rem' }}>
-                            Ingresa el total de ventas del día (del ticket de la caja registradora). El sistema calcula el efectivo restando las transferencias verificadas.
-                          </p>
-                          <div style={{ marginBottom: '0.75rem' }}>
-                            <label style={{ fontSize: '0.8rem', color: 'var(--dash-text-muted)', fontWeight: 600, marginBottom: '0.3rem', display: 'block' }}>
-                              Total de ventas del día ($)
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Ej: 235100"
-                              value={montoVentas}
-                              onChange={(e) => setMontoVentas(e.target.value.replace(/[^0-9]/g, ''))}
-                              style={{
-                                width: '100%', padding: '0.65rem 0.8rem', borderRadius: 8,
-                                border: '2px solid var(--dash-border)', fontSize: '1.1rem', fontWeight: 600,
-                                outline: 'none', boxSizing: 'border-box',
-                              }}
-                            />
-                            {montoVentas && (
-                              <div style={{ fontSize: '0.8rem', color: '#F57C00', marginTop: '0.3rem', fontWeight: 500 }}>
-                                {formatearMonto(parseInt(montoVentas) || 0)}
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ marginBottom: '0.75rem' }}>
-                            <label style={{ fontSize: '0.8rem', color: 'var(--dash-text-muted)', fontWeight: 600, marginBottom: '0.3rem', display: 'block' }}>
-                              Nota (opcional)
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Ej: Día normal, faltó cambio"
-                              value={notaCierre}
-                              onChange={(e) => setNotaCierre(e.target.value)}
-                              style={{
-                                width: '100%', padding: '0.55rem 0.8rem', borderRadius: 8,
-                                border: '2px solid var(--dash-border)', fontSize: '0.85rem',
-                                outline: 'none', boxSizing: 'border-box',
-                              }}
-                            />
-                          </div>
-                          <div style={{
-                            background: 'var(--tint-orange-bg)', borderRadius: 8, padding: '0.6rem 0.8rem',
-                            marginBottom: '1rem', fontSize: '0.8rem', color: 'var(--tint-orange-fg)',
-                            display: 'flex', alignItems: 'center', gap: '0.4rem',
-                          }}>
-                            <ArrowDownUp size={14} />
-                            Transferencias verificadas hoy: <strong>{formatearMonto(ventasResumen?.transferencias?.total || 0)}</strong> ({ventasResumen?.transferencias?.cantidad || 0} pagos)
-                          </div>
-                          <button
-                            disabled={guardandoCierre || !montoVentas}
-                            onClick={hacerCierre}
-                            style={{
-                              width: '100%', padding: '0.7rem', borderRadius: 10, border: 'none',
-                              background: montoVentas ? '#F57C00' : 'var(--dash-surface-2)',
-                              color: montoVentas ? '#fff' : 'var(--dash-text-faint)', fontWeight: 700,
-                              fontSize: '0.9rem', cursor: montoVentas ? 'pointer' : 'default',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
-                            }}
-                          >
-                            <Receipt size={16} /> {guardandoCierre ? 'Guardando...' : 'Cerrar caja del día'}
-                          </button>
-                        </div>
-                      )}
+                      <CierreCaja
+                        resumen={ventasResumen}
+                        api={api}
+                        esAdmin={esAdmin}
+                        onGuardado={() => { cargarVentas(); cargarDatos(); }}
+                      />
                     </div>
 
                     {/* Gastos rápidos */}
@@ -2269,9 +1754,10 @@ function Dashboard({ onLogout }) {
                       <div style={{ marginBottom: '0.6rem' }}>
                         <input
                           type="text"
+                          inputMode="numeric"
                           placeholder="Monto ($)"
-                          value={gastoMonto}
-                          onChange={(e) => setGastoMonto(e.target.value.replace(/[^0-9]/g, ''))}
+                          value={formatearMiles(gastoMonto)}
+                          onChange={(e) => setGastoMonto(soloDigitos(e.target.value))}
                           style={{
                             width: '100%', padding: '0.55rem 0.8rem', borderRadius: 8,
                             border: '2px solid var(--dash-border)', fontSize: '0.95rem', fontWeight: 600,
@@ -2306,6 +1792,24 @@ function Dashboard({ onLogout }) {
                             outline: 'none', marginBottom: '0.6rem', boxSizing: 'border-box',
                           }}
                         />
+                        {/* Solo lo pagado en efectivo sale del cajón, así que
+                            define si el gasto se resta del cierre. */}
+                        <div className="gasto-metodo">
+                          <button
+                            type="button"
+                            aria-pressed={gastoMetodo === 'efectivo'}
+                            onClick={() => setGastoMetodo('efectivo')}
+                          >
+                            Pagué en efectivo
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={gastoMetodo === 'transferencia'}
+                            onClick={() => setGastoMetodo('transferencia')}
+                          >
+                            Por transferencia
+                          </button>
+                        </div>
                         <button
                           className="btn-registrar-gasto"
                           disabled={guardandoGasto || !gastoMonto || !gastoDescripcion.trim()}
@@ -2318,7 +1822,10 @@ function Dashboard({ onLogout }) {
                             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
                           }}
                         >
-                          <PlusCircle size={15} /> {guardandoGasto ? 'Guardando...' : 'Registrar gasto'}
+                          {guardandoGasto
+                            ? <span className="fp-btn__spinner" style={{ width: 15, height: 15 }} aria-hidden="true" />
+                            : <PlusCircle size={15} />}
+                          {guardandoGasto ? 'Guardando...' : 'Registrar gasto'}
                         </button>
                       </div>
 
@@ -2340,7 +1847,11 @@ function Dashboard({ onLogout }) {
                                 }} />
                                 <div>
                                   <div style={{ fontSize: '0.82rem', fontWeight: 500 }}>{g.descripcion}</div>
-                                  <div style={{ fontSize: '0.72rem', color: 'var(--dash-text-faint)' }}>{getCategoriaLabel(g.categoria)}</div>
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--dash-text-faint)' }}>
+                                    {getCategoriaLabel(g.categoria)}
+                                    {' · '}
+                                    {(g.metodo_pago || 'efectivo') === 'transferencia' ? 'Transferencia' : 'Efectivo'}
+                                  </div>
                                 </div>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -2416,27 +1927,9 @@ function Dashboard({ onLogout }) {
                     <div className="seccion" style={{ marginBottom: '1.25rem' }}>
                       <h2 className="seccion-titulo"><BarChart3 size={18} /> Ventas vs Efectivo (7 días)</h2>
                       <div className="grafica-container">
-                        <ResponsiveContainer width="100%" height={260}>
-                          <LineChart data={ventasSemanal.dias.map(d => ({
-                            fecha: (d.fecha || '').split('/').slice(0, 2).join('/'),
-                            ventas: Math.round(d.total_ventas / 1000),
-                            efectivo: Math.round(d.total_efectivo / 1000),
-                          }))} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                            <XAxis dataKey="fecha" tick={{ fontSize: 11, fill: 'var(--dash-text-faint)' }} axisLine={false} tickLine={false} />
-                            <YAxis tickFormatter={(v) => `$${v}k`} tick={{ fontSize: 11, fill: 'var(--dash-text-faint)' }} axisLine={false} tickLine={false} width={44} />
-                            <Tooltip
-                              formatter={(value, name) => [formatearMonto(value * 1000), name === 'ventas' ? 'Ventas' : 'Efectivo']}
-                              contentStyle={{ borderRadius: 10, border: '1px solid var(--dash-border)', fontSize: '0.8rem', boxShadow: '0 8px 20px rgba(25,31,62,0.12)' }}
-                            />
-                            <Legend
-                              formatter={(value) => (value === 'ventas' ? 'Ventas' : 'Efectivo')}
-                              wrapperStyle={{ fontSize: '0.8rem' }}
-                            />
-                            <Line type="monotone" dataKey="ventas" name="ventas" stroke="#F57C00" strokeWidth={2.5} dot={{ r: 4, fill: '#F57C00', strokeWidth: 0 }} activeDot={{ r: 6 }} />
-                            <Line type="monotone" dataKey="efectivo" name="efectivo" stroke="#43A047" strokeWidth={2.5} dot={{ r: 4, fill: '#43A047', strokeWidth: 0 }} activeDot={{ r: 6 }} />
-                          </LineChart>
-                        </ResponsiveContainer>
+                        <Suspense fallback={<GraficaCargando alto={260} />}>
+                          <VentasVsEfectivoChart dias={ventasSemanal.dias} />
+                        </Suspense>
                       </div>
                     </div>
                   )}
@@ -2524,29 +2017,13 @@ function Dashboard({ onLogout }) {
                         <h2 className="seccion-titulo"><BarChart3 size={18} /> Gastos por categoría (30 días)</h2>
                         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '1rem' }}>
                           <div style={{ position: 'relative', width: 190, height: 190, flexShrink: 0, margin: '0 auto' }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                              <PieChart>
-                                <Pie
-                                  data={ventasGastosCategorias}
-                                  dataKey="total"
-                                  nameKey="categoria"
-                                  innerRadius={58}
-                                  outerRadius={85}
-                                  paddingAngle={2}
-                                  startAngle={90}
-                                  endAngle={-270}
-                                  stroke="none"
-                                >
-                                  {ventasGastosCategorias.map((cat) => (
-                                    <Cell key={cat.categoria} fill={getCategoriaColor(cat.categoria)} />
-                                  ))}
-                                </Pie>
-                                <Tooltip
-                                  formatter={(value, _name, props) => [formatearMonto(value), getCategoriaLabel(props.payload.categoria)]}
-                                  contentStyle={{ borderRadius: 8, border: '1px solid var(--dash-border)', fontSize: '0.8rem' }}
-                                />
-                              </PieChart>
-                            </ResponsiveContainer>
+                            <Suspense fallback={<GraficaCargando />}>
+                              <GastosPorCategoriaChart
+                                categorias={ventasGastosCategorias}
+                                getColor={getCategoriaColor}
+                                getLabel={getCategoriaLabel}
+                              />
+                            </Suspense>
                             <div style={{
                               position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
                               textAlign: 'center', pointerEvents: 'none',
@@ -2591,187 +2068,7 @@ function Dashboard({ onLogout }) {
           )}
 
           {/* ─── USUARIOS ────────────────────────── */}
-          {seccionActiva === 'usuarios' && (
-            <>
-              <div className="tarjetas-grid">
-                {cargandoUsuarios ? (
-                  <>
-                    <TarjetaSkeleton />
-                    <TarjetaSkeleton />
-                    <TarjetaSkeleton />
-                    <TarjetaSkeleton />
-                  </>
-                ) : (
-                  <>
-                    <div className="tarjeta tarjeta-accent">
-                      <div className="tarjeta-icon-box tarjeta-icon-naranja"><Users size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Total usuarios</span>
-                        <span className="tarjeta-valor">{usuarios.length}</span>
-                        <span className="tarjeta-sub">Registrados</span>
-                      </div>
-                    </div>
-                    <div className="tarjeta">
-                      <div className="tarjeta-icon-box tarjeta-icon-verde"><UserCheck size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Activos</span>
-                        <span className="tarjeta-valor">{usuarios.filter(u => u.activo).length}</span>
-                        <span className="tarjeta-sub">Con acceso al sistema</span>
-                      </div>
-                    </div>
-                    <div className="tarjeta">
-                      <div className="tarjeta-icon-box tarjeta-icon-azul"><Shield size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Administradores</span>
-                        <span className="tarjeta-valor">{usuarios.filter(u => u.rol === 'admin').length}</span>
-                        <span className="tarjeta-sub">Acceso total</span>
-                      </div>
-                    </div>
-                    <div className="tarjeta">
-                      <div className="tarjeta-icon-box tarjeta-icon-morado"><CreditCard size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Empleados</span>
-                        <span className="tarjeta-valor">{usuarios.filter(u => u.rol === 'empleado').length}</span>
-                        <span className="tarjeta-sub">Acceso limitado</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-
-              <div className="seccion">
-                <div className="seccion-header">
-                  <h2 className="seccion-titulo"><Users size={18} /> Usuarios del sistema</h2>
-                  {!mostrarFormUsuario && (
-                    <button className="exportar-btn" onClick={() => { setMostrarFormUsuario(true); setEditandoUsuario(null); setFormUsuario({ usuario: '', password: '', nombre: '', rol: 'empleado', whatsapp: '', email: '' }); }}>
-                      <UserPlus size={14} /> Nuevo usuario
-                    </button>
-                  )}
-                </div>
-
-                {mostrarFormUsuario && (
-                  <div className="usuario-form">
-                    <h3 className="usuario-form-titulo">
-                      {editandoUsuario ? <><Edit size={16} /> Editar usuario</> : <><UserPlus size={16} /> Crear nuevo usuario</>}
-                    </h3>
-                    <div className="usuario-form-grid">
-                      <div className="usuario-form-campo">
-                        <label>Nombre completo</label>
-                        <input type="text" placeholder="Ej: Kevin Ramírez" value={formUsuario.nombre} onChange={(e) => setFormUsuario({ ...formUsuario, nombre: e.target.value })} />
-                      </div>
-                      <div className="usuario-form-campo">
-                        <label>Usuario (login)</label>
-                        <input type="text" placeholder="Ej: kevin" value={formUsuario.usuario} onChange={(e) => setFormUsuario({ ...formUsuario, usuario: e.target.value })} disabled={!!editandoUsuario} />
-                      </div>
-                      <div className="usuario-form-campo">
-                        <label>{editandoUsuario ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña'}</label>
-                        <input type="password" placeholder={editandoUsuario ? '••••••' : 'Mín. 8, con Mayús. y minús.'} value={formUsuario.password} onChange={(e) => setFormUsuario({ ...formUsuario, password: e.target.value })} />
-                      </div>
-                      <div className="usuario-form-campo">
-                        <label>Rol</label>
-                        <select value={formUsuario.rol} onChange={(e) => setFormUsuario({ ...formUsuario, rol: e.target.value })}>
-                          <option value="empleado">Empleado</option>
-                          <option value="admin">Administrador</option>
-                        </select>
-                      </div>
-                      <div className="usuario-form-campo">
-                        <label>WhatsApp (opcional)</label>
-                        <input type="text" placeholder="Ej: 573001234567@c.us" value={formUsuario.whatsapp} onChange={(e) => setFormUsuario({ ...formUsuario, whatsapp: e.target.value })} />
-                      </div>
-                      <div className="usuario-form-campo">
-                        <label>Email (para recuperar contraseña)</label>
-                        <input type="email" placeholder="Ej: kevin@negocio.com" value={formUsuario.email} onChange={(e) => setFormUsuario({ ...formUsuario, email: e.target.value })} />
-                      </div>
-                    </div>
-                    <div className="usuario-form-acciones">
-                      <button className="usuario-btn-guardar" onClick={editandoUsuario ? actualizarUsuario : crearUsuario}>
-                        <Save size={15} /> {editandoUsuario ? 'Guardar cambios' : 'Crear usuario'}
-                      </button>
-                      <button className="usuario-btn-cancelar" onClick={cancelarForm}>
-                        <X size={15} /> Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {cargandoUsuarios ? (
-                  <div className="tabla-container">
-                    <table className="tabla-pagos">
-                      <thead>
-                        <tr>
-                          <th>Nombre</th>
-                          <th>Usuario</th>
-                          <th>Rol</th>
-                          <th>WhatsApp</th>
-                          <th>Estado</th>
-                          <th>Último login</th>
-                          <th>Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <FilaSkeleton key={`skeleton-${i}`} columnas={['65%', '50%', 55, '50%', 55, '45%', 50]} />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="tabla-container">
-                    <table className="tabla-pagos">
-                      <thead>
-                        <tr>
-                          <th>Nombre</th>
-                          <th>Usuario</th>
-                          <th>Rol</th>
-                          <th>WhatsApp</th>
-                          <th>Estado</th>
-                          <th>Último login</th>
-                          <th>Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {usuarios.map(user => (
-                          <tr key={user.id} style={!user.activo ? { opacity: 0.5 } : {}}>
-                            <td className="td-cliente">{user.nombre}</td>
-                            <td>{user.usuario}</td>
-                            <td>
-                              <span className={`banco-badge ${user.rol === 'admin' ? 'badge-bancolombia' : 'badge-nequi'}`}>
-                                {user.rol === 'admin' ? 'Admin' : 'Empleado'}
-                              </span>
-                            </td>
-                            <td>{user.whatsapp || '—'}</td>
-                            <td>
-                              <span className={`fuente-badge ${user.activo ? 'fuente-gmail' : 'fuente-nocturna'}`}>
-                                {user.activo ? <><UserCheck size={11} /> Activo</> : <><UserX size={11} /> Inactivo</>}
-                              </span>
-                            </td>
-                            <td style={{ fontSize: '0.8rem' }}>{user.ultimo_login || 'Nunca'}</td>
-                            <td>
-                              <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                <button className="ver-foto-btn" onClick={() => iniciarEdicion(user)} title="Editar">
-                                  <Edit size={13} />
-                                </button>
-                                {user.activo ? (
-                                  <button className="ver-foto-btn" onClick={() => desactivarUsuario(user.id, user.nombre)} title="Desactivar" style={{ color: '#E53935' }}>
-                                    <Trash2 size={13} />
-                                  </button>
-                                ) : (
-                                  <button className="ver-foto-btn" onClick={() => reactivarUsuario(user.id)} title="Reactivar" style={{ color: '#43A047' }}>
-                                    <UserCheck size={13} />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+          {seccionActiva === 'usuarios' && <SeccionUsuarios api={api} />}
 
           {/* ─── CONFIGURACIÓN ──────────────────── */}
           {seccionActiva === 'configuracion' && (
@@ -2874,9 +2171,9 @@ function Dashboard({ onLogout }) {
                     </p>
                   </div>
 
-                  <button className="usuario-btn-guardar" onClick={guardarConfiguracion} disabled={guardandoConfig}>
-                    <Save size={15} /> {guardandoConfig ? 'Guardando...' : 'Guardar configuración'}
-                  </button>
+                  <Button onClick={guardarConfiguracion} loading={guardandoConfig} icon={<Save size={15} />}>
+                    {guardandoConfig ? 'Guardando...' : 'Guardar configuración'}
+                  </Button>
                 </div>
               )}
             </div>
@@ -3189,6 +2486,7 @@ function Dashboard({ onLogout }) {
             {!transferenciaInfo ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <button
+                  className="fp-option-btn"
                   onClick={() => { cerrarModalPago(); pagarConWompi(modalPagoPlan.id, modalPagoPlan.nombre); }}
                   disabled={pagandoPlan === modalPagoPlan.id}
                   style={{
@@ -3197,21 +2495,26 @@ function Dashboard({ onLogout }) {
                     cursor: 'pointer', textAlign: 'left',
                   }}
                 >
-                  <CreditCard size={20} color="#F57C00" />
+                  {pagandoPlan === modalPagoPlan.id
+                    ? <span className="fp-btn__spinner" style={{ color: '#F57C00', width: 20, height: 20 }} aria-hidden="true" />
+                    : <CreditCard size={20} color="#F57C00" />}
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--dash-text)' }}>PSE / Tarjeta</div>
-                    <div style={{ fontSize: 12, color: 'var(--dash-text-faint)' }}>Pago inmediato con Wompi</div>
+                    <div style={{ fontSize: 12, color: 'var(--dash-text-faint)' }}>
+                      {pagandoPlan === modalPagoPlan.id ? 'Abriendo pasarela...' : 'Pago inmediato con Wompi'}
+                    </div>
                   </div>
                 </button>
 
                 <button
+                  className="fp-option-btn"
                   onClick={() => iniciarTransferencia(modalPagoPlan.id)}
                   disabled={cargandoTransferencia}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10, padding: '0.9rem 1rem',
                     borderRadius: 12, border: '2px solid #F57C00',
                     background: 'linear-gradient(135deg, rgba(245,124,0,0.08), rgba(245,124,0,0.02))',
-                    cursor: 'pointer', textAlign: 'left', opacity: cargandoTransferencia ? 0.7 : 1,
+                    cursor: 'pointer', textAlign: 'left',
                     position: 'relative', boxShadow: '0 4px 16px rgba(245,124,0,0.12)',
                   }}
                 >
@@ -3222,7 +2525,9 @@ function Dashboard({ onLogout }) {
                   }}>
                     Recomendado
                   </div>
-                  <Building2 size={20} color="#F57C00" />
+                  {cargandoTransferencia
+                    ? <span className="fp-btn__spinner" style={{ color: '#F57C00', width: 20, height: 20 }} aria-hidden="true" />
+                    : <Building2 size={20} color="#F57C00" />}
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--dash-text)' }}>Transferencia bancaria</div>
                     <div style={{ fontSize: 12, color: 'var(--dash-text-faint)' }}>

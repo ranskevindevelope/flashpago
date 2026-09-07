@@ -767,6 +767,15 @@ db.run(`
   if (!err) {
     console.log('[DB] Tabla "cierres_caja" lista');
     db.run('CREATE INDEX IF NOT EXISTS idx_cierres_negocio_fecha ON cierres_caja (negocio_id, fecha)');
+    // Migración: efectivo realmente contado en el cajón y su diferencia
+    // contra lo esperado. Sin esto el cierre solo guardaba lo que el sistema
+    // suponía, y un faltante pasaba desapercibido.
+    db.run('ALTER TABLE cierres_caja ADD COLUMN efectivo_contado INTEGER', (e) => {
+      if (e && !e.message.includes('duplicate column')) console.error('[DB] Error migrando efectivo_contado:', e.message);
+    });
+    db.run('ALTER TABLE cierres_caja ADD COLUMN diferencia INTEGER', (e) => {
+      if (e && !e.message.includes('duplicate column')) console.error('[DB] Error migrando diferencia:', e.message);
+    });
   }
 });
 
@@ -786,6 +795,11 @@ db.run(`
   if (!err) {
     console.log('[DB] Tabla "gastos" lista');
     db.run('CREATE INDEX IF NOT EXISTS idx_gastos_negocio_fecha ON gastos (negocio_id, fecha)');
+    // Migración: solo los gastos pagados en efectivo salen del cajón, así que
+    // son los únicos que deben restarse al efectivo esperado del cierre.
+    db.run(`ALTER TABLE gastos ADD COLUMN metodo_pago TEXT DEFAULT 'efectivo'`, (e) => {
+      if (e && !e.message.includes('duplicate column')) console.error('[DB] Error migrando metodo_pago:', e.message);
+    });
   }
 });
 
@@ -795,11 +809,12 @@ db.run(`
 
 function crearCierreCaja(cierre) {
   return new Promise((resolve, reject) => {
-    const { negocio_id, fecha, total_ventas, total_transferencias, total_efectivo, total_gastos, nota, cerrado_por, foto } = cierre;
+    const { negocio_id, fecha, total_ventas, total_transferencias, total_efectivo, total_gastos, efectivo_contado, diferencia, nota, cerrado_por, foto } = cierre;
     db.run(
-      `INSERT INTO cierres_caja (negocio_id, fecha, total_ventas, total_transferencias, total_efectivo, total_gastos, nota, cerrado_por, foto)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [negocio_id, fecha, total_ventas || 0, total_transferencias || 0, total_efectivo || 0, total_gastos || 0, nota || null, cerrado_por || null, foto || null],
+      `INSERT INTO cierres_caja (negocio_id, fecha, total_ventas, total_transferencias, total_efectivo, total_gastos, efectivo_contado, diferencia, nota, cerrado_por, foto)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [negocio_id, fecha, total_ventas || 0, total_transferencias || 0, total_efectivo || 0, total_gastos || 0,
+       efectivo_contado ?? null, diferencia ?? null, nota || null, cerrado_por || null, foto || null],
       function (err) {
         if (err) reject(err);
         else resolve({ id: this.lastID });
@@ -884,11 +899,11 @@ function totalTransferenciasDia(negocio_id, fecha) {
 
 function registrarGasto(gasto) {
   return new Promise((resolve, reject) => {
-    const { negocio_id, fecha, monto, categoria, descripcion, registrado_por } = gasto;
+    const { negocio_id, fecha, monto, categoria, descripcion, registrado_por, metodo_pago } = gasto;
     db.run(
-      `INSERT INTO gastos (negocio_id, fecha, monto, categoria, descripcion, registrado_por)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [negocio_id, fecha, monto, categoria || 'general', descripcion || null, registrado_por || null],
+      `INSERT INTO gastos (negocio_id, fecha, monto, categoria, descripcion, registrado_por, metodo_pago)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [negocio_id, fecha, monto, categoria || 'general', descripcion || null, registrado_por || null, metodo_pago === 'transferencia' ? 'transferencia' : 'efectivo'],
       function (err) {
         if (err) reject(err);
         else resolve({ id: this.lastID });
@@ -913,12 +928,44 @@ function listarGastos(negocio_id, fecha) {
 function totalGastosDia(negocio_id, fecha) {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT COALESCE(SUM(monto), 0) as total, COUNT(*) as cantidad
+      `SELECT COALESCE(SUM(monto), 0) as total,
+              COUNT(*) as cantidad,
+              COALESCE(SUM(CASE WHEN COALESCE(metodo_pago, 'efectivo') = 'efectivo' THEN monto ELSE 0 END), 0) as total_efectivo
        FROM gastos WHERE negocio_id = ? AND fecha = ?`,
       [negocio_id, fecha],
       (err, row) => {
         if (err) reject(err);
         else resolve(row);
+      }
+    );
+  });
+}
+
+// Efectivo que debería haber en el cajón al cerrar:
+//   ventas cobradas en efectivo − gastos pagados en efectivo
+//
+// Las ventas en efectivo las reporta el negocio desde sus pedidos, no
+// contando el cajón: si salieran del cajón, lo "esperado" y lo "contado"
+// serían el mismo dato y la diferencia nunca revelaría un faltante.
+// No se recorta a cero — un negativo (gastaste más efectivo del que
+// entró) es información, no un error que haya que esconder.
+function calcularEfectivoEsperado({ ventas_efectivo, gastos_efectivo }) {
+  return (ventas_efectivo || 0) - (gastos_efectivo || 0);
+}
+
+function actualizarCierreCaja(id, negocio_id, campos) {
+  return new Promise((resolve, reject) => {
+    const { total_ventas, total_transferencias, total_efectivo, total_gastos, efectivo_contado, diferencia, nota } = campos;
+    db.run(
+      `UPDATE cierres_caja
+       SET total_ventas = ?, total_transferencias = ?, total_efectivo = ?, total_gastos = ?,
+           efectivo_contado = ?, diferencia = ?, nota = ?
+       WHERE id = ? AND negocio_id = ?`,
+      [total_ventas, total_transferencias, total_efectivo, total_gastos,
+       efectivo_contado ?? null, diferencia ?? null, nota || null, id, negocio_id],
+      function (err) {
+        if (err) reject(err);
+        else resolve({ changes: this.changes });
       }
     );
   });
@@ -1050,6 +1097,8 @@ module.exports = {
   obtenerPagosExportables,
   // Cierres de caja
   crearCierreCaja,
+  actualizarCierreCaja,
+  calcularEfectivoEsperado,
   obtenerCierreDelDia,
   listarCierres,
   resumenSemanal,

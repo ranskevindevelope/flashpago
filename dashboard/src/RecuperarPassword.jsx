@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Zap, Mail, KeyRound, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, ShieldCheck, Clock, BarChart3 } from 'lucide-react';
 
-const PASSWORD_VALIDA = /^(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
-const PASSWORD_ERROR = 'La contraseña debe tener mínimo 8 caracteres, con mayúsculas y minúsculas';
+import { PASSWORD_VALIDA, PASSWORD_ERROR } from './utils/password';
 
 function RecuperarPassword({ onVolver }) {
   const [paso, setPaso] = useState(1); // 1: email, 2: código + nueva contraseña, 3: éxito

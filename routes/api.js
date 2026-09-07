@@ -30,6 +30,8 @@ const {
   guardarTokenGmail,
   obtenerTokenGmail,
   crearCierreCaja,
+  actualizarCierreCaja,
+  calcularEfectivoEsperado,
   obtenerCierreDelDia,
   listarCierres,
   resumenSemanal,
@@ -797,7 +799,39 @@ router.get('/dashboard/duplicados', verificarToken, async (req, res) => {
       parametros,
       (err, filas) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(filas);
+        if (filas.length === 0) return res.json(filas);
+
+        // Un pago se marca DUPLICADO cuando repite la referencia de otro pago
+        // reciente. Quien revisa necesita ver ese otro pago para comparar, así
+        // que se adjuntan los pagos que comparten la misma referencia.
+        const referencias = [...new Set(filas.map((f) => f.referencia).filter(Boolean))];
+        if (referencias.length === 0) {
+          return res.json(filas.map((f) => ({ ...f, relacionados: [] })));
+        }
+
+        const marcadores = referencias.map(() => '?').join(',');
+        db.all(
+          `SELECT id, referencia, monto, banco, fecha, hora, estado,
+                  verificado_por, creado_en, foto, nombre_cliente
+           FROM pagos
+           WHERE negocio_id = ? AND referencia IN (${marcadores})
+           ORDER BY id ASC`,
+          [nid, ...referencias],
+          (errRel, pagosMismaRef) => {
+            if (errRel) return res.status(500).json({ error: errRel.message });
+
+            const porReferencia = new Map();
+            for (const pago of pagosMismaRef) {
+              if (!porReferencia.has(pago.referencia)) porReferencia.set(pago.referencia, []);
+              porReferencia.get(pago.referencia).push(pago);
+            }
+
+            res.json(filas.map((fila) => ({
+              ...fila,
+              relacionados: (porReferencia.get(fila.referencia) || []).filter((p) => p.id !== fila.id),
+            })));
+          }
+        );
       }
     );
   } catch (err) {
@@ -1191,10 +1225,10 @@ router.get('/exportar', verificarToken, soloAdmin, (req, res) => {
 router.post('/ventas/cierre', verificarToken, soloAdmin, async (req, res) => {
   try {
     const nid = req.user.negocio_id;
-    const { total_ventas, nota, foto } = req.body;
+    const { ventas_efectivo, nota, foto, efectivo_contado } = req.body;
 
-    if (!total_ventas || total_ventas <= 0) {
-      return res.status(400).json({ ok: false, error: 'El total de ventas es obligatorio' });
+    if (!ventas_efectivo || ventas_efectivo <= 0) {
+      return res.status(400).json({ ok: false, error: 'Las ventas en efectivo son obligatorias' });
     }
 
     const fecha = new Date().toLocaleDateString('es-CO');
@@ -1211,16 +1245,26 @@ router.post('/ventas/cierre', verificarToken, soloAdmin, async (req, res) => {
     // Calcular gastos del día
     const gastos = await totalGastosDia(nid, fecha);
 
-    // Efectivo = Total ventas - Transferencias verificadas
-    const total_efectivo = total_ventas - transferencias.total;
+    // El total del día no se escribe: se arma con lo que reportó el negocio
+    // (efectivo) más lo que ya verificó el bot (transferencias).
+    const total_ventas = ventas_efectivo + transferencias.total;
+    const total_efectivo = calcularEfectivoEsperado({
+      ventas_efectivo,
+      gastos_efectivo: gastos.total_efectivo,
+    });
+    const contado = Number.isFinite(Number(efectivo_contado)) && efectivo_contado !== null && efectivo_contado !== ''
+      ? Math.round(Number(efectivo_contado))
+      : null;
 
     const cierre = await crearCierreCaja({
       negocio_id: nid,
       fecha,
       total_ventas,
       total_transferencias: transferencias.total,
-      total_efectivo: Math.max(total_efectivo, 0),
+      total_efectivo,
       total_gastos: gastos.total,
+      efectivo_contado: contado,
+      diferencia: contado === null ? null : contado - total_efectivo,
       nota,
       cerrado_por: req.user.usuario,
       foto,
@@ -1233,8 +1277,72 @@ router.post('/ventas/cierre', verificarToken, soloAdmin, async (req, res) => {
         fecha,
         total_ventas,
         total_transferencias: transferencias.total,
-        total_efectivo: Math.max(total_efectivo, 0),
+        total_efectivo,
         total_gastos: gastos.total,
+        efectivo_contado: contado,
+        diferencia: contado === null ? null : contado - total_efectivo,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ─── Editar el cierre del día ───────────────────────────
+// Antes no existía: el error de "ya hay un cierre" invitaba a editarlo pero
+// no había forma de hacerlo, así que un total mal escrito quedaba fijo.
+router.put('/ventas/cierre/:id', verificarToken, soloAdmin, async (req, res) => {
+  try {
+    const nid = req.user.negocio_id;
+    const id = Number.parseInt(req.params.id, 10);
+    const { ventas_efectivo, nota, efectivo_contado } = req.body;
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ ok: false, error: 'Cierre inválido' });
+    }
+    if (!ventas_efectivo || ventas_efectivo <= 0) {
+      return res.status(400).json({ ok: false, error: 'Las ventas en efectivo son obligatorias' });
+    }
+
+    const fecha = new Date().toLocaleDateString('es-CO');
+    const existente = await obtenerCierreDelDia(nid, fecha);
+    if (!existente || existente.id !== id) {
+      return res.status(404).json({ ok: false, error: 'Solo se puede editar el cierre del día de hoy' });
+    }
+
+    // Los totales derivados se recalculan: pueden haber entrado pagos o
+    // gastos nuevos entre el cierre original y esta corrección.
+    const transferencias = await totalTransferenciasDia(nid, fecha);
+    const gastos = await totalGastosDia(nid, fecha);
+    const total_ventas = ventas_efectivo + transferencias.total;
+    const total_efectivo = calcularEfectivoEsperado({
+      ventas_efectivo,
+      gastos_efectivo: gastos.total_efectivo,
+    });
+    const contado = Number.isFinite(Number(efectivo_contado)) && efectivo_contado !== null && efectivo_contado !== ''
+      ? Math.round(Number(efectivo_contado))
+      : null;
+
+    await actualizarCierreCaja(id, nid, {
+      total_ventas,
+      total_transferencias: transferencias.total,
+      total_efectivo,
+      total_gastos: gastos.total,
+      efectivo_contado: contado,
+      diferencia: contado === null ? null : contado - total_efectivo,
+      nota,
+    });
+
+    res.json({
+      ok: true,
+      cierre: {
+        id, fecha, total_ventas,
+        total_transferencias: transferencias.total,
+        total_efectivo,
+        total_gastos: gastos.total,
+        efectivo_contado: contado,
+        diferencia: contado === null ? null : contado - total_efectivo,
+        nota: nota || null,
       },
     });
   } catch (err) {
@@ -1301,8 +1409,19 @@ router.get('/ventas/resumen', verificarToken, async (req, res) => {
       ok: true,
       fecha,
       transferencias,
-      gastos: { total: gastos.total, cantidad: gastos.cantidad, lista: gastosLista },
+      gastos: {
+        total: gastos.total,
+        cantidad: gastos.cantidad,
+        total_efectivo: gastos.total_efectivo,
+        lista: gastosLista,
+      },
       cierre: cierre || null,
+      // Cuánto debería haber en el cajón según lo que va del día, para poder
+      // mostrarlo antes de cerrar. Si ya hay cierre, manda el del cierre.
+      efectivo_esperado: cierre
+        ? cierre.total_efectivo
+        : null,
+      gastos_efectivo: gastos.total_efectivo,
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -1313,7 +1432,7 @@ router.get('/ventas/resumen', verificarToken, async (req, res) => {
 router.post('/ventas/gasto', verificarToken, async (req, res) => {
   try {
     const nid = req.user.negocio_id;
-    const { monto, categoria, descripcion } = req.body;
+    const { monto, categoria, descripcion, metodo_pago } = req.body;
 
     if (!monto || monto <= 0) {
       return res.status(400).json({ ok: false, error: 'El monto es obligatorio' });
@@ -1324,6 +1443,7 @@ router.post('/ventas/gasto', verificarToken, async (req, res) => {
 
     const categoriasPermitidas = ['general', 'insumos', 'nomina', 'servicios', 'arriendo', 'transporte', 'otro'];
     const cat = categoriasPermitidas.includes(categoria) ? categoria : 'general';
+    const metodo = metodo_pago === 'transferencia' ? 'transferencia' : 'efectivo';
 
     const fecha = new Date().toLocaleDateString('es-CO');
     const gasto = await registrarGasto({
@@ -1333,9 +1453,10 @@ router.post('/ventas/gasto', verificarToken, async (req, res) => {
       categoria: cat,
       descripcion: descripcion.trim(),
       registrado_por: req.user.usuario,
+      metodo_pago: metodo,
     });
 
-    res.status(201).json({ ok: true, gasto: { ...gasto, monto, categoria: cat, descripcion: descripcion.trim(), fecha } });
+    res.status(201).json({ ok: true, gasto: { ...gasto, monto, categoria: cat, descripcion: descripcion.trim(), fecha, metodo_pago: metodo } });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

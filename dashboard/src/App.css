@@ -249,6 +249,97 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .revision-label { display: block; margin-top: 1.2rem; margin-bottom: 0.4rem; color: var(--dash-text-muted); font-size: 0.78rem; font-weight: 600; }
 .revision-motivo { width: 100%; min-height: 90px; resize: vertical; border: 2px solid var(--dash-border); border-radius: 9px; padding: 0.7rem; font: inherit; font-size: 0.8rem; outline: none; background: var(--dash-surface); color: var(--dash-text); }
 .revision-motivo:focus { border-color: var(--naranja); }
+/* ─── CIERRE DE CAJA ─────────────────────────── */
+.cierre-label { display: block; font-size: 0.8rem; color: var(--dash-text-muted); font-weight: 600; margin: 0.9rem 0 0.3rem; }
+.cierre-label:first-of-type { margin-top: 0; }
+.cierre-input {
+  width: 100%; padding: 0.55rem 0.8rem; border-radius: 8px; box-sizing: border-box;
+  border: 2px solid var(--dash-border); font: inherit; font-size: 0.85rem; outline: none;
+  background: var(--dash-surface); color: var(--dash-text); transition: border-color 0.18s ease;
+}
+.cierre-input:focus { border-color: var(--naranja); }
+.cierre-input--grande { font-size: 1.1rem; font-weight: 600; padding: 0.65rem 0.8rem; }
+.cierre-pista { margin-top: 0.35rem; font-size: 0.73rem; color: var(--dash-text-faint); line-height: 1.45; }
+
+.cierre-calculo { margin-top: 0.9rem; padding: 0.75rem 0.9rem; background: var(--dash-surface-2); border-radius: 10px; }
+.cierre-calculo-fila { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; padding: 0.28rem 0; font-size: 0.82rem; color: var(--dash-text-muted); }
+.cierre-calculo-fila--total {
+  border-top: 1px solid var(--dash-border); margin-top: 0.35rem; padding-top: 0.5rem;
+  font-size: 0.95rem; font-weight: 700; color: var(--dash-text);
+}
+.cierre-calculo-etiqueta { display: flex; align-items: baseline; gap: 0.35rem; min-width: 0; }
+.cierre-calculo-signo { color: var(--dash-text-faint); font-weight: 700; }
+.cierre-calculo-detalle { font-size: 0.7rem; color: var(--dash-text-faint); }
+.cierre-calculo-valor { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.cierre-diferencia { margin-top: 0.8rem; padding: 0.7rem 0.9rem; border-radius: 10px; border: 1px solid transparent; }
+.cierre-diferencia-fila { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.82rem; padding: 0.15rem 0; }
+.cierre-diferencia-resultado { font-size: 0.92rem; font-weight: 700; }
+.cierre-diferencia--ok { background: var(--tint-green-bg); color: var(--tint-green-fg); border-color: var(--tint-green-fg); }
+.cierre-diferencia--faltante { background: var(--tint-red-bg); color: var(--tint-red-fg); border-color: var(--tint-red-fg); }
+.cierre-diferencia--sobrante { background: var(--tint-orange-bg); color: var(--tint-orange-fg); border-color: var(--tint-orange-fg); }
+
+.cierre-alerta {
+  display: flex; gap: 0.5rem; align-items: flex-start; margin-top: 0.8rem;
+  padding: 0.7rem 0.9rem; border-radius: 10px; font-size: 0.78rem; line-height: 1.5;
+  background: var(--tint-red-bg); color: var(--tint-red-fg);
+}
+.cierre-aviso { margin-top: 0.8rem; font-size: 0.76rem; color: var(--dash-text-faint); font-style: italic; }
+.cierre-nota { margin-top: 0.75rem; padding: 0.6rem 0.8rem; background: var(--dash-surface-2); border-radius: 8px; font-size: 0.82rem; color: var(--dash-text-muted); }
+
+.cierre-hecho { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1rem; background: var(--tint-green-bg); border-radius: 10px; }
+.cierre-hecho-monto { font-family: 'Space Grotesk', sans-serif; font-size: 1.3rem; font-weight: 700; color: var(--tint-green-fg); }
+.cierre-hecho-autor { font-size: 0.78rem; color: var(--tint-green-fg); opacity: 0.85; }
+.cierre-editar { margin-left: auto; color: var(--tint-green-fg); }
+.cierre-editando { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem; padding: 0.5rem 0.75rem; border-radius: 8px; background: var(--tint-orange-bg); color: var(--tint-orange-fg); font-size: 0.78rem; font-weight: 600; }
+
+.gasto-metodo { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; }
+.gasto-metodo button {
+  flex: 1; padding: 0.45rem 0.5rem; border-radius: 8px; font: inherit; font-size: 0.78rem; font-weight: 600;
+  border: 2px solid var(--dash-border); background: var(--dash-surface); color: var(--dash-text-muted);
+  cursor: pointer; transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+}
+.gasto-metodo button:hover { border-color: var(--naranja); }
+.gasto-metodo button[aria-pressed="true"] { border-color: var(--naranja); background: var(--tint-orange-bg); color: var(--tint-orange-fg); }
+.gasto-metodo button:focus-visible { outline: 2px solid var(--naranja); outline-offset: 2px; }
+
+/* ── Decisión ya registrada sobre un duplicado ── */
+.dup-decision { margin-top: 1rem; padding: 0.8rem 0.9rem; border-radius: 10px; background: var(--dash-surface-2); border-left: 3px solid var(--dash-border); }
+.dup-decision-encabezado { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.dup-decision-autor { font-size: 0.72rem; color: var(--dash-text-faint); }
+.dup-decision-motivo { margin-top: 0.5rem; font-size: 0.78rem; color: var(--dash-text-muted); line-height: 1.5; font-style: italic; overflow-wrap: break-word; }
+
+.revision-ayuda { display: flex; justify-content: space-between; gap: 0.75rem; margin-top: 0.4rem; color: var(--dash-text-faint); font-size: 0.72rem; }
+.revision-ayuda--ok { color: var(--tint-green-fg); font-weight: 600; }
+
+/* ── Comparación del duplicado contra el pago ya registrado ── */
+.dup-comparar { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.25rem; }
+.dup-comparar-flecha { color: var(--dash-text-faint); flex-shrink: 0; }
+.dup-comparar-card {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--dash-border);
+  border-radius: 12px;
+  padding: 0.8rem 0.85rem;
+  background: var(--dash-surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.dup-comparar-card--sospechoso { border: 2px solid var(--naranja); background: var(--tint-orange-bg); }
+.dup-comparar-etiqueta { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--dash-text-faint); }
+.dup-comparar-card--sospechoso .dup-comparar-etiqueta { color: var(--tint-orange-fg); }
+.dup-comparar-monto { font-family: 'Space Grotesk', sans-serif; font-size: 1.05rem; font-weight: 700; color: var(--dash-text); }
+.dup-comparar-fila { font-size: 0.75rem; color: var(--dash-text-muted); overflow-wrap: break-word; }
+.dup-comparar-fecha { font-variant-numeric: tabular-nums; }
+.dup-comparar-sinfoto { font-size: 0.72rem; color: var(--dash-text-faint); font-style: italic; }
+.dup-comparar-aviso { font-size: 0.72rem; color: var(--dash-text-muted); line-height: 1.5; margin-top: 0.5rem; }
+
+@media (max-width: 900px) {
+  .dup-comparar { flex-direction: column; align-items: stretch; }
+  .dup-comparar-flecha { transform: rotate(90deg); align-self: center; }
+}
+
 .revision-acciones { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.9rem; }
 .revision-btn { border: none; border-radius: 8px; padding: 0.7rem 0.8rem; color: #fff; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
 .revision-btn:disabled { opacity: 0.45; cursor: not-allowed; }
