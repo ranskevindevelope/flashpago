@@ -107,7 +107,76 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .sidebar-nav { flex: 1; padding: 1rem 0; overflow-y: auto; }
 .sidebar-section-label { font-size: 0.65rem; font-weight: 700; color: #4a4a6a; letter-spacing: 1.5px; text-transform: uppercase; padding: 0.75rem 1.25rem 0.5rem; }
 
-.sidebar-negocio { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.sidebar-negocio { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.06); position: relative; cursor: default; }
+
+/* ── Tarjeta del plan (al pasar el mouse por el negocio) ── */
+.plan-card {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  width: 262px;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  background: #1f2130;
+  border: 1px solid rgba(255,255,255,0.09);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.45);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-50%) translateX(-6px) scale(0.97);
+  transform-origin: left center;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+  pointer-events: none;
+  z-index: 320;
+}
+.sidebar-negocio:hover .plan-card {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0) scale(1);
+}
+/* Punta que conecta la tarjeta con el sidebar */
+.plan-card::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translateY(-50%) rotate(45deg);
+  background: #1f2130;
+  border-left: 1px solid rgba(255,255,255,0.09);
+  border-bottom: 1px solid rgba(255,255,255,0.09);
+}
+
+.plan-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
+.plan-card-negocio { font-size: 0.9rem; font-weight: 700; color: #fff; line-height: 1.25; overflow-wrap: anywhere; }
+.plan-card-plan { font-size: 0.72rem; color: var(--naranja-suave); font-weight: 600; margin-top: 2px; }
+.plan-card-detalle { margin-top: 0.5rem; font-size: 0.72rem; color: #8f93ad; }
+
+.plan-card-chip {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  padding: 0.22rem 0.5rem; border-radius: 50px;
+  font-size: 0.66rem; font-weight: 700; white-space: nowrap;
+}
+.plan-card-chip--ok { background: rgba(67,160,71,0.16); color: #7fd9a0; }
+.plan-card-chip--aviso { background: rgba(245,124,0,0.16); color: #ffb74d; }
+.plan-card-chip--alerta { background: rgba(229,57,53,0.16); color: #f5a08f; }
+.plan-card-chip--neutro { background: rgba(255,255,255,0.08); color: #b7bacb; }
+
+.plan-card-uso { margin-top: 0.85rem; padding-top: 0.8rem; border-top: 1px solid rgba(255,255,255,0.07); }
+.plan-card-uso-cifras { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.72rem; color: #8f93ad; margin-bottom: 0.4rem; }
+.plan-card-uso-cifras strong { color: #fff; font-variant-numeric: tabular-nums; }
+.plan-card-barra { height: 6px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.plan-card-barra-relleno { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+.plan-card-uso-pie { margin-top: 0.4rem; font-size: 0.68rem; color: #6f7391; }
+
+@media (max-width: 768px) {
+  /* En móvil el sidebar se superpone al contenido: la tarjeta estorbaría */
+  .plan-card { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plan-card { transition: opacity 0.18s ease, visibility 0.18s; }
+  .sidebar-negocio:hover .plan-card { transform: translateY(-50%); }
+}
 .sidebar-negocio-avatar { width: 34px; height: 34px; border-radius: 9px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 0.95rem; color: var(--naranja-suave); flex-shrink: 0; }
 .sidebar-negocio-label { font-size: 0.62rem; color: #6868a0; text-transform: uppercase; letter-spacing: 0.5px; }
 .sidebar-negocio-nombre { font-size: 0.85rem; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }

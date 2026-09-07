@@ -713,6 +713,7 @@ function Dashboard({ onLogout }) {
         isAdmin={esAdmin}
         isSuperAdmin={esSuperAdmin}
         negocioNombre={planInfo?.nombre}
+        planInfo={planInfo}
         paymentCount={totales.dia.cantidad}
         userCount={usuarios.length}
         onSectionChange={(section) => cambiarSeccion(section)}

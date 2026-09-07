@@ -1,7 +1,40 @@
 import React, { useState } from 'react';
-import { CreditCard, Download, LayoutDashboard, LogOut, Search, TrendingUp, Users, AlertTriangle, Menu, X, ShoppingBag, Settings, Building2, Sun, Moon } from 'lucide-react';
+import { CreditCard, Download, LayoutDashboard, LogOut, Search, TrendingUp, Users, AlertTriangle, Menu, X, ShoppingBag, Settings, Building2, Sun, Moon, Infinity as InfinityIcon, Clock, CheckCircle2 } from 'lucide-react';
+import { getPlanLabel, getPlanColor } from '../utils/bancos';
 
-function Sidebar({ activeSection, isOpen, isAdmin, isSuperAdmin, paymentCount, userCount, negocioNombre, onSectionChange, onLogout, tema, onToggleTema }) {
+// Estado del plan resumido en una línea: qué mostrar y de qué color.
+function estadoDelPlan(planInfo) {
+  const trial = planInfo?.trial;
+  if (!trial) return null;
+
+  if (trial.ilimitado) {
+    return { texto: 'Sin vencimiento', Icono: InfinityIcon, tono: 'ok', detalle: 'Cuenta ilimitada' };
+  }
+  if (!trial.activo) {
+    return {
+      texto: trial.razon === 'plan_vencido' ? 'Plan vencido' : 'Prueba terminada',
+      Icono: Clock, tono: 'alerta', detalle: 'Renueva para reactivar',
+    };
+  }
+  if (trial.pagado) {
+    const dias = trial.dias || 0;
+    return {
+      texto: trial.plan_vence ? `Vence en ${dias} día${dias === 1 ? '' : 's'}` : 'Activo',
+      Icono: dias <= 5 && trial.plan_vence ? Clock : CheckCircle2,
+      tono: dias <= 5 && trial.plan_vence ? 'aviso' : 'ok',
+      detalle: trial.plan_vence ? `Hasta el ${new Date(trial.plan_vence).toLocaleDateString('es-CO')}` : 'Plan pagado',
+    };
+  }
+  const dias = trial.dias || 0;
+  return {
+    texto: `Prueba · ${dias} día${dias === 1 ? '' : 's'}`,
+    Icono: Clock,
+    tono: dias <= 3 ? 'aviso' : 'neutro',
+    detalle: trial.trial_fin ? `Hasta el ${new Date(trial.trial_fin).toLocaleDateString('es-CO')}` : null,
+  };
+}
+
+function Sidebar({ activeSection, isOpen, isAdmin, isSuperAdmin, paymentCount, userCount, negocioNombre, planInfo, onSectionChange, onLogout, tema, onToggleTema }) {
   const [fijado, setFijado] = useState(() => {
     try {
       return localStorage.getItem('fp_sidebar_fijado') === '1';
@@ -63,19 +96,60 @@ function Sidebar({ activeSection, isOpen, isAdmin, isSuperAdmin, paymentCount, u
         </div>
       </div>
 
-      {negocioNombre && (
-        <div className="sidebar-negocio" style={{ justifyContent: expandido ? 'flex-start' : 'center' }}>
-          <div className="sidebar-negocio-avatar" title={!expandido ? negocioNombre : ''}>
-            {negocioNombre.trim().charAt(0).toUpperCase()}
-          </div>
-          {expandido && (
-            <div style={{ minWidth: 0 }}>
-              <div className="sidebar-negocio-label">Tu negocio</div>
-              <div className="sidebar-negocio-nombre" title={negocioNombre}>{negocioNombre}</div>
+      {negocioNombre && (() => {
+        const estado = estadoDelPlan(planInfo);
+        const porcentaje = Math.min(planInfo?.porcentaje ?? 0, 100);
+        return (
+          <div className="sidebar-negocio" style={{ justifyContent: expandido ? 'flex-start' : 'center' }}>
+            <div className="sidebar-negocio-avatar">
+              {negocioNombre.trim().charAt(0).toUpperCase()}
             </div>
-          )}
-        </div>
-      )}
+            {expandido && (
+              <div style={{ minWidth: 0 }}>
+                <div className="sidebar-negocio-label">Tu negocio</div>
+                <div className="sidebar-negocio-nombre">{negocioNombre}</div>
+              </div>
+            )}
+
+            {planInfo && (
+              <div className="plan-card" role="tooltip">
+                <div className="plan-card-top">
+                  <div>
+                    <div className="plan-card-negocio">{negocioNombre}</div>
+                    <div className="plan-card-plan">Plan {getPlanLabel(planInfo.plan)}</div>
+                  </div>
+                  {estado && (
+                    <span className={`plan-card-chip plan-card-chip--${estado.tono}`}>
+                      <estado.Icono size={12} />
+                      {estado.texto}
+                    </span>
+                  )}
+                </div>
+
+                {estado?.detalle && <div className="plan-card-detalle">{estado.detalle}</div>}
+
+                <div className="plan-card-uso">
+                  <div className="plan-card-uso-cifras">
+                    <span>Comprobantes del mes</span>
+                    <strong>{planInfo.usados ?? 0} / {planInfo.limite ?? '—'}</strong>
+                  </div>
+                  <div className="plan-card-barra">
+                    <div
+                      className="plan-card-barra-relleno"
+                      style={{ width: `${porcentaje}%`, background: getPlanColor(porcentaje) }}
+                    />
+                  </div>
+                  <div className="plan-card-uso-pie">
+                    {porcentaje >= 90
+                      ? 'Estás por alcanzar el límite de tu plan'
+                      : `${porcentaje}% usado este mes`}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <nav className="sidebar-nav">
         {expandido && <div className="sidebar-section-label">MENÚ</div>}
