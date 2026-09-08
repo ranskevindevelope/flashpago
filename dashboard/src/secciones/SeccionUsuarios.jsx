@@ -47,7 +47,7 @@ export default function SeccionUsuarios({ api }) {
         toast.error(data.error || 'Error creando usuario');
       }
     } catch (err) {
-      toast.error('Error de conexión');
+      toast.error(err.message || 'Error de conexión');
     }
     setGuardando(false);
   };
@@ -71,7 +71,7 @@ export default function SeccionUsuarios({ api }) {
         toast.error(data.error || 'Error actualizando');
       }
     } catch (err) {
-      toast.error('Error de conexión');
+      toast.error(err.message || 'Error de conexión');
     }
     setGuardando(false);
   };
@@ -87,7 +87,7 @@ export default function SeccionUsuarios({ api }) {
         toast.error(data.error);
       }
     } catch (err) {
-      toast.error('Error de conexión');
+      toast.error(err.message || 'Error de conexión');
     }
   };
 
@@ -99,7 +99,7 @@ export default function SeccionUsuarios({ api }) {
         refrescar();
       }
     } catch (err) {
-      toast.error('Error de conexión');
+      toast.error(err.message || 'Error de conexión');
     }
   };
 

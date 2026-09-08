@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AlertTriangle, Eye, X, ArrowRight } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Button from '../components/ui/Button';
 import { formatearMonto } from '../utils/formato';
 import { getBancoBadge } from '../utils/bancos';
@@ -77,12 +78,14 @@ export default function SeccionDuplicados({ api, esAdmin, onVerFoto, onRevisionG
         method: 'POST',
         body: JSON.stringify({ estado, motivo: motivo.trim() }),
       });
+      toast.success(estado === 'DUPLICADO' ? 'Marcado como duplicado' : 'Marcado como legítimo');
       setMotivo('');
       setSeleccionado(null);
       await cargarDuplicados();
       onRevisionGuardada?.();
     } catch (err) {
       console.error('Error guardando revisión de duplicado:', err);
+      toast.error(err.message || 'No se pudo guardar la decisión');
     } finally {
       setGuardando(null);
     }

@@ -74,7 +74,7 @@ export default function CierreCaja({ resumen, api, esAdmin, onGuardado }) {
         toast.error(data.error || 'No se pudo guardar el cierre');
       }
     } catch (err) {
-      toast.error('Error guardando el cierre');
+      toast.error(err.message || 'Error guardando el cierre');
     }
     setGuardando(false);
   };
