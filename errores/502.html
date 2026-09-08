@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlashPago — Volvemos en un momento</title>
+<!-- Todo va embebido a propósito: esta página se muestra cuando el servidor
+     no responde, así que no puede depender de él para cargar nada. -->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
+    color: #e8e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    text-align: center;
+  }
+  .caja { max-width: 460px; width: 100%; }
+
+  .rayo {
+    width: 84px; height: 84px; margin: 0 auto 1.75rem;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #F57C00, #E65100);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 14px 40px rgba(245, 124, 0, 0.35);
+    animation: latir 2.4s ease-in-out infinite;
+  }
+  @keyframes latir {
+    0%, 100% { transform: scale(1); box-shadow: 0 14px 40px rgba(245,124,0,0.35); }
+    50%      { transform: scale(1.05); box-shadow: 0 18px 50px rgba(245,124,0,0.5); }
+  }
+
+  h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.75rem; letter-spacing: -0.3px; }
+  p { font-size: 0.95rem; line-height: 1.65; color: #a8abc4; }
+  .marca { font-size: 0.78rem; letter-spacing: 2px; text-transform: uppercase; color: #F57C00; font-weight: 700; margin-bottom: 0.6rem; }
+
+  .aviso {
+    margin-top: 1.75rem; padding: 0.9rem 1.1rem;
+    background: rgba(245, 124, 0, 0.1);
+    border: 1px solid rgba(245, 124, 0, 0.3);
+    border-radius: 12px;
+    font-size: 0.85rem; color: #ffb74d; line-height: 1.6;
+  }
+
+  button {
+    margin-top: 1.75rem; padding: 0.8rem 1.75rem;
+    background: #F57C00; color: #fff;
+    border: none; border-radius: 11px;
+    font-family: inherit; font-size: 0.9rem; font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  }
+  button:hover { background: #E65100; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(245,124,0,0.3); }
+  button:active { transform: translateY(0); }
+  button:focus-visible { outline: 2px solid #FFB74D; outline-offset: 3px; }
+
+  .reintento { margin-top: 1rem; font-size: 0.78rem; color: #6f7391; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rayo { animation: none; }
+    button:hover { transform: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="caja">
+    <div class="rayo" aria-hidden="true">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="#fff">
+        <path d="M13 2 4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5z"/>
+      </svg>
+    </div>
+
+    <div class="marca">FlashPago</div>
+    <h1>Volvemos en un momento</h1>
+    <p>
+      Estamos haciendo un ajuste en el servidor. No te preocupes: tus pagos y tu
+      información están a salvo, no se pierde nada.
+    </p>
+
+    <div class="aviso">
+      Mientras tanto, <strong>revisa los comprobantes a mano</strong> antes de
+      entregar un pedido.
+    </div>
+
+    <button onclick="location.reload()">Reintentar ahora</button>
+    <div class="reintento" id="contador">Reintentando solo en 20 segundos…</div>
+  </div>
+
+<script>
+  // Recarga sola: lo normal es que el servidor vuelva en menos de un minuto,
+  // y así el negocio no tiene que estar dándole F5.
+  var quedan = 20;
+  var texto = document.getElementById('contador');
+  setInterval(function () {
+    quedan--;
+    if (quedan <= 0) { location.reload(); return; }
+    texto.textContent = 'Reintentando solo en ' + quedan + ' segundo' + (quedan === 1 ? '' : 's') + '…';
+  }, 1000);
+</script>
+</body>
+</html>
