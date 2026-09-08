@@ -43,6 +43,7 @@ const {
   eliminarGasto,
 } = require('../db');
 const eventos = require('../eventos');
+const salud = require('../salud');
 
 // ─── Google OAuth config ────────────────────────────────
 const CREDENTIALS_PATH = path.join(__dirname, '..', 'credentials.json');
@@ -1507,14 +1508,15 @@ router.get('/eventos', verificarToken, (req, res) => {
   });
 });
 
-// ─── Estado de la sesión de WhatsApp del bot ────────────
-router.get('/bot/estado', verificarToken, async (req, res) => {
+// ─── Salud del procesamiento de pagos ───────────────────
+// Reporta fallas que ocurrieron de verdad (OCR, Gmail, envío de mensajes,
+// errores del webhook) en los últimos minutos. No intenta adivinar si los
+// componentes están vivos: eso daba falsas alarmas.
+router.get('/bot/estado', verificarToken, (req, res) => {
   try {
-    const { estadoSesionWhatsapp } = require('../bot/openwa');
-    const estado = await estadoSesionWhatsapp();
-    res.json({ ok: true, ...estado });
+    res.json({ ok: true, ...salud.resumen(req.user.negocio_id) });
   } catch (err) {
-    res.json({ ok: true, estado: 'desconocido', detalle: 'No se pudo consultar el estado' });
+    res.json({ ok: true, hayFallas: false, cantidad: 0 });
   }
 });
 

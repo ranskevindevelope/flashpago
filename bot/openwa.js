@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 const fs = require('fs');
 const config = require('../config');
+const salud = require('../salud');
 
 const OPENWA_URL = config.OPENWA_URL;
 const OPENWA_KEY = config.OPENWA_KEY;
@@ -28,7 +29,15 @@ function revisarEnvio(etiqueta, destino, res, data) {
     ? (typeof errorApi === 'string' ? errorApi : JSON.stringify(errorApi))
     : `HTTP ${res.status}`;
   console.error(`${etiqueta} FALLÓ el envío a ${destino}: ${motivo}`);
+  // Si el motivo habla de la sesión o del QR, se clasifica aparte: no es que
+  // un mensaje no haya salido, es que WhatsApp está desvinculado y no va a
+  // entrar ni salir nada hasta que alguien lo reconecte.
+  salud.registrar(esProblemaDeSesion(motivo) ? 'sesion' : 'envio', motivo);
   return false;
+}
+
+function esProblemaDeSesion(motivo) {
+  return /session|qr|not connected|unpaired|logged out|disconnect/i.test(motivo || '');
 }
 
 // ─── Proveedor: open-wa (no oficial) ──────────────────────
@@ -50,7 +59,9 @@ async function enviarMensajeOpenwa(to, body) {
     const data = await res.json().catch(() => ({}));
     return revisarEnvio('[Bot]', chatId, res, data);
   } catch (err) {
+    // El servidor de open-wa no respondió: apagado, puerto cerrado o timeout.
     console.error('[Bot] Error enviando mensaje:', err.message);
+    salud.registrar('conexion', err.message);
     return false;
   }
 }
@@ -82,6 +93,7 @@ async function enviarImagenOpenwa(to, rutaFoto, caption) {
     return revisarEnvio('[Bot] (imagen)', chatId, res, data);
   } catch (err) {
     console.error('[Bot] Error enviando imagen:', err.message);
+    salud.registrar('conexion', err.message);
     return false;
   }
 }
@@ -192,46 +204,4 @@ async function enviarImagen(to, rutaFoto, caption) {
   return enviarImagenOpenwa(to, rutaFoto, caption);
 }
 
-// ─── Estado de la sesión de WhatsApp ───────────────────────
-// Si la sesión se cae, el bot deja de recibir comprobantes sin avisar y el
-// negocio se entera cuando un cliente reclama. Esto permite mostrarlo.
-//
-// Solo aplica al proveedor open-wa: la API de Meta no tiene "sesión" que se
-// caiga. Ante cualquier duda devuelve 'desconocido' en vez de 'desconectado',
-// para no alarmar por un problema de red o una API distinta a la esperada.
-async function estadoSesionWhatsapp() {
-  if (config.WA_PROVIDER === 'meta') {
-    return { estado: 'oficial', detalle: 'Usando la API oficial de Meta' };
-  }
-
-  try {
-    const controlador = new AbortController();
-    const corte = setTimeout(() => controlador.abort(), 4000);
-    const res = await fetch(`${OPENWA_URL}/api/sessions/${OPENWA_SESSION}`, {
-      headers: { 'X-API-Key': OPENWA_KEY },
-      signal: controlador.signal,
-    });
-    clearTimeout(corte);
-
-    if (!res.ok) {
-      return { estado: 'desconocido', detalle: `El servidor respondió ${res.status}` };
-    }
-
-    const data = await res.json();
-    const crudo = typeof data?.status === 'string' ? data.status.toUpperCase() : null;
-    if (!crudo) return { estado: 'desconocido', detalle: 'La respuesta no trae estado' };
-
-    if (crudo === 'WORKING') return { estado: 'conectado', detalle: 'El bot está recibiendo mensajes', crudo };
-    if (crudo === 'SCAN_QR_CODE') return { estado: 'desconectado', detalle: 'Falta escanear el código QR', crudo };
-    if (crudo === 'STARTING') return { estado: 'iniciando', detalle: 'La sesión está arrancando', crudo };
-    return { estado: 'desconectado', detalle: `La sesión está en estado ${crudo}`, crudo };
-  } catch (err) {
-    const corto = err.name === 'AbortError';
-    return {
-      estado: 'desconocido',
-      detalle: corto ? 'El servidor de WhatsApp no respondió a tiempo' : 'No se pudo consultar el servidor de WhatsApp',
-    };
-  }
-}
-
-module.exports = { enviarMensaje, enviarImagen, descargarMediaMeta, estadoSesionWhatsapp };
+module.exports = { enviarMensaje, enviarImagen, descargarMediaMeta };

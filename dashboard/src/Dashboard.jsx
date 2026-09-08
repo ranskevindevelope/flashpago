@@ -910,25 +910,19 @@ function Dashboard({ onLogout }) {
               {/* Va de primero y no se puede ocultar: mientras la sesión esté
                   caída no entra ningún comprobante, y esa falla es silenciosa
                   — el negocio se entera cuando un cliente reclama. */}
-              {(botEstado?.estado === 'desconectado' || botEstado?.estado === 'iniciando') && (
-                <div className={`bot-alerta ${botEstado.estado === 'iniciando' ? 'bot-alerta--aviso' : ''}`}>
-                  <div className="bot-alerta-icono">
-                    {botEstado.estado === 'iniciando' ? <Clock size={20} /> : <WifiOff size={20} />}
-                  </div>
+              {botEstado?.hayFallas && (
+                <div className="bot-alerta">
+                  <div className="bot-alerta-icono"><AlertTriangle size={20} /></div>
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div className="bot-alerta-titulo">
-                      {botEstado.estado === 'iniciando'
-                        ? 'Reconectando la verificación automática'
-                        : 'La verificación automática está caída'}
+                      Hubo {botEstado.cantidad === 1 ? 'un problema' : `${botEstado.cantidad} problemas`} en los últimos minutos
                     </div>
                     <div className="bot-alerta-texto">
-                      {botEstado.estado === 'iniciando'
-                        ? 'En un momento vuelve a la normalidad. Los comprobantes que lleguen mientras tanto se procesan apenas se restablezca.'
-                        : 'Los comprobantes que te envíen por WhatsApp no se están verificando en este momento. Revísalos a mano antes de entregar un pedido. Ya estamos trabajando para restablecerlo.'}
-                      {/* El detalle técnico (QR pendiente, servidor caído) solo
-                          le sirve a quien administra el servidor, no al negocio. */}
-                      {esSuperAdmin && botEstado.detalle && (
-                        <span className="bot-alerta-detalle"> · {botEstado.detalle}</span>
+                      Falló {botEstado.afectado}. Puede que algún comprobante no se haya verificado —
+                      revisa a mano los pagos recientes antes de entregar un pedido.
+                      {/* El mensaje de error crudo solo le sirve a quien administra el servidor. */}
+                      {esSuperAdmin && botEstado.ultimoDetalle && (
+                        <span className="bot-alerta-detalle"> · {botEstado.ultimoDetalle}</span>
                       )}
                     </div>
                   </div>

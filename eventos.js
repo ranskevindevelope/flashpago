@@ -41,8 +41,4 @@ function emitir(negocio_id, tipo, datos) {
   return enviados;
 }
 
-function contarConexiones(negocio_id) {
-  return conexiones.get(negocio_id)?.size || 0;
-}
-
-module.exports = { agregarConexion, quitarConexion, emitir, contarConexiones };
+module.exports = { agregarConexion, quitarConexion, emitir };

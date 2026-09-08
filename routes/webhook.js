@@ -13,6 +13,7 @@ const {
 } = require('../db');
 const { enviarMensaje, descargarMediaMeta } = require('../bot/openwa');
 const eventos = require('../eventos');
+const salud = require('../salud');
 const { formatearResultado, guardarFoto } = require('../bot/utils');
 const { pagosPendientes, historialPagos } = require('../bot/state');
 const comandos = require('../bot/comandos');
@@ -346,6 +347,7 @@ router.post('/', async (req, res) => {
   try {
     const datos = await leerComprobante(mediaUrl, mediaBase64);
     if (datos.error) {
+      salud.registrar('ocr', datos.mensaje, negocio_id);
       await enviarMensaje(from, MENSAJES.errorLectura);
       return;
     }
@@ -481,6 +483,7 @@ router.post('/', async (req, res) => {
     }
   } catch (err) {
     console.error('[Bot] Error procesando imagen:', err);
+    salud.registrar('webhook', err.message, negocio_id);
     await enviarMensaje(from, '⚠️ Error interno. Intenta de nuevo o llama al dueño.');
   }
 });

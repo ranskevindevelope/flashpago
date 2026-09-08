@@ -2,7 +2,7 @@
 // Son la única forma de avisar de un pago cuando la pestaña no está al frente
 // — los toasts se dibujan dentro de la página y ahí nadie los ve.
 
-export function soportaNotificaciones() {
+function soportaNotificaciones() {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
 
