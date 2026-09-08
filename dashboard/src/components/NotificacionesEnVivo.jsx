@@ -207,7 +207,7 @@ function NotificacionesEnVivo({ onLogout }) {
     const token = localStorage.getItem('fp_token');
     if (!token || typeof EventSource === 'undefined') return undefined;
 
-    const fuente = new EventSource(`/api/eventos?token=${encodeURIComponent(token)}`);
+    const fuente = new EventSource('/api/eventos');
 
     fuente.addEventListener('pago', (evento) => {
       try {

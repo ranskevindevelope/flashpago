@@ -497,8 +497,7 @@ function Dashboard({ onLogout }) {
   const conectarGmail = async () => {
     setGmailCargando(true);
     try {
-      const token = localStorage.getItem('fp_token');
-      const data = await api.request(`/api/gmail/auth-url?token=${token}`);
+      const data = await api.request('/api/gmail/auth-url');
       if (data.ok && data.url) {
         window.location.href = data.url;
       } else {
@@ -2557,7 +2556,7 @@ function Dashboard({ onLogout }) {
         <div className="modal-overlay" onClick={() => setFotoActiva(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setFotoActiva(null)}><X size={16} /></button>
-            <img src={`/api/comprobantes/${fotoActiva}?token=${localStorage.getItem('fp_token')}`} alt="Comprobante" />
+            <img src={`/api/comprobantes/${fotoActiva}`} alt="Comprobante" />
           </div>
         </div>
       )}

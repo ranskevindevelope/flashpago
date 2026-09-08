@@ -46,6 +46,10 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('fp_token');
     localStorage.removeItem('fp_user');
+    // La cookie de sesión es httpOnly: solo el servidor puede borrarla. Si
+    // falla (sin red), igual se cierra la sesión en el cliente; la cookie
+    // caduca sola a las 24h.
+    fetch('/api/logout', { method: 'POST' }).catch(() => {});
     setVista('login');
   };
 

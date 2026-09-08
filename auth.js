@@ -2,13 +2,39 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { JWT_SECRET } = require('./config');
 
+// Nombre de la cookie de sesión. Mismo valor que la clave de localStorage
+// para que sea obvio que son la misma sesión vista desde los dos lados.
+const COOKIE_SESION = 'fp_token';
+
+// El JWT viaja por header en todo lo que es fetch/XHR. La cookie existe solo
+// para los dos casos donde el navegador NO deja poner headers: <img> (modal de
+// comprobantes) y EventSource (notificaciones en vivo). Antes eso se resolvía
+// con ?token= en la URL, lo que dejaba el JWT en los logs de nginx y en el
+// historial del navegador.
+//
+// domain .flashpago.co: la landing (flashpago.co) y el panel
+// (app.flashpago.co) son orígenes distintos y deben compartir la sesión. En
+// localhost se omite el domain, si no el navegador rechaza la cookie.
+function opcionesCookieSesion(req) {
+  const host = req.hostname || '';
+  const enFlashpago = host === 'flashpago.co' || host.endsWith('.flashpago.co');
+  return {
+    httpOnly: true,
+    secure: req.secure, // con trust proxy activo, refleja el https real de nginx
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000, // igual que expiresIn del JWT
+    path: '/',
+    ...(enFlashpago ? { domain: '.flashpago.co' } : {}),
+  };
+}
+
 function verificarToken(req, res, next) {
   let token = null;
   const header = req.headers.authorization || req.headers.Authorization;
   if (header && typeof header === 'string' && header.startsWith('Bearer ')) {
     token = header.split(' ')[1];
-  } else if (req.query && req.query.token) {
-    token = req.query.token;
+  } else if (req.cookies && req.cookies[COOKIE_SESION]) {
+    token = req.cookies[COOKIE_SESION];
   }
   if (!token) return res.status(401).json({ ok: false, error: 'No autorizado' });
   try {
@@ -66,4 +92,11 @@ setInterval(() => {
   }
 }, 300000);
 
-module.exports = { verificarToken, soloAdmin, soloSuperAdmin, limitarLogin };
+module.exports = {
+  verificarToken,
+  soloAdmin,
+  soloSuperAdmin,
+  limitarLogin,
+  opcionesCookieSesion,
+  COOKIE_SESION,
+};

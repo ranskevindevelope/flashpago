@@ -203,11 +203,14 @@ export default function Privacidad({ onVolver }) {
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>13. Almacenamiento local y sesión</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>13. Sesión y datos guardados en tu navegador</h2>
             <p>
-              El panel de administración guarda en el navegador (localStorage) el token de sesión y datos básicos
-              del usuario autenticado, únicamente para mantener la sesión iniciada. Esta información permanece en
-              el dispositivo del usuario y se elimina al cerrar sesión.
+              Para que no tengas que escribir tu contraseña en cada página, guardamos en tu navegador la
+              información mínima que te mantiene con la sesión iniciada, incluida una cookie. Esa información
+              se queda en tu dispositivo, caduca a las 24 horas y se borra cuando cierras sesión.
+            </p>
+            <p>
+              No usamos cookies de publicidad ni de seguimiento.
             </p>
           </section>
 

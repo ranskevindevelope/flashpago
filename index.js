@@ -1,6 +1,8 @@
 // index.js — Punto de entrada del servidor (multi-negocio)
 require('dotenv').config();
 const express = require('express');
+const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 const fs = require('fs');
 const path = require('path');
 
@@ -43,6 +45,34 @@ const app = express();
 // sitio real sea https, lo que rompe redirect_uri de OAuth (Gmail, etc.)
 app.set('trust proxy', 1);
 
+// ─── HSTS + CSP ───────────────────────────────────────────
+// Complementan el bloque de headers custom que va mas abajo, sin tocarlo.
+// Eran los dos que faltaban y los que ZAP reporta como hallazgo.
+app.use(helmet.hsts({ maxAge: 15552000, includeSubDomains: true }));
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      // El dashboard no tiene scripts inline; el unico externo es el widget de Wompi.
+      scriptSrc: ["'self'", 'https://checkout.wompi.co'],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      fontSrc: ["'self'", 'data:'],
+      connectSrc: [
+        "'self'",
+        'https://checkout.wompi.co',
+        'https://production.wompi.co',
+        'https://sandbox.wompi.co',
+      ],
+      frameSrc: ['https://checkout.wompi.co'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  })
+);
+
 // ─── Headers de seguridad ─────────────────────────────────
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -75,6 +105,9 @@ app.use((req, res, next) => {
 // para validar la firma X-Hub-Signature-256 (WA_PROVIDER=meta).
 app.use(express.json({ limit: '50mb', verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ limit: '50mb', extended: false }));
+
+// Cookie de sesión: la leen <img> y EventSource, que no pueden mandar headers.
+app.use(cookieParser());
 
 // ─── Carpeta de comprobantes ──────────────────────────────
 const CARPETA_COMPROBANTES = path.join(__dirname, 'comprobantes');

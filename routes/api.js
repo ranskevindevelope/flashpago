@@ -13,7 +13,14 @@ const PASSWORD_VALIDA = /^(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
 const PASSWORD_ERROR = 'La contraseña debe tener mínimo 8 caracteres, con mayúsculas y minúsculas';
 
 const config = require('../config');
-const { verificarToken, soloAdmin, soloSuperAdmin, limitarLogin } = require('../auth');
+const {
+  verificarToken,
+  soloAdmin,
+  soloSuperAdmin,
+  limitarLogin,
+  opcionesCookieSesion,
+  COOKIE_SESION,
+} = require('../auth');
 const {
   db,
   totalDelDia,
@@ -107,12 +114,24 @@ router.post('/login', limitarLogin, (req, res) => {
       { expiresIn: '24h' }
     );
 
+    // Además del token en el cuerpo (que el front guarda para el header
+    // Authorization), se emite la cookie de sesión para <img> y EventSource.
+    res.cookie(COOKIE_SESION, token, opcionesCookieSesion(req));
+
     res.json({
       ok: true,
       token,
       user: { id: user.id, nombre: user.nombre, rol: user.rol, negocio_id: user.negocio_id || 1 }
     });
   });
+});
+
+// Cierre de sesión: la cookie es httpOnly, así que el navegador no puede
+// borrarla por su cuenta — tiene que pedirlo al servidor.
+router.post('/logout', (req, res) => {
+  const opciones = opcionesCookieSesion(req);
+  res.clearCookie(COOKIE_SESION, { path: opciones.path, domain: opciones.domain });
+  res.json({ ok: true });
 });
 
 function formatearWhatsapp(num) {
@@ -295,6 +314,8 @@ router.post('/registro/verificar', limitarLogin, async (req, res) => {
     );
 
     console.log(`[Registro] Nuevo negocio: ${datos.nombre_negocio} (${datos.plan}) — ${datos.email}`);
+
+    res.cookie(COOKIE_SESION, token, opcionesCookieSesion(req));
 
     res.status(201).json({
       ok: true,
@@ -603,10 +624,12 @@ router.get('/gmail/auth-url', verificarToken, soloAdmin, (req, res) => {
     const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
     const oAuth2Client = getOAuth2Client(redirectUri);
 
-    // Guardar negocio_id + token JWT en el state para recuperarlo en el callback
+    // Guardar negocio_id + token JWT en el state para recuperarlo en el callback.
+    // El token sale del header o de la cookie de sesión; ya no se acepta por
+    // query para no dejar el JWT en la URL.
     const state = Buffer.from(JSON.stringify({
       negocio_id: req.user.negocio_id,
-      token: req.query.token || req.headers.authorization?.split(' ')[1],
+      token: req.headers.authorization?.split(' ')[1] || req.cookies?.[COOKIE_SESION],
     })).toString('base64');
 
     const authUrl = oAuth2Client.generateAuthUrl({
