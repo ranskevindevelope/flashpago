@@ -1,5 +1,6 @@
 // mailer.js — Envío de correos con Nodemailer
 const nodemailer = require('nodemailer');
+const path = require('path');
 
 const transporter = nodemailer.createTransport({
   host: process.env.MAIL_HOST || 'smtp.porkbun.com',
@@ -10,6 +11,42 @@ const transporter = nodemailer.createTransport({
     pass: process.env.MAIL_PASS,
   },
 });
+
+// Remitente. Con Resend el usuario SMTP es literalmente "resend", asi que el
+// from ya no puede salir de MAIL_USER como antes: hay que declararlo aparte y
+// que sea un dominio verificado en Resend. El fallback deja el comportamiento
+// viejo intacto si MAIL_FROM no esta definido.
+const REMITENTE = process.env.MAIL_FROM || `"FlashPago" <${process.env.MAIL_USER}>`;
+
+// El logo viaja incrustado en el correo (CID) en vez de por URL. Asi no depende
+// de dashboard/build, que ya falto una vez en produccion, ni de que el cliente
+// acepte imagenes externas: Gmail muestra los adjuntos CID sin pedir permiso.
+const LOGO_CID = 'logo-flashpago';
+const ADJUNTOS = [{
+  filename: 'logo-flashpago.png',
+  path: path.join(__dirname, 'assets', 'logo-email.png'),
+  cid: LOGO_CID,
+}];
+
+// El From es impersonal para que la bandeja se vea limpia, pero nadie lee un
+// no-reply: las respuestas van a contacto@, que es el buzon real declarado en la
+// politica de privacidad. Sin esto, el "responde este correo" de gracias-por-pago
+// rebotaria.
+const RESPUESTA_A = process.env.MAIL_REPLY_TO || 'FlashPago <contacto@flashpago.co>';
+
+// Los pasos de la bienvenida viven aqui para que la version HTML y la de texto
+// plano no se separen con el tiempo.
+const PASOS_INICIO = [
+  'Conecta tu Gmail desde el dashboard',
+  'Agrega tus empleados con su WhatsApp',
+  'Dales el número del bot y listo',
+];
+
+const PIE_TEXTO = `
+
+--
+FlashPago — Verificación de pagos con IA
+Este es un correo transaccional relacionado con tu cuenta.`;
 
 const COLOR_ACCENT = '#F57C00';
 const COLOR_DARK = '#1A1A2E';
@@ -38,13 +75,16 @@ function plantilla({ preheader = '', contenido, ctaTexto, ctaUrl }) {
         <td align="center">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 520px; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 16px rgba(26,26,46,0.08);">
             <tr>
-              <td style="background: linear-gradient(135deg, ${COLOR_DARK}, #2A2A4E); padding: 28px 32px; text-align: center;">
+              <td style="background-color: ${COLOR_DARK}; background: linear-gradient(135deg, ${COLOR_DARK}, #2A2A4E); padding: 22px 32px; text-align: center; border-bottom: 3px solid ${COLOR_ACCENT};">
                 <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
                   <tr>
-                    <td style="width: 40px; height: 40px; background: ${COLOR_ACCENT}; border-radius: 10px; text-align: center; vertical-align: middle;">
-                      <span style="color: #fff; font-size: 20px; font-weight: 800; line-height: 40px;">$</span>
+                    <td style="vertical-align: middle;">
+                      <img src="cid:${LOGO_CID}" width="52" height="52" alt="FlashPago"
+                           style="display: block; width: 52px; height: 52px; border: 0; border-radius: 12px;" />
                     </td>
-                    <td style="padding-left: 10px; color: #fff; font-size: 19px; font-weight: 700;">FlashPago</td>
+                    <td style="padding-left: 12px; color: #ffffff; font-size: 18px; font-weight: 700; letter-spacing: -0.3px; vertical-align: middle;">
+                      <span translate="no" class="notranslate">FlashPago</span>
+                    </td>
                   </tr>
                 </table>
               </td>
@@ -58,8 +98,8 @@ function plantilla({ preheader = '', contenido, ctaTexto, ctaUrl }) {
             <tr>
               <td style="padding: 28px 32px 26px;">
                 <hr style="border: none; border-top: 1px solid #EFEFF4; margin: 0 0 18px;" />
-                <p style="margin: 0; color: #ABABBE; font-size: 11px; text-align: center; line-height: 1.6;">
-                  FlashPago — Verificación de pagos con IA<br />
+                <p style="margin: 0; color: #8A8AA0; font-size: 12px; text-align: center; line-height: 1.6;">
+                  <span translate="no" class="notranslate">FlashPago</span> — Verificación de pagos con IA<br />
                   Este es un correo transaccional relacionado con tu cuenta.
                 </p>
               </td>
@@ -96,10 +136,19 @@ async function enviarCodigoVerificacion(email, codigo, nombreNegocio) {
   `;
 
   await transporter.sendMail({
-    from: `"FlashPago" <${process.env.MAIL_USER}>`,
+    from: REMITENTE,
+    replyTo: RESPUESTA_A,
     to: email,
     subject: `${codigo} — Tu código de verificación de FlashPago`,
     html: plantilla({ preheader: `Tu código es ${codigo}`, contenido }),
+    text: `Tu código de verificación
+
+Hola, usa este código para verificar tu cuenta de ${nombreNegocio} en FlashPago:
+
+    ${codigo}
+
+Expira en 10 minutos. Si no solicitaste esta verificación, ignora este correo.${PIE_TEXTO}`,
+    attachments: ADJUNTOS,
   });
 
   console.log(`[Mailer] Código enviado a ${email}`);
@@ -121,11 +170,7 @@ async function enviarBienvenida(email, nombre, usuario, plan, trialFin) {
     `
     : '';
 
-  const pasos = [
-    'Conecta tu Gmail desde el dashboard',
-    'Agrega tus empleados con su WhatsApp',
-    'Dales el número del bot y listo',
-  ]
+  const pasos = PASOS_INICIO
     .map(
       (texto, i) => `
       <tr>
@@ -153,7 +198,8 @@ async function enviarBienvenida(email, nombre, usuario, plan, trialFin) {
   `;
 
   await transporter.sendMail({
-    from: `"FlashPago" <${process.env.MAIL_USER}>`,
+    from: REMITENTE,
+    replyTo: RESPUESTA_A,
     to: email,
     subject: `¡Bienvenido a FlashPago, ${nombre}!`,
     html: plantilla({
@@ -162,6 +208,18 @@ async function enviarBienvenida(email, nombre, usuario, plan, trialFin) {
       ctaTexto: 'Ir al dashboard',
       ctaUrl: DASHBOARD_URL,
     }),
+    text: `¡Bienvenido, ${nombre}!
+
+Tu cuenta está lista. Para empezar a verificar comprobantes:
+
+${PASOS_INICIO.map((t, i) => `  ${i + 1}. ${t}`).join('\n')}
+${trialFin ? `
+Estás en tu prueba gratis del plan ${NOMBRE_PLAN[plan] || plan || 'Básico'}. Termina el ${new Date(trialFin).toLocaleDateString('es-CO')} — todas las funciones están activas hasta esa fecha.
+` : ''}
+Tu usuario: ${usuario}
+
+Ir al dashboard: ${DASHBOARD_URL}${PIE_TEXTO}`,
+    attachments: ADJUNTOS,
   });
 
   console.log(`[Mailer] Bienvenida enviada a ${email}`);
@@ -211,7 +269,8 @@ async function enviarGraciasPago(email, nombre, plan, montoCentavos) {
   `;
 
   await transporter.sendMail({
-    from: `"FlashPago" <${process.env.MAIL_USER}>`,
+    from: REMITENTE,
+    replyTo: RESPUESTA_A,
     to: email,
     subject: `¡Gracias por tu pago, ${nombre}! Tu plan ${nombrePlan} está activo`,
     html: plantilla({
@@ -220,6 +279,17 @@ async function enviarGraciasPago(email, nombre, plan, montoCentavos) {
       ctaTexto: 'Ver mi dashboard',
       ctaUrl: DASHBOARD_URL,
     }),
+    text: `¡Gracias por tu pago, ${nombre}!
+
+Tu cuenta ya quedó activa con todos los beneficios del plan, sin límite de prueba.
+
+Plan:         ${nombrePlan}
+Monto pagado: $${monto} COP
+
+Ver mi dashboard: ${DASHBOARD_URL}
+
+Cualquier duda sobre tu suscripción, responde este correo y te ayudamos.${PIE_TEXTO}`,
+    attachments: ADJUNTOS,
   });
 
   console.log(`[Mailer] Correo de agradecimiento de pago enviado a ${email}`);
@@ -238,10 +308,19 @@ async function enviarCodigoRecuperacion(email, codigo, nombre) {
   `;
 
   await transporter.sendMail({
-    from: `"FlashPago" <${process.env.MAIL_USER}>`,
+    from: REMITENTE,
+    replyTo: RESPUESTA_A,
     to: email,
     subject: `${codigo} — Recupera tu contraseña de FlashPago`,
     html: plantilla({ preheader: `Tu código es ${codigo}`, contenido }),
+    text: `Recupera tu contraseña
+
+Hola${nombre ? ` ${nombre}` : ''}, usa este código para crear una nueva contraseña en FlashPago:
+
+    ${codigo}
+
+Expira en 10 minutos. Si no solicitaste este cambio, ignora este correo y tu contraseña seguirá igual.${PIE_TEXTO}`,
+    attachments: ADJUNTOS,
   });
 
   console.log(`[Mailer] Código de recuperación enviado a ${email}`);

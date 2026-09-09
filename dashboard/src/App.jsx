@@ -50,6 +50,11 @@ function App() {
     // falla (sin red), igual se cierra la sesión en el cliente; la cookie
     // caduca sola a las 24h.
     fetch('/api/logout', { method: 'POST' }).catch(() => {});
+    // Limpiar la URL: al cerrar sesión no debe quedar el ?seccion= de la vista
+    // anterior colgado en la barra de direcciones.
+    if (window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     setVista('login');
   };
 
