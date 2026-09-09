@@ -1,4 +1,4 @@
-// gmail.js — Verificación de pagos vía correos de Bancolombia y Nequi (multi-negocio)
+// gmail.js — Verificación de pagos vía correos de Bancolombia, Nequi y BBVA (multi-negocio)
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
@@ -7,13 +7,40 @@ const { obtenerTokenGmail, guardarTokenGmail } = require('./db');
 const CREDENTIALS_PATH = path.join(__dirname, 'credentials.json');
 
 // Remitentes de notificación de cada banco soportado
-const REMITENTES_BANCOS = ['notificacionesbancolombia.com', 'notificaciones@nequi.com.co'];
+const REMITENTES_BANCOS = ['notificacionesbancolombia.com', 'notificaciones@nequi.com.co', 'notificacionesBreB@bbva.com'];
 const QUERY_REMITENTES = `{${REMITENTES_BANCOS.map((r) => `from:${r}`).join(' ')}}`;
 
-// Extrae { monto, nombre } del snippet de un correo, según el banco remitente.
+// BBVA escribe los decimales con coma al estilo colombiano: "$1.000,00" son mil
+// pesos, no cien mil. La limpieza de los otros bancos solo reconoce decimales con
+// punto, asi que sin esto un pago de $50.000 se leeria como 5.000.000 y no
+// coincidiria nunca. Se deja aparte para no alterar el parseo de Bancolombia ni
+// el de Nequi, que llevan tiempo funcionando.
+function montoColombianoAEntero(texto) {
+  let limpio = String(texto).trim();
+  if (/,\d{2}$/.test(limpio)) limpio = limpio.slice(0, -3);
+  const n = parseInt(limpio.replace(/[.,]/g, ''), 10);
+  return Number.isNaN(n) ? null : n;
+}
+
+// Extrae { monto, nombre } de un correo, según el banco remitente.
 // Cada banco redacta distinto: Bancolombia usa "$60.800" y "pago de X por",
-// Nequi usa "Recibiste 554 de X el" (sin signo $).
-function extraerMontoYNombre(snippet, remitente) {
+// Nequi usa "Recibiste 554 de X el" (sin signo $), y BBVA (Bre-B) pone el importe
+// en una tabla de detalles bajo "Valor recibido".
+//
+// `cuerpo` es opcional y solo lo usa BBVA: su correo empieza con un parrafo largo
+// y el importe queda fuera de los ~200 caracteres del snippet de Gmail. Los demas
+// bancos siguen leyendo solo el snippet, igual que siempre.
+function extraerMontoYNombre(snippet, remitente, cuerpo) {
+  if (/bbva\.com/i.test(remitente || '')) {
+    const texto = `${snippet || ''} ${cuerpo || ''}`.replace(/\s+/g, ' ');
+    const mMonto = texto.match(/Valor\s+recibido\s*:?\s*\$?\s*([\d.,]+)/i);
+    if (!mMonto) return null;
+    const monto = montoColombianoAEntero(mMonto[1]);
+    if (monto === null) return null;
+    const mNombre = texto.match(/Persona\s+que\s+env[ií]a\s*:?\s*(.+?)\s*(?:Tipo\s+de\s+llave|Cuenta\s+destino|C[óo]digo\s+de\s+operaci[óo]n|$)/i);
+    return { monto, nombre: mNombre ? mNombre[1].trim() : null };
+  }
+
   if (/nequi\.com\.co/i.test(remitente || '')) {
     const match = snippet.match(/Recibiste\s+\$?\s?([\d.,]+)\s+de\s+(.+?)\s+el\s/i);
     if (!match) return null;
@@ -33,6 +60,29 @@ function extraerMontoYNombre(snippet, remitente) {
   if (isNaN(monto)) return null;
   const matchNombre = snippet.match(/pago de (.+?) por/i);
   return { monto, nombre: matchNombre ? matchNombre[1].trim() : null };
+}
+
+// Texto plano del cuerpo del mensaje. Solo se usa para BBVA; pedirlo para todos
+// gastaria memoria sin ganar nada, porque el resto cabe en el snippet.
+function textoDelCuerpo(payload) {
+  let salida = '';
+  const visitar = (parte) => {
+    if (!parte) return;
+    const datos = parte.body && parte.body.data;
+    if (datos && (parte.mimeType === 'text/plain' || parte.mimeType === 'text/html')) {
+      salida += ' ' + Buffer.from(datos, 'base64').toString('utf8');
+    }
+    (parte.parts || []).forEach(visitar);
+  };
+  visitar(payload);
+  return salida.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ');
+}
+
+// Devuelve el texto sobre el que analizar el correo: el snippet basta para
+// Bancolombia y Nequi; BBVA necesita ademas el cuerpo.
+function cuerpoSiHaceFalta(detalle, remitente) {
+  if (!/bbva\.com/i.test(remitente || '')) return undefined;
+  return textoDelCuerpo(detalle && detalle.data && detalle.data.payload);
 }
 
 function obtenerRemitente(mensajeDetalle) {
@@ -162,7 +212,8 @@ async function buscarEnGmail(auth, montoEsperado) {
       const remitente = obtenerRemitente(detalle);
       console.log('[Gmail] Revisando correo:', snippet);
 
-      const extraido = extraerMontoYNombre(snippet, remitente);
+      const cuerpo = cuerpoSiHaceFalta(detalle, remitente);
+      const extraido = extraerMontoYNombre(snippet, remitente, cuerpo);
       if (!extraido) continue;
       const { monto: montoCorreo, nombre: nombreCliente } = extraido;
 
@@ -231,18 +282,24 @@ async function listarIngresosDelDia(negocio_id = 1) {
 
       const snippet = detalle.data.snippet || '';
       const remitente = obtenerRemitente(detalle);
+      const cuerpo = cuerpoSiHaceFalta(detalle, remitente);
+
+      // Los filtros miran el mismo texto que el parser. Para Bancolombia y Nequi
+      // `cuerpo` es undefined, asi que esto es exactamente el snippet de siempre;
+      // BBVA necesita el cuerpo porque su snippet no dice "recibido" por ningun lado.
+      const textoFiltros = cuerpo ? `${snippet} ${cuerpo}` : snippet;
 
       // ❌ Excluir retiros / salidas de dinero (evitar falsos "ingresos")
-      if (/retiraste|retiró|retiro|debitaste|pagaste|descont|cajero|de tu t\.deb|de tu t deb|de su t\.deb|compra|compraste|folios?|avance|retiro en/i.test(snippet)) {
+      if (/retiraste|retiró|retiro|debitaste|pagaste|descont|cajero|de tu t\.deb|de tu t deb|de su t\.deb|compra|compraste|folios?|avance|retiro en/i.test(textoFiltros)) {
         continue;
       }
 
       // ✅ Requerir señales claras de INGRESO (transferencias recibidas)
-      if (!/recibiste|recibido|recibida|recibimos|consignaci|abono|un pago de|una transferencia|transferencia de|te hicieron|te realizaron|a tu cuenta|a su cuenta|ingresó|ingreso de|depósito|deposito/i.test(snippet)) {
+      if (!/recibiste|recibido|recibida|recibimos|consignaci|abono|un pago de|una transferencia|transferencia de|te hicieron|te realizaron|a tu cuenta|a su cuenta|ingresó|ingreso de|depósito|deposito/i.test(textoFiltros)) {
         continue;
       }
 
-      const extraido = extraerMontoYNombre(snippet, remitente);
+      const extraido = extraerMontoYNombre(snippet, remitente, cuerpo);
       if (!extraido) continue;
 
       ingresos.push({ monto: extraido.monto, nombre: extraido.nombre, snippet });
