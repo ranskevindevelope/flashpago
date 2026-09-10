@@ -2,6 +2,7 @@ const fetch = require('node-fetch');
 const fs = require('fs');
 const config = require('../config');
 const salud = require('../salud');
+const plantillas = require('./plantillas');
 
 const OPENWA_URL = config.OPENWA_URL;
 const OPENWA_KEY = config.OPENWA_KEY;
@@ -193,6 +194,33 @@ async function descargarMediaMeta(mediaId) {
   return { base64: Buffer.from(arrayBuffer).toString('base64'), mimetype: metaData.mime_type };
 }
 
+// ─── Plantillas (mensajes proactivos) ─────────────────────
+// Un aviso que sale sin que el cliente haya escrito antes cae fuera de la
+// ventana de 24 h de Meta, donde solo se aceptan plantillas aprobadas. openwa
+// no distingue: se le manda el texto ya sustituido.
+async function enviarPlantillaMeta(to, clave, variables) {
+  try {
+    const numero = normalizarNumero(to);
+    const url = `https://graph.facebook.com/${config.META_API_VERSION}/${config.META_PHONE_NUMBER_ID}/messages`;
+    const res = await globalThis.fetch(url, {
+      method: 'POST',
+      headers: metaHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(plantillas.cargaMeta(clave, variables, numero)),
+    });
+    const data = await res.json().catch(() => ({}));
+    const ok = revisarEnvio(`[Bot][Meta][${clave}]`, numero, res, data);
+    // 132001: la plantilla no existe o no esta aprobada en la cuenta de Meta.
+    // Es un fallo de configuracion, no del mensaje: conviene que se distinga.
+    if (!ok && String(data?.error?.code) === '132001') {
+      console.error(`[Bot][Meta] La plantilla "${clave}" no esta aprobada en tu cuenta de WhatsApp Business.`);
+    }
+    return ok;
+  } catch (err) {
+    console.error('[Bot][Meta] Error enviando plantilla:', err.message);
+    return false;
+  }
+}
+
 // ─── Switch de proveedor ───────────────────────────────────
 async function enviarMensaje(to, body) {
   if (config.WA_PROVIDER === 'meta') return enviarMensajeMeta(to, body);
@@ -204,4 +232,23 @@ async function enviarImagen(to, rutaFoto, caption) {
   return enviarImagenOpenwa(to, rutaFoto, caption);
 }
 
-module.exports = { enviarMensaje, enviarImagen, descargarMediaMeta };
+// Migrar a Meta es cambiar WA_PROVIDER: quien llama a esto no se entera.
+//
+// `opciones.textoOpenwa` existe porque las variables de plantilla de Meta no
+// admiten saltos de linea, asi que la version de Meta va en resumen. openwa no
+// tiene esa limitacion: mientras sigamos ahi se manda el mensaje completo, con
+// su lista, tal como lo recibe hoy el admin. Sin esa opcion se manda la
+// plantilla renderizada.
+async function enviarPlantilla(to, clave, variables = [], opciones = {}) {
+  if (config.WA_PROVIDER === 'meta') return enviarPlantillaMeta(to, clave, variables);
+  try {
+    const texto = opciones.textoOpenwa || plantillas.renderizar(clave, variables);
+    return enviarMensajeOpenwa(to, texto);
+  } catch (err) {
+    // Variables mal pasadas: mejor no enviar nada que mandarle un "{{2}}" al cliente.
+    console.error(`[Bot] Plantilla "${clave}" mal usada:`, err.message);
+    return false;
+  }
+}
+
+module.exports = { enviarMensaje, enviarImagen, enviarPlantilla, descargarMediaMeta };

@@ -8,11 +8,15 @@ const required = (name) => {
 
 module.exports = {
   PORT: process.env.PORT || 3000,
-  JWT_SECRET: process.env.JWT_SECRET || process.env.JWT_SECRET || required('JWT_SECRET'),
+  JWT_SECRET: process.env.JWT_SECRET || required('JWT_SECRET'),
   INBOUND_WEBHOOK_SECRET: process.env.INBOUND_WEBHOOK_SECRET || null,
   OPENWA_URL: process.env.OPENWA_URL || 'http://localhost:2785',
   OPENWA_SESSION: process.env.OPENWA_SESSION || 'vinson',
-  OPENWA_KEY: process.env.OPENWA_API_KEY || 'dev-admin-key',
+  // Sin fallback a proposito: si falta OPENWA_API_KEY, mejor que el arranque
+  // truene (como JWT_SECRET) a que el bot se autentique en silencio con una
+  // clave debil y predecible — asi fue como el webhook quedo mudo una vez,
+  // con una credencial equivocada que no avisaba.
+  OPENWA_KEY: process.env.OPENWA_API_KEY || required('OPENWA_API_KEY'),
   NEGOCIO_NOMBRE: process.env.NEGOCIO_NOMBRE || 'Flash Pago',
 
   // Proveedor de WhatsApp: 'openwa' (por defecto, no oficial) o 'meta' (API

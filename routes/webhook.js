@@ -9,7 +9,7 @@ const { verificarPorGmail } = require('../gmail');
 const { verificarPago } = require('../verificador');
 const {
   db, guardarPago, buscarDuplicadoReciente, contarComprobantesDelMes, obtenerNegocio, verificarTrialActivo,
-  marcarNegocioPagado, actualizarPagoPlataforma, obtenerAdminDeNegocio,
+  marcarNegocioPagado, actualizarPagoPlataforma, obtenerAdminDeNegocio, planBase,
 } = require('../db');
 const { enviarMensaje, descargarMediaMeta } = require('../bot/openwa');
 const eventos = require('../eventos');
@@ -64,7 +64,9 @@ async function procesarPagoPlataforma(from, transferencia, mediaUrl, mediaBase64
 
       try {
         const admin = await obtenerAdminDeNegocio(negocio_id);
-        if (admin) await enviarGraciasPago(admin.email, admin.nombre, transferencia.plan, transferencia.montoPesos * 100);
+        // transferencia.plan puede traer '_anual'; NOMBRE_PLAN solo conoce los
+        // 4 planes base, así que se resuelve antes o el correo sale sin nombre.
+        if (admin) await enviarGraciasPago(admin.email, admin.nombre, planBase(transferencia.plan), transferencia.montoPesos * 100);
       } catch (e) {
         console.error('[PagoPlataforma] Error enviando correo de agradecimiento:', e.message);
       }

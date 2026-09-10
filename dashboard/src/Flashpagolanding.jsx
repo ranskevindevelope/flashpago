@@ -3,7 +3,7 @@ import {
   Zap, MessageCircle, Lock, Camera, Bot, CheckCircle2, Shield, BarChart3,
   Search, RefreshCw, Clock, AlertTriangle, Building2, Database,
   FileText, Landmark, Smartphone, TrendingUp, Users, FileSpreadsheet,
-  Headphones, Star, Check, Minus, Hourglass, Volume2
+  Headphones, Star, Check, Minus, Hourglass, Volume2, Rocket
 } from "lucide-react";
 
 const COLORS = {
@@ -74,7 +74,7 @@ function Nav({ onLogin }) {
       </li>
     ))}
     <li className="nav-login-mobile-item">
-      <button onClick={() => { setMenuOpen(false); window.open('https://app.flashpago.co', '_blank'); }} style={{ background: "none", border: "none", color: "#b0b0c8", fontSize: "0.9rem", fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: 0 }}>
+      <button onClick={() => { setMenuOpen(false); onLogin(); }} style={{ background: "none", border: "none", color: "#b0b0c8", fontSize: "0.9rem", fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: 0 }}>
         <Lock size={15} /> Iniciar sesión
       </button>
     </li>
@@ -82,7 +82,7 @@ function Nav({ onLogin }) {
 
   {/* Derecha: botones */}
   <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-    <button className="nav-login-btn" onClick={() => window.open('https://app.flashpago.co', '_blank')} style={{ background: "transparent", border: "2px solid rgba(255,255,255,0.2)", color: COLORS.blanco, padding: "0.45rem 1.1rem", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+    <button className="nav-login-btn" onClick={onLogin} style={{ background: "transparent", border: "2px solid rgba(255,255,255,0.2)", color: COLORS.blanco, padding: "0.45rem 1.1rem", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
   <Lock size={15} /> Iniciar sesión
     </button>
     <a href="#contacto" style={{ background: COLORS.naranja, color: "white", padding: "0.5rem 1.1rem", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap" }}>
@@ -224,6 +224,10 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
     if (onLogin) onLogin();
   };
 
+  // Arranca en Anual para que el precio de lanzamiento sea lo primero que
+  // ve un visitante nuevo. El toggle lo cambia a Mensual si prefiere.
+  const [facturacionAnual, setFacturacionAnual] = useState(true);
+
   const stats = [
     ["<8s", "Verificación"],
     ["5", "Bancos soportados"],
@@ -258,19 +262,22 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
     { Icon: Building2, label: "BBVA" },
   ];
 
+  // Precios anuales de lanzamiento (25/30/35% off sobre 12 meses sueltos).
+  // Deben coincidir con PRECIOS_CENTAVOS en db.js y con PLANES_PRECIOS en
+  // Dashboard.jsx — si cambian en un sitio, cambian en los tres.
   const planes = [
     {
-      name: "Básico", price: "$39.900",
+      name: "Básico", precioMensual: 39900, precioAnual: 359000,
       features: ["Verificación de pagos por WhatsApp", "300 comprobantes/mes", "Lectura con IA (3 bancos)", "Detección de duplicados", "Registro de pagos", "Dashboard web", "Soporte por WhatsApp"],
       disabled: ["Reportes automáticos"],
     },
     {
-      name: "Premium", price: "$79.900", popular: true,
+      name: "Premium", precioMensual: 79900, precioAnual: 669000, popular: true,
       features: ["Todo lo del plan Básico", "1,000 comprobantes/mes", "Reportes diarios automáticos", "Búsqueda de clientes", "Fotos de comprobantes", "Estadísticas del negocio", "Soporte prioritario"],
       disabled: [],
     },
     {
-      name: "Premium Plus", price: "$109.900",
+      name: "Premium Plus", precioMensual: 109900, precioAnual: 859000,
       features: ["Todo lo del plan Premium", "Comprobantes ilimitados", "Soporte prioritario"],
       disabled: [],
     },
@@ -472,18 +479,85 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
           <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "0.85rem", fontWeight: 600, color: COLORS.naranja, textTransform: "uppercase", letterSpacing: 2, marginBottom: "1rem" }}>Planes</div>
           <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, marginBottom: "1.5rem", lineHeight: 1.2, marginTop: 0 }}>Elige el plan para tu negocio</h2>
-          <p style={{ fontSize: "1.1rem", color: COLORS.grisTxt, maxWidth: 650, marginBottom: "3rem" }}>Sin contratos largos. Cancela cuando quieras.</p>
+          <p style={{ fontSize: "1.1rem", color: COLORS.grisTxt, maxWidth: 650, marginBottom: "2rem" }}>Sin contratos largos. Cancela cuando quieras.</p>
+
+          {/* Mensual / Anual — precio de lanzamiento */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "2.5rem", flexWrap: "wrap", justifyContent: "center" }}>
+            <span style={{ fontSize: "0.9rem", fontWeight: !facturacionAnual ? 600 : 400, color: !facturacionAnual ? COLORS.oscuro : COLORS.grisTxt }}>Mensual</span>
+            <button
+              type="button"
+              onClick={() => setFacturacionAnual(v => !v)}
+              aria-label="Cambiar entre facturación mensual y anual"
+              style={{ width: 46, height: 26, borderRadius: 999, border: "none", cursor: "pointer", background: facturacionAnual ? "linear-gradient(135deg, #F57C00, #E65100)" : "#d8d8e4", position: "relative", padding: 0, transition: "background 0.2s" }}
+            >
+              <span style={{ position: "absolute", top: 3, left: facturacionAnual ? 23 : 3, width: 20, height: 20, borderRadius: "50%", background: "white", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} />
+            </button>
+            <span style={{ fontSize: "0.9rem", fontWeight: facturacionAnual ? 600 : 400, color: facturacionAnual ? COLORS.oscuro : COLORS.grisTxt }}>Anual</span>
+          </div>
+
           <div className="planes-grid-wrap" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "2rem" }}>
-            {planes.map(plan => (
+            {planes.map(plan => {
+              const precioMostrado = facturacionAnual ? plan.precioAnual : plan.precioMensual;
+              const descuentoPct = Math.round((1 - plan.precioAnual / (plan.precioMensual * 12)) * 100);
+              const mesesGratis = Math.round((1 - plan.precioAnual / (plan.precioMensual * 12)) * 12 * 10) / 10;
+              return (
               <div key={plan.name} style={{ border: `2px solid ${plan.popular ? COLORS.naranja : "#e8e8f0"}`, borderRadius: 20, padding: "2.5rem 2rem", position: "relative", ...(plan.popular ? { background: "linear-gradient(180deg, rgba(245,124,0,0.03) 0%, transparent 100%)" } : {}) }}>
                 {plan.popular && (
                   <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: COLORS.naranja, color: "white", padding: "0.3rem 1.2rem", borderRadius: 50, fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
                     <Star size={12} fill="white" /> Más popular
                   </div>
                 )}
+                {/* Cinta de lanzamiento en la esquina opuesta a "Más popular", solo
+                    en las cards que hoy no tienen nada arriba (Premium ya tiene la
+                    suya). Es absolute: no empuja nada, se monta y desmonta sin el
+                    problema de layout que tuvo la del interruptor. */}
+                {facturacionAnual && !plan.popular && (
+                  <div style={{
+                    position: "absolute", top: 16, left: 16,
+                    background: "#FFF3E0", color: COLORS.naranja, fontSize: "0.68rem", fontWeight: 700,
+                    padding: "0.22rem 0.6rem", borderRadius: 999, letterSpacing: 0.2,
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                  }}>
+                    <Rocket size={10} /> Lanzamiento
+                  </div>
+                )}
                 <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "1.3rem", fontWeight: 700, marginBottom: "0.5rem" }}>{plan.name}</div>
-                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, color: COLORS.naranja, marginBottom: "0.25rem" }}>{plan.price}</div>
-                <div style={{ fontSize: "0.9rem", color: COLORS.grisTxt, marginBottom: "2rem" }}>COP / mes</div>
+                {/* El -X% va junto al precio, no suelto en la esquina: en el plan
+                    Básico (sin borde naranja ni fondo degradado) quedaba flotando
+                    sin nada que lo acompañe. Se mantiene montado con visibility
+                    (mismo motivo que el resto de esta seccion: no correr el layout). */}
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 8, marginBottom: "0.25rem" }}>
+                  {/* En mensual, naranja plano de siempre; en anual pasa a un
+                      degradado mas intenso — el color "se pone mas fuerte" justo
+                      cuando aparece el precio con descuento. */}
+                  <div style={{
+                    fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, transition: "color .2s",
+                    ...(facturacionAnual
+                      ? { backgroundImage: "linear-gradient(135deg, #F57C00, #E65100)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }
+                      : { color: COLORS.naranja }),
+                  }}>
+                    ${precioMostrado.toLocaleString('es-CO')}
+                  </div>
+                  <span style={{
+                    fontSize: "0.75rem", fontWeight: 700, color: "white", background: COLORS.verde,
+                    padding: "0.2rem 0.55rem", borderRadius: 999, whiteSpace: "nowrap",
+                    visibility: facturacionAnual ? "visible" : "hidden",
+                  }}>
+                    -{descuentoPct}%
+                  </span>
+                </div>
+                <div style={{ fontSize: "0.9rem", color: COLORS.grisTxt, marginBottom: "0.35rem" }}>
+                  COP / {facturacionAnual ? "año" : "mes"}
+                </div>
+                {/* Se mantiene montada (solo cambia visibility) con el mismo
+                    marginBottom en los dos modos, para que el boton "Empezar" no
+                    salte de posicion al cambiar entre mensual y anual. */}
+                <div style={{
+                  fontSize: "0.85rem", fontWeight: 600, color: COLORS.verde, marginBottom: "2rem",
+                  visibility: facturacionAnual ? "visible" : "hidden",
+                }}>
+                  Equivale a {mesesGratis} meses gratis
+                </div>
                 <ul style={{ listStyle: "none", padding: 0, marginBottom: "2rem", margin: "0 0 2rem 0" }}>
                   {plan.features.map(f => (
                     <li key={f} style={{ padding: "0.5rem 0", fontSize: "0.9rem", color: COLORS.grisTxt, display: "flex", alignItems: "flex-start", gap: 8 }}>
@@ -505,7 +579,8 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
                   Empezar
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div style={{ marginTop: "2rem", border: "1px solid #e8e8f0", borderRadius: 16, padding: "1.5rem 2rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", background: COLORS.grisClaro }}>
@@ -530,9 +605,8 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
             <a href={`https://wa.me/573167064671?text=${encodeURIComponent('Hola, quiero conocer más sobre FlashPago')}`} target="_blank" rel="noopener noreferrer" style={{ background: COLORS.naranja, color: "white", padding: "1rem 2rem", borderRadius: 12, textDecoration: "none", fontWeight: 600, fontSize: "1.05rem", display: "inline-flex", alignItems: "center", gap: 8 }}>
               <MessageCircle size={18} /> Escribir por WhatsApp
             </a>
-            <button onClick={() => window.open('https://app.flashpago.co', '_blank')} style={{ background: "transparent", color: COLORS.blanco, padding: "1rem 2rem", borderRadius: 12, fontWeight: 600, fontSize: "1.05rem", border: "2px solid rgba(255,255,255,0.2)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "'Inter',sans-serif" }}>
-             <Lock size={17} /> Ir al Panel
-
+            <button onClick={onLogin} style={{ background: "transparent", color: COLORS.blanco, padding: "1rem 2rem", borderRadius: 12, fontWeight: 600, fontSize: "1.05rem", border: "2px solid rgba(255,255,255,0.2)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "'Inter',sans-serif" }}>
+              <Lock size={17} /> Ir al Panel
             </button>
           </div>
         </div>

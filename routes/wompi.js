@@ -13,6 +13,7 @@ const {
   marcarNegocioPagado,
   obtenerAdminDeNegocio,
   PRECIOS_CENTAVOS,
+  planBase,
 } = require('../db');
 const { enviarGraciasPago } = require('../mailer');
 
@@ -191,7 +192,10 @@ router.post('/webhook', async (req, res) => {
         try {
           const admin = await obtenerAdminDeNegocio(pago.negocio_id);
           if (admin) {
-            await enviarGraciasPago(admin.email, admin.nombre, pago.plan, pago.monto);
+            // pago.plan puede traer sufijo '_anual' (p.ej. 'premium_anual'); el
+            // correo busca el nombre en NOMBRE_PLAN, que solo conoce los 4 planes
+            // base, así que hay que resolverlo antes o el nombre sale en blanco.
+            await enviarGraciasPago(admin.email, admin.nombre, planBase(pago.plan), pago.monto);
           }
         } catch (e) {
           console.error('[Wompi] Error enviando correo de agradecimiento:', e.message);

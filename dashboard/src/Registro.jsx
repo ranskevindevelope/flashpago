@@ -12,6 +12,10 @@ function Registro({ onBack }) {
 
   // Paso 1: Plan
   const [plan, setPlan] = useState('premium');
+  // Solo cambia lo que se muestra (precio/ahorro por plan); el trial es
+  // gratis con cualquier plan, asi que esto no afecta lo que se envia al
+  // crear la cuenta. Arranca en Anual, igual que dashboard y landing.
+  const [facturacionAnual, setFacturacionAnual] = useState(true);
 
   // Paso 2: Datos del negocio
   const [nombreNegocio, setNombreNegocio] = useState('');
@@ -50,10 +54,15 @@ function Registro({ onBack }) {
   // Paso 5: Resultado
   const [registroExitoso, setRegistroExitoso] = useState(null);
 
+  // precioAnual solo se usa para mostrar el ahorro de lanzamiento (ver abajo);
+  // la prueba de 15 días es gratis sin importar el plan, así que aquí no se
+  // elige mensual/anual todavía — eso se decide en el dashboard al terminar
+  // la prueba. Los montos deben coincidir con PRECIOS_CENTAVOS en db.js,
+  // PLANES_PRECIOS en Dashboard.jsx y `planes` en Flashpagolanding.jsx.
   const planes = [
-    { id: 'basico', nombre: 'Básico', precio: '$39.900', comprobantes: '300 comprobantes/mes', corto: '300/mes', popular: false, Icono: Package },
-    { id: 'premium', nombre: 'Premium', precio: '$79.900', comprobantes: '1,000 comprobantes/mes', corto: '1,000/mes', popular: true, Icono: Rocket },
-    { id: 'premium_plus', nombre: 'Premium Plus', precio: '$109.900', comprobantes: 'Ilimitado', corto: 'Ilimitado', popular: false, Icono: Zap },
+    { id: 'basico', nombre: 'Básico', precio: '$39.900', precioMensual: 39900, precioAnual: 359000, comprobantes: '300 comprobantes/mes', corto: '300/mes', popular: false, Icono: Package },
+    { id: 'premium', nombre: 'Premium', precio: '$79.900', precioMensual: 79900, precioAnual: 669000, comprobantes: '1,000 comprobantes/mes', corto: '1,000/mes', popular: true, Icono: Rocket },
+    { id: 'premium_plus', nombre: 'Premium Plus', precio: '$109.900', precioMensual: 109900, precioAnual: 859000, comprobantes: 'Ilimitado', corto: 'Ilimitado', popular: false, Icono: Zap },
   ];
 
   const planActual = planes.find(p => p.id === plan);
@@ -448,6 +457,22 @@ function Registro({ onBack }) {
               <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{plan ? '300/mes' : '—'}</span>
             </div>
 
+            {/* Ahorro de lanzamiento — informativo: la decisión mensual/anual
+                se toma despues, en el dashboard, cuando termine el trial. */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              opacity: plan ? 1 : 0.3, transition: 'all 0.4s ease',
+            }}>
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Al terminar la prueba</span>
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: '#F57C00', background: 'rgba(245,124,0,0.15)',
+                padding: '3px 9px', borderRadius: 50, display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                <Rocket size={10} />
+                -{planActual ? Math.round((1 - planActual.precioAnual / (planActual.precioMensual * 12)) * 100) : 0}% si pagas anual
+              </span>
+            </div>
+
             {/* Ciudad - aparece cuando la llena */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -602,10 +627,64 @@ function Registro({ onBack }) {
             }}>
               <Gift size={13} /> 15 días gratis en cualquier plan
             </div>
-            <div className="registro-planes-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
-              {planes.map(p => (
+
+            {/* Mensual / Anual — igual que en el dashboard y la landing. No hay
+                pago en este paso (la prueba es gratis con cualquier plan), asi
+                que es puramente informativo: solo cambia lo que se muestra, no
+                lo que se envia al crear la cuenta. */}
+            {/* Misma grilla de 3 columnas que las cards de abajo, con el
+                interruptor en la columna del medio: queda pegado al centro
+                de la card "Premium" por construcción, no por un centrado
+                aparte que puede no coincidir exactamente con la grilla. */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: 14 }}>
+              <div style={{ gridColumn: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: !facturacionAnual ? 600 : 400, color: !facturacionAnual ? '#1A1A2E' : '#999' }}>Mensual</span>
+                <button
+                  type="button"
+                  onClick={() => setFacturacionAnual(v => !v)}
+                  aria-label="Cambiar entre facturación mensual y anual"
+                  style={{
+                    width: 38, height: 21, borderRadius: 999, border: 'none', cursor: 'pointer',
+                    background: facturacionAnual ? 'linear-gradient(135deg, #F57C00, #E65100)' : '#e0e0e8',
+                    position: 'relative', padding: 0, transition: 'background 0.2s',
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 2, left: facturacionAnual ? 19 : 2, width: 17, height: 17,
+                    borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                  }} />
+                </button>
+                <span style={{ fontSize: 12, fontWeight: facturacionAnual ? 600 : 400, color: facturacionAnual ? '#1A1A2E' : '#999' }}>Anual</span>
+              </div>
+            </div>
+
+            {/* minmax(0, 1fr), no solo 1fr: con 1fr a secas, una card con
+                contenido que no cabe en su columna se niega a encoger y
+                desborda la grilla entera hacia la derecha — por eso el
+                interruptor de arriba (centrado bien contra la grilla) se veia
+                corrido respecto a las cards (centradas contra su propio
+                desborde, no contra la grilla real). minmax(0, ...) fuerza el
+                encogimiento real y asi ambos quedan centrados sobre lo mismo. */}
+            <div className="registro-planes-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 16 }}>
+              {planes.map(p => {
+                const precioMostrado = facturacionAnual ? p.precioAnual : p.precioMensual;
+                const descuentoPct = Math.round((1 - p.precioAnual / (p.precioMensual * 12)) * 100);
+                const mesesGratis = Math.round((1 - p.precioAnual / (p.precioMensual * 12)) * 12 * 10) / 10;
+                return (
                 <div key={p.id} style={s.planCard(plan === p.id)} onClick={() => setPlan(p.id)}>
                   {p.popular && <div style={s.planTag}>Popular</div>}
+                  {/* Cinta en la esquina opuesta, solo en las cards que no tienen
+                      "Popular" arriba — mismo tratamiento que dashboard y landing. */}
+                  {facturacionAnual && !p.popular && (
+                    <div style={{
+                      position: 'absolute', top: 8, left: 8,
+                      background: '#FFF3E0', color: '#F57C00', fontSize: 8.5, fontWeight: 700,
+                      padding: '2px 6px', borderRadius: 999,
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                    }}>
+                      <Rocket size={8} /> Lanzamiento
+                    </div>
+                  )}
                   <div style={{
                     width: 34, height: 34, borderRadius: 9, margin: '0 auto 8px',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -615,12 +694,45 @@ function Registro({ onBack }) {
                     <p.Icono size={17} color={plan === p.id ? '#fff' : '#8888a8'} />
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1A2E', marginBottom: 4 }}>{p.nombre}</div>
-                  <div style={{ fontSize: 19, fontWeight: 700, color: '#F57C00', lineHeight: 1.2 }}>{p.precio}</div>
-                  <div style={{ fontSize: 10, color: '#bbb', marginBottom: 8 }}>por mes</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
+                    {/* En mensual, naranja plano de siempre; en anual, degradado
+                        mas intenso — mismo tratamiento que dashboard y landing. */}
+                    <div style={{
+                      fontSize: 19, fontWeight: 700, lineHeight: 1.2, transition: 'color .2s',
+                      ...(facturacionAnual
+                        ? { backgroundImage: 'linear-gradient(135deg, #F57C00, #E65100)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }
+                        : { color: '#F57C00' }),
+                    }}>
+                      ${precioMostrado.toLocaleString('es-CO')}
+                    </div>
+                    {/* Solo se monta en anual (no visibility) para que en
+                        mensual el precio quede solo y realmente centrado, en
+                        vez de compartir el centro con un hueco invisible. */}
+                    {facturacionAnual && (
+                      <span style={{
+                        fontSize: 8.5, fontWeight: 700, color: '#fff', background: '#43A047',
+                        padding: '1px 5px', borderRadius: 999, whiteSpace: 'nowrap',
+                      }}>
+                        -{descuentoPct}%
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#bbb', marginBottom: 8 }}>{facturacionAnual ? 'por año' : 'por mes'}</div>
                   <div style={{ height: 1, background: '#eee', margin: '0 -12px 8px' }} />
-                  <div style={{ fontSize: 11, color: '#666', fontWeight: 500 }}>{p.corto}</div>
+                  <div style={{ fontSize: 11, color: '#666', fontWeight: 500, marginBottom: 8 }}>{p.corto}</div>
+                  {/* Solo en anual: en mensual no hay nada que mostrar aqui. */}
+                  {facturacionAnual && (
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      fontSize: 9.5, fontWeight: 700, color: '#2E7D32', background: '#E8F5E9',
+                      padding: '2px 8px', borderRadius: 50, whiteSpace: 'nowrap',
+                    }}>
+                      <Rocket size={9} /> {mesesGratis} meses gratis
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
             <button style={s.btn(true)} onClick={avanzar}>
               Empezar gratis <ArrowRight size={16} />

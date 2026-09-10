@@ -176,7 +176,11 @@ function Sidebar({ activeSection, isOpen, isAdmin, isSuperAdmin, paymentCount, u
           onClick={onToggleTema}
           title={!expandido ? (tema === 'dark' ? 'Modo claro' : 'Modo oscuro') : ''}
         >
-          <span className="sidebar-item-icon">{tema === 'dark' ? <Sun size={18} /> : <Moon size={18} />}</span>
+          <span className="sidebar-item-icon">
+            <span key={tema} className="sidebar-theme-icon">
+              {tema === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </span>
+          </span>
           {expandido && <span>{tema === 'dark' ? 'Modo claro' : 'Modo oscuro'}</span>}
         </button>
         <button className="sidebar-item" onClick={onLogout} title={!expandido ? 'Cerrar sesión' : ''}>

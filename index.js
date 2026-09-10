@@ -10,6 +10,7 @@ const config = require('./config');
 const { verificarToken, soloAdmin } = require('./auth');
 const { obtenerPagosExportables, listarNegocios, horaCierreDelDia } = require('./db');
 const { verificacionNocturna, enviarReporteDiario, buscarIngresosSinComprobante } = require('./bot/reportes');
+const { revisarVencimientos } = require('./bot/avisos');
 const { esFestivo, esFinDeSemana } = require('./bot/festivos');
 
 // ─── Opciones según festivos / fin de semana ──────────────
@@ -385,6 +386,14 @@ setInterval(async () => {
     }
   }
 }, 60000);
+
+// ─── Avisos de vencimiento de plan ────────────────────────
+// Cada hora en vez de una vez al dia: si el proceso se reinicia justo a la hora
+// del chequeo, el aviso no se pierde. Repetir es inofensivo porque la tabla
+// avisos_plan garantiza que cada aviso salga una sola vez por vencimiento.
+setInterval(() => {
+  revisarVencimientos().catch((err) => console.error('[Avisos] Error en la revisión:', err.message));
+}, 60 * 60 * 1000);
 
 // ─── 404 (cualquier ruta no encontrada) ────────────────────
 app.use((req, res) => {

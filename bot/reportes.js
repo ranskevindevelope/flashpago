@@ -1,7 +1,7 @@
 // reportes.js — Reportes y verificación nocturna (multi-negocio)
 const { db, resumenDelDia, obtenerNegocio, totalDelDia } = require('../db');
 const { verificarPorGmail, listarIngresosDelDia } = require('../gmail');
-const { enviarMensaje } = require('./openwa');
+const { enviarMensaje, enviarPlantilla } = require('./openwa');
 const { pagosPendientes } = require('./state');
 
 // ─── Obtener admins de un negocio ───────────────────────
@@ -60,7 +60,12 @@ async function enviarReporteDiario(negocio_id = 1) {
 
     const numerosReporte = await obtenerAdminsNegocio(negocio_id);
     for (const numero of numerosReporte) {
-      await enviarMensaje(numero, mensaje);
+      await enviarPlantilla(
+        numero,
+        'reporte_diario',
+        [negocioNombre, String(cantidad), total.toLocaleString('es-CO')],
+        { textoOpenwa: mensaje }
+      );
     }
     console.log(`[Reporte] Reporte diario enviado (negocio ${negocio_id})`);
   } catch (err) {
@@ -146,7 +151,12 @@ async function verificacionNocturna(revision, negocio_id) {
         `💵 Total recuperado: $${totalRecuperado.toLocaleString('es-CO')}`;
 
       for (const numero of numerosReporte) {
-        await enviarMensaje(numero, mensaje);
+        await enviarPlantilla(
+          numero,
+          'verificacion_nocturna',
+          [negocioNombre, String(verificadosNeg.length), totalRecuperado.toLocaleString('es-CO')],
+          { textoOpenwa: mensaje }
+        );
       }
     }
 
@@ -163,7 +173,12 @@ async function verificacionNocturna(revision, negocio_id) {
           `Revisa manualmente en la app del banco si es necesario.`;
 
         for (const numero of numerosReporte) {
-          await enviarMensaje(numero, mensaje);
+          await enviarPlantilla(
+            numero,
+            'pagos_no_confirmados',
+            [negocioNombre, String(noEncontradosNeg.length)],
+            { textoOpenwa: mensaje }
+          );
         }
       }
     }
@@ -226,7 +241,12 @@ async function buscarIngresosSinComprobante(negocio_id = 1) {
 
     const numerosReporte = await obtenerAdminsNegocio(negocio_id);
     for (const numero of numerosReporte) {
-      await enviarMensaje(numero, mensaje);
+      await enviarPlantilla(
+        numero,
+        'ingresos_sin_comprobante',
+        [negocioNombre, String(sinComprobante.length), totalSinComprobante.toLocaleString('es-CO')],
+        { textoOpenwa: mensaje }
+      );
     }
     console.log(`[SinComprobante] Alerta enviada: ${sinComprobante.length} ingreso(s) sin comprobante (negocio ${negocio_id})`);
   } catch (err) {

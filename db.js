@@ -50,6 +50,15 @@ db.run(`
         console.error('[DB] Error migrando pagado:', err.message);
       }
     });
+    // Si el plan es anual, plan_vence queda ~365 días adelante en vez de ~30.
+    // Sin esta bandera, un aviso de vencimiento no puede distinguir "le quedan
+    // 3 días de un plan mensual" de "le quedan 3 días de uno anual" — y ese
+    // segundo caso necesita avisarse con más antelación (ver bot/avisos.js).
+    db.run(`ALTER TABLE negocios ADD COLUMN plan_anual INTEGER DEFAULT 0`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('[DB] Error migrando plan_anual:', err.message);
+      }
+    });
     // Migración: vencimiento del plan pagado (renovación mensual). Sin esta
     // columna, "pagado" era una bandera permanente que nunca expiraba.
     db.run(`ALTER TABLE negocios ADD COLUMN plan_vence TEXT`, (err) => {
@@ -317,6 +326,22 @@ db.run(`
 `, (err) => {
   if (!err) console.log('[DB] Tabla "registros_trial" lista');
 });
+// Registro de avisos de vencimiento ya enviados. Sin esto, la revision diaria
+// le mandaria el mismo aviso al admin cada vez que corre. La clave unica
+// (negocio, tipo, vence) permite que el aviso se vuelva a mandar en el siguiente
+// ciclo de facturacion, pero solo una vez por vencimiento.
+db.run(`
+  CREATE TABLE IF NOT EXISTS avisos_plan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    negocio_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL,
+    vence TEXT NOT NULL,
+    enviado_en TEXT DEFAULT (datetime('now','localtime')),
+    UNIQUE (negocio_id, tipo, vence)
+  )
+`, (err) => {
+  if (!err) console.log('[DB] Tabla "avisos_plan" lista');
+});
 db.run(`
   CREATE TABLE IF NOT EXISTS duplicate_reviews (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -400,7 +425,23 @@ function actualizarHorarioNegocio(id, { hora_cierre, dias_operacion }) {
 // ═══════════════════════════════════════════════════════════
 
 const LIMITES_PLAN = { basico: 300, premium: 1000, premium_plus: 999999, empresarial: 999999 };
-const PRECIOS_CENTAVOS = { basico: 3990000, premium: 7990000, premium_plus: 10990000, empresarial: 17990000 };
+const PRECIOS_CENTAVOS = {
+  basico: 3990000, premium: 7990000, premium_plus: 10990000, empresarial: 17990000,
+  // Precio de lanzamiento anual: 25/30/35% de descuento sobre 12 meses sueltos
+  // (hasta 4.2 meses gratis en Premium Plus). El límite de comprobantes sigue
+  // siendo MENSUAL — un anual no da de golpe los comprobantes de un año.
+  basico_anual: 35900000, premium_anual: 66900000, premium_plus_anual: 85900000,
+};
+
+// Un plan anual se identifica por el sufijo en el id que llega desde el
+// checkout (p.ej. 'premium_anual'). LIMITES_PLAN y el resto de la app siguen
+// conociendo solo los 4 planes base — nunca hay que duplicar sus entradas.
+function esAnual(plan) {
+  return typeof plan === 'string' && plan.endsWith('_anual');
+}
+function planBase(plan) {
+  return esAnual(plan) ? plan.slice(0, -'_anual'.length) : plan;
+}
 
 function crearPagoPlataforma({ negocio_id, referencia, plan, monto }) {
   return new Promise((resolve, reject) => {
@@ -438,23 +479,31 @@ function actualizarPagoPlataforma(referencia, { estado, wompi_transaction_id }) 
 }
 
 function marcarNegocioPagado(negocio_id, plan) {
-  const limite = LIMITES_PLAN[plan] || 300;
+  // `plan` puede llegar con sufijo '_anual' (p.ej. 'premium_anual') desde el
+  // checkout — eso decide cuantos dias sumar, pero en la tabla `negocios` se
+  // guarda siempre el plan base. El resto de la app (NOMBRE_PLAN, los <option>
+  // del dashboard, LIMITES_PLAN) solo conoce los 4 planes base; duplicar esas
+  // listas por cada variante anual seria un sitio mas donde desincronizarse.
+  const anual = esAnual(plan);
+  const base = planBase(plan);
+  const limite = LIMITES_PLAN[base] || 300;
+  const dias = anual ? 365 : 30;
   return new Promise((resolve, reject) => {
-    // Si renueva antes de que venza el plan actual, se suman los 30 días
-    // desde el vencimiento vigente en vez de desde hoy, para no perder
-    // los días ya pagados que faltaban por consumir.
+    // Si renueva antes de que venza el plan actual, los dias se suman desde
+    // el vencimiento vigente en vez de desde hoy, para no perder los que ya
+    // había pagados.
     db.get(`SELECT plan_vence FROM negocios WHERE id = ?`, [negocio_id], (err, row) => {
       if (err) return reject(err);
       const venceActual = row?.plan_vence ? new Date(row.plan_vence).getTime() : 0;
-      const base = Math.max(Date.now(), venceActual);
-      const nuevoVence = new Date(base + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const desde = Math.max(Date.now(), venceActual);
+      const nuevoVence = new Date(desde + dias * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
       db.run(
-        `UPDATE negocios SET pagado = 1, plan = ?, limite_comprobantes = ?, plan_vence = ? WHERE id = ?`,
-        [plan, limite, nuevoVence, negocio_id],
+        `UPDATE negocios SET pagado = 1, plan = ?, limite_comprobantes = ?, plan_vence = ?, plan_anual = ? WHERE id = ?`,
+        [base, limite, nuevoVence, anual ? 1 : 0, negocio_id],
         function (err2) {
           if (err2) reject(err2);
-          else resolve({ changes: this.changes, plan_vence: nuevoVence });
+          else resolve({ changes: this.changes, plan_vence: nuevoVence, plan_anual: anual });
         }
       );
     });
@@ -517,6 +566,53 @@ function obtenerAdminDeNegocio(negocio_id) {
   });
 }
 
+// Admin al que avisar. A diferencia de obtenerAdminDeNegocio, no exige email:
+// un admin sin correo pero con WhatsApp igual debe enterarse de que su plan
+// vence. Devuelve tambien el whatsapp del negocio como respaldo, porque el del
+// local suele ser el mostrador y el del admin es quien decide el pago.
+function obtenerAdminParaAvisos(negocio_id) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT u.nombre, u.email, u.whatsapp AS whatsapp_admin, n.whatsapp AS whatsapp_negocio
+         FROM usuarios u
+         JOIN negocios n ON n.id = u.negocio_id
+        WHERE u.negocio_id = ? AND u.rol = 'admin' AND u.activo = 1
+        ORDER BY u.id ASC LIMIT 1`,
+      [negocio_id],
+      (err, row) => {
+        if (err) return reject(err);
+        if (!row) return resolve(null);
+        resolve({
+          nombre: row.nombre,
+          email: row.email || null,
+          whatsapp: row.whatsapp_admin || row.whatsapp_negocio || null,
+        });
+      }
+    );
+  });
+}
+
+// true si el aviso ya salio para ese vencimiento concreto.
+function yaSeAviso(negocio_id, tipo, vence) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT 1 FROM avisos_plan WHERE negocio_id = ? AND tipo = ? AND vence = ?`,
+      [negocio_id, tipo, vence],
+      (err, row) => (err ? reject(err) : resolve(Boolean(row)))
+    );
+  });
+}
+
+function registrarAviso(negocio_id, tipo, vence) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT OR IGNORE INTO avisos_plan (negocio_id, tipo, vence) VALUES (?, ?, ?)`,
+      [negocio_id, tipo, vence],
+      (err) => (err ? reject(err) : resolve())
+    );
+  });
+}
+
 function listarNegocios() {
   return new Promise((resolve, reject) => {
     db.all(`SELECT * FROM negocios WHERE activo = 1 ORDER BY id`, [], (err, rows) => {
@@ -544,7 +640,7 @@ function contarComprobantesDelMes(negocio_id) {
 function verificarTrialActivo(negocio_id) {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT trial_fin, pagado, plan, plan_vence, plan_ilimitado FROM negocios WHERE id = ? AND activo = 1`,
+      `SELECT trial_fin, pagado, plan, plan_vence, plan_ilimitado, plan_anual FROM negocios WHERE id = ? AND activo = 1`,
       [negocio_id],
       (err, row) => {
         if (err) return reject(err);
@@ -559,11 +655,12 @@ function verificarTrialActivo(negocio_id) {
 
           const hoy = new Date().toISOString().split('T')[0];
           const diasRestantes = Math.ceil((new Date(row.plan_vence) - new Date(hoy)) / (1000 * 60 * 60 * 24));
+          const anual = Boolean(row.plan_anual);
 
           if (diasRestantes <= 0) {
-            return resolve({ activo: false, pagado: true, razon: 'plan_vencido', plan_vence: row.plan_vence, dias: 0, plan: row.plan });
+            return resolve({ activo: false, pagado: true, razon: 'plan_vencido', plan_vence: row.plan_vence, dias: 0, plan: row.plan, plan_anual: anual });
           }
-          return resolve({ activo: true, pagado: true, plan_vence: row.plan_vence, dias: diasRestantes, plan: row.plan });
+          return resolve({ activo: true, pagado: true, plan_vence: row.plan_vence, dias: diasRestantes, plan: row.plan, plan_anual: anual });
         }
 
         // Si no tiene trial_fin (negocio viejo), está activo
@@ -1074,6 +1171,9 @@ module.exports = {
   crearNegocio,
   obtenerNegocio,
   listarNegocios,
+  obtenerAdminParaAvisos,
+  yaSeAviso,
+  registrarAviso,
   actualizarHorarioNegocio,
   parsearHoraCierre,
   horaCierreDelDia,
@@ -1090,6 +1190,8 @@ module.exports = {
   whatsappYaUsoTrial,
   PRECIOS_CENTAVOS,
   LIMITES_PLAN,
+  esAnual,
+  planBase,
   // Gmail tokens
   guardarTokenGmail,
   obtenerTokenGmail,

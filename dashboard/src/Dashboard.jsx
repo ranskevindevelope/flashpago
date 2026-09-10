@@ -36,6 +36,18 @@ const PLANES_INFO = {
   premium_plus: { id: 'premium_plus', nombre: 'Premium Plus', precio: '$109.900' },
 };
 
+// Precios anuales de lanzamiento (25/30/35% off sobre 12 meses sueltos, hasta
+// 4.2 meses gratis en Premium Plus). Deben coincidir con PRECIOS_CENTAVOS en
+// db.js — si cambian ahí, cambian aquí también.
+const PLANES_PRECIOS = [
+  { id: 'basico', nombre: 'Básico', Icono: Package, precioMensual: 39900, precioAnual: 359000,
+    features: ['Verificación por WhatsApp', 'IA para lectura de bancos', '300 comprobantes/mes'] },
+  { id: 'premium', nombre: 'Premium', Icono: Rocket, popular: true, precioMensual: 79900, precioAnual: 669000,
+    features: ['Todo lo de Básico', 'Reportes diarios automáticos', 'Dashboard completo'] },
+  { id: 'premium_plus', nombre: 'Premium Plus', Icono: Zap, precioMensual: 109900, precioAnual: 859000,
+    features: ['Todo lo de Premium', 'Comprobantes ilimitados', 'Soporte prioritario'] },
+];
+
 function Dashboard({ onLogout }) {
   const getInitialSection = () => {
     if (typeof window === 'undefined') return 'panel';
@@ -125,6 +137,9 @@ function Dashboard({ onLogout }) {
   const [errorActualizacion, setErrorActualizacion] = useState(false);
   const [gmailCargando, setGmailCargando] = useState(false);
   const [modalPagoPlan, setModalPagoPlan] = useState(null);
+  // Arranca en Anual: es el precio de lanzamiento que queremos que la gente
+  // vea primero. Puede cambiar a Mensual con el interruptor si prefiere.
+  const [facturacionAnual, setFacturacionAnual] = useState(true);
   const [transferenciaInfo, setTransferenciaInfo] = useState(null);
   const [cargandoTransferencia, setCargandoTransferencia] = useState(false);
 
@@ -795,61 +810,142 @@ function Dashboard({ onLogout }) {
                   : 'El bot dejó de verificar comprobantes y el dashboard está suspendido. Elige un plan para reactivar tu cuenta al instante — tu historial de pagos queda intacto.'}
               </p>
 
+              {/* Mensual / Anual — precio de lanzamiento */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <span style={{ fontSize: 13, fontWeight: !facturacionAnual ? 600 : 400, color: !facturacionAnual ? 'var(--dash-text)' : 'var(--dash-text-faint)' }}>
+                  Mensual
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFacturacionAnual((v) => !v)}
+                  aria-label="Cambiar entre facturación mensual y anual"
+                  style={{
+                    width: 44, height: 24, borderRadius: 999, border: 'none', cursor: 'pointer',
+                    background: facturacionAnual ? 'linear-gradient(135deg, #F57C00, #E65100)' : 'var(--dash-border)',
+                    position: 'relative', padding: 0, transition: 'background 0.2s',
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 2, left: facturacionAnual ? 22 : 2, width: 20, height: 20,
+                    borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                  }} />
+                </button>
+                <span style={{ fontSize: 13, fontWeight: facturacionAnual ? 600 : 400, color: facturacionAnual ? 'var(--dash-text)' : 'var(--dash-text-faint)' }}>
+                  Anual
+                </span>
+              </div>
+
               {/* Cards de planes */}
               <div className="planes-bloqueo-grid" style={{
                 display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18,
                 maxWidth: 900, width: '100%', marginBottom: '2rem', alignItems: 'stretch',
               }}>
-                {[
-                  { id: 'basico', nombre: 'Básico', precio: '$39.900', comprobantes: '300 comprobantes/mes', Icono: Package,
-                    features: ['Verificación por WhatsApp', 'IA para lectura de bancos', '300 comprobantes/mes'] },
-                  { id: 'premium', nombre: 'Premium', precio: '$79.900', comprobantes: '1,000 comprobantes/mes', Icono: Rocket, popular: true,
-                    features: ['Todo lo de Básico', 'Reportes diarios automáticos', 'Dashboard completo'] },
-                  { id: 'premium_plus', nombre: 'Premium Plus', precio: '$109.900', comprobantes: 'Comprobantes ilimitados', Icono: Zap,
-                    features: ['Todo lo de Premium', 'Comprobantes ilimitados', 'Soporte prioritario'] },
-                ].map((p) => (
-                  <div key={p.nombre} className={`plan-card-bloqueo ${p.popular ? 'plan-card-bloqueo-popular' : ''}`} style={{
-                    display: 'flex', flexDirection: 'column',
-                    border: p.popular ? `2px solid #F57C00` : '1px solid var(--dash-border)',
-                    borderRadius: 18, padding: '1.75rem 1.25rem', position: 'relative',
-                    background: p.popular ? 'linear-gradient(180deg, rgba(245,124,0,0.04) 0%, var(--dash-surface) 100%)' : 'var(--dash-surface)',
-                    boxShadow: p.popular ? '0 12px 34px rgba(245,124,0,0.16)' : '0 4px 16px rgba(20,20,40,0.05)',
-                    transform: p.popular ? 'translateY(-6px)' : 'none',
-                  }}>
-                    {p.popular && (
-                      <div style={{
-                        position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)',
-                        background: '#F57C00', color: '#fff', fontSize: 11, padding: '3px 16px',
-                        borderRadius: 10, fontWeight: 700, letterSpacing: 0.4,
-                      }}>MÁS ELEGIDO</div>
-                    )}
-                    <div style={{
-                      width: 44, height: 44, borderRadius: 12, margin: '0 auto 1rem',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: p.popular ? '#F57C00' : 'var(--tint-orange-bg)',
+                {PLANES_PRECIOS.map((p) => {
+                  const precioMostrado = facturacionAnual ? p.precioAnual : p.precioMensual;
+                  const descuentoPct = Math.round((1 - p.precioAnual / (p.precioMensual * 12)) * 100);
+                  // Meses "gratis" respecto a 12 meses sueltos — se comunica mejor que el %.
+                  const mesesGratis = Math.round((1 - p.precioAnual / (p.precioMensual * 12)) * 12 * 10) / 10;
+                  const idPlan = facturacionAnual ? `${p.id}_anual` : p.id;
+
+                  return (
+                    <div key={p.id} className={`plan-card-bloqueo ${p.popular ? 'plan-card-bloqueo-popular' : ''}`} style={{
+                      display: 'flex', flexDirection: 'column',
+                      border: p.popular ? `2px solid #F57C00` : '1px solid var(--dash-border)',
+                      borderRadius: 18, padding: '1.75rem 1.25rem', position: 'relative',
+                      background: p.popular ? 'linear-gradient(180deg, rgba(245,124,0,0.04) 0%, var(--dash-surface) 100%)' : 'var(--dash-surface)',
+                      boxShadow: p.popular ? '0 12px 34px rgba(245,124,0,0.16)' : '0 4px 16px rgba(20,20,40,0.05)',
+                      transform: p.popular ? 'translateY(-6px)' : 'none',
                     }}>
-                      <p.Icono size={21} color={p.popular ? '#fff' : '#F57C00'} strokeWidth={2} />
-                    </div>
-                    <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, fontWeight: 600, color: 'var(--dash-text)', marginBottom: 4 }}>{p.nombre}</div>
-                    <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 28, fontWeight: 700, color: 'var(--dash-text)', lineHeight: 1.2 }}>{p.precio}</div>
-                    <div style={{ fontSize: 11, color: 'var(--dash-text-faint)', marginBottom: '1.1rem' }}>por mes</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '1.5rem', flexGrow: 1, textAlign: 'left' }}>
-                      {p.features.map((f) => (
-                        <div key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                          <CheckCircle size={14} color="#43A047" style={{ flexShrink: 0, marginTop: 2 }} />
-                          <span style={{ fontSize: 12.5, color: 'var(--dash-text-muted)', lineHeight: 1.4 }}>{f}</span>
+                      {p.popular && (
+                        <div style={{
+                          position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)',
+                          background: '#F57C00', color: '#fff', fontSize: 11, padding: '3px 16px',
+                          borderRadius: 10, fontWeight: 700, letterSpacing: 0.4,
+                        }}>MÁS ELEGIDO</div>
+                      )}
+                      {/* Cinta de lanzamiento en la esquina opuesta a "MÁS ELEGIDO",
+                          y solo en las cards que hoy no tienen nada arriba — Premium
+                          ya lleva su propia etiqueta, ponerle dos se ve recargado.
+                          Es absolute: no empuja nada, se puede montar/desmontar sin
+                          el problema de layout que tuvo la del interruptor. */}
+                      {facturacionAnual && !p.popular && (
+                        <div style={{
+                          position: 'absolute', top: 14, left: 14,
+                          background: 'var(--tint-orange-bg)', color: '#F57C00', fontSize: 10, fontWeight: 700,
+                          padding: '3px 9px', borderRadius: 999, letterSpacing: 0.2,
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}>
+                          <Rocket size={10} /> Lanzamiento
                         </div>
-                      ))}
+                      )}
+                      <div style={{
+                        width: 44, height: 44, borderRadius: 12, margin: '0 auto 1rem',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: p.popular ? '#F57C00' : 'var(--tint-orange-bg)',
+                      }}>
+                        <p.Icono size={21} color={p.popular ? '#fff' : '#F57C00'} strokeWidth={2} />
+                      </div>
+                      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, fontWeight: 600, color: 'var(--dash-text)', marginBottom: 4 }}>{p.nombre}</div>
+                      {/* El -X% va junto al precio, no suelto en una esquina: en el
+                          plan Básico (sin borde ni fondo naranja) quedaría flotando
+                          sin nada que lo acompañe. Mismo tratamiento que en la landing. */}
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
+                        {/* En mensual el precio va en el color neutro de siempre; en
+                            anual pasa a un degradado naranja — el color "se pone mas
+                            fuerte" justo cuando aparece el precio con descuento. */}
+                        <div style={{
+                          fontFamily: "'Space Grotesk',sans-serif", fontSize: 28, fontWeight: 700, lineHeight: 1.2,
+                          transition: 'color .2s',
+                          ...(facturacionAnual
+                            ? { backgroundImage: 'linear-gradient(135deg, #F57C00, #E65100)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }
+                            : { color: 'var(--dash-text)' }),
+                        }}>
+                          ${precioMostrado.toLocaleString('es-CO')}
+                        </div>
+                        <span style={{
+                          fontSize: 10.5, fontWeight: 700, color: '#fff', background: '#43A047',
+                          padding: '2px 7px', borderRadius: 999, whiteSpace: 'nowrap',
+                          visibility: facturacionAnual ? 'visible' : 'hidden',
+                        }}>
+                          -{descuentoPct}%
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--dash-text-faint)', marginBottom: 4 }}>
+                        {facturacionAnual ? 'por año' : 'por mes'}
+                      </div>
+                      {/* Se mantiene montada (solo cambia visibility) y con el mismo
+                          marginBottom en los dos modos: si esta linea aparece y
+                          desaparece, empuja el resto de la card (features, boton)
+                          hacia arriba o abajo al cambiar de mensual a anual. */}
+                      <div style={{
+                        fontSize: 11, fontWeight: 600, color: '#43A047', marginBottom: '1.1rem',
+                        visibility: facturacionAnual ? 'visible' : 'hidden',
+                      }}>
+                        Equivale a {mesesGratis} meses gratis
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '1.5rem', flexGrow: 1, textAlign: 'left' }}>
+                        {p.features.map((f) => (
+                          <div key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                            <CheckCircle size={14} color="#43A047" style={{ flexShrink: 0, marginTop: 2 }} />
+                            <span style={{ fontSize: 12.5, color: 'var(--dash-text-muted)', lineHeight: 1.4 }}>{f}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        variant={p.popular ? 'primary' : 'dark'}
+                        fullWidth
+                        onClick={() => setModalPagoPlan({
+                          id: idPlan,
+                          nombre: facturacionAnual ? `${p.nombre} Anual` : p.nombre,
+                          precio: `$${precioMostrado.toLocaleString('es-CO')}`,
+                          periodo: facturacionAnual ? 'año' : 'mes',
+                        })}
+                      >
+                        Activar {p.nombre}
+                      </Button>
                     </div>
-                    <Button
-                      variant={p.popular ? 'primary' : 'dark'}
-                      fullWidth
-                      onClick={() => setModalPagoPlan(p)}
-                    >
-                      Activar {p.nombre}
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div style={{
@@ -2576,7 +2672,7 @@ function Dashboard({ onLogout }) {
                 <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--dash-text)' }}>
                   Activar {modalPagoPlan.nombre}
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--dash-text-faint)' }}>{modalPagoPlan.precio} / mes</div>
+                <div style={{ fontSize: 13, color: 'var(--dash-text-faint)' }}>{modalPagoPlan.precio} / {modalPagoPlan.periodo || 'mes'}</div>
               </div>
               <button onClick={cerrarModalPago} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
                 <X size={20} color="var(--dash-text-faint)" />
