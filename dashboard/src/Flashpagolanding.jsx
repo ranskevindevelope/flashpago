@@ -18,6 +18,14 @@ const COLORS = {
   verde: "#2ecc71",
 };
 
+// flashpago.co (esta landing) y app.flashpago.co (el dashboard) son dominios
+// distintos en producción — no comparten localStorage, por eso Registro.jsx
+// pasa el token de sesión por la URL al saltar entre los dos. Los botones de
+// "Iniciar sesión" de aquí no pueden usar el `onLogin` local (eso solo
+// cambiaría de pantalla dentro de este mismo dominio): tienen que navegar de
+// verdad al subdominio de la app.
+const APP_URL = "https://app.flashpago.co/";
+
 // Ícono con fondo suave estilo dashboard
 function IconBadge({ icon: Icon, bg, color, size = 22, boxSize = 44 }) {
   return (
@@ -74,7 +82,7 @@ function Nav({ onLogin }) {
       </li>
     ))}
     <li className="nav-login-mobile-item">
-      <button onClick={() => { setMenuOpen(false); onLogin(); }} style={{ background: "none", border: "none", color: "#b0b0c8", fontSize: "0.9rem", fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: 0 }}>
+      <button onClick={() => { setMenuOpen(false); window.location.href = APP_URL; }} style={{ background: "none", border: "none", color: "#b0b0c8", fontSize: "0.9rem", fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: 0 }}>
         <Lock size={15} /> Iniciar sesión
       </button>
     </li>
@@ -82,7 +90,7 @@ function Nav({ onLogin }) {
 
   {/* Derecha: botones */}
   <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-    <button className="nav-login-btn" onClick={onLogin} style={{ background: "transparent", border: "2px solid rgba(255,255,255,0.2)", color: COLORS.blanco, padding: "0.45rem 1.1rem", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+    <button className="nav-login-btn" onClick={() => { window.location.href = APP_URL; }} style={{ background: "transparent", border: "2px solid rgba(255,255,255,0.2)", color: COLORS.blanco, padding: "0.45rem 1.1rem", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
   <Lock size={15} /> Iniciar sesión
     </button>
     <a href="#contacto" style={{ background: COLORS.naranja, color: "white", padding: "0.5rem 1.1rem", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap" }}>
@@ -605,7 +613,7 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
             <a href={`https://wa.me/573167064671?text=${encodeURIComponent('Hola, quiero conocer más sobre FlashPago')}`} target="_blank" rel="noopener noreferrer" style={{ background: COLORS.naranja, color: "white", padding: "1rem 2rem", borderRadius: 12, textDecoration: "none", fontWeight: 600, fontSize: "1.05rem", display: "inline-flex", alignItems: "center", gap: 8 }}>
               <MessageCircle size={18} /> Escribir por WhatsApp
             </a>
-            <button onClick={onLogin} style={{ background: "transparent", color: COLORS.blanco, padding: "1rem 2rem", borderRadius: 12, fontWeight: 600, fontSize: "1.05rem", border: "2px solid rgba(255,255,255,0.2)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "'Inter',sans-serif" }}>
+            <button onClick={() => { window.location.href = APP_URL; }} style={{ background: "transparent", color: COLORS.blanco, padding: "1rem 2rem", borderRadius: 12, fontWeight: 600, fontSize: "1.05rem", border: "2px solid rgba(255,255,255,0.2)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "'Inter',sans-serif" }}>
               <Lock size={17} /> Ir al Panel
             </button>
           </div>
