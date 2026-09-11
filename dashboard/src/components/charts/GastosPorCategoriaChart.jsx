@@ -22,7 +22,12 @@ export default function GastosPorCategoriaChart({ categorias, getColor, getLabel
         </Pie>
         <Tooltip
           formatter={(value, _name, props) => [formatearMonto(value), getLabel(props.payload.categoria)]}
-          contentStyle={{ borderRadius: 8, border: '1px solid var(--dash-border)', fontSize: '0.8rem' }}
+          contentStyle={{
+            borderRadius: 8, border: '1px solid var(--dash-border)', fontSize: '0.8rem',
+            background: 'var(--dash-surface)', boxShadow: '0 8px 20px rgba(25,31,62,0.12)',
+          }}
+          labelStyle={{ color: 'var(--dash-text-faint)' }}
+          itemStyle={{ color: 'var(--dash-text)' }}
         />
       </PieChart>
     </ResponsiveContainer>

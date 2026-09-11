@@ -84,13 +84,18 @@ function limitarLogin(req, res, next) {
   next();
 }
 
-// limpiar cada 5 minutos
-setInterval(() => {
+// limpiar cada 5 minutos. .unref(): sin esto, cualquier script corto que
+// solo necesite importar este archivo (como un test) queda colgado para
+// siempre esperando este timer — el servidor real no lo nota porque ya se
+// mantiene vivo solo (tiene un puerto abierto), así que quitarlo no cambia
+// nada ahí.
+const limpiezaLoginIntentos = setInterval(() => {
   const ahora = Date.now();
   for (const [ip, datos] of loginIntentos) {
     if (ahora - datos.inicio > 300000) loginIntentos.delete(ip);
   }
 }, 300000);
+limpiezaLoginIntentos.unref();
 
 module.exports = {
   verificarToken,

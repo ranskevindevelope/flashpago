@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, ArrowRight, ArrowLeft, Check, Mail, Users, ShoppingBag, Shield, Zap, Sparkles, Gift, Package, Rocket } from 'lucide-react';
 
 import { PASSWORD_VALIDA, PASSWORD_ERROR } from './utils/password';
+import './components/ui/ui.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -789,8 +790,9 @@ function Registro({ onBack }) {
                           color: whatsappNegocio.replace(/\D/g, '').length >= 10 ? '#fff' : '#999',
                           cursor: whatsappNegocio.replace(/\D/g, '').length >= 10 ? 'pointer' : 'default',
                           whiteSpace: 'nowrap',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                         }}>
-                        {wppEnviando ? '...' : 'Verificar'}
+                        {wppEnviando ? <><span className="fp-btn__spinner" aria-hidden="true" /> Enviando</> : 'Verificar'}
                       </button>
                     </div>
                     {wppMensaje && (
@@ -817,8 +819,9 @@ function Registro({ onBack }) {
                             color: wppCodigo.length === 6 ? '#fff' : '#999',
                             cursor: wppCodigo.length === 6 ? 'pointer' : 'default',
                             whiteSpace: 'nowrap',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                           }}>
-                          <Check size={14} />
+                          {wppEnviando ? <span className="fp-btn__spinner" aria-hidden="true" /> : <Check size={14} />}
                         </button>
                       </div>
                     )}
@@ -968,13 +971,15 @@ function Registro({ onBack }) {
               onClick={verificarCodigo}
               disabled={codigoDigitos.join('').length !== 6 || cargando}
             >
-              {cargando ? 'Verificando...' : <><Check size={16} /> Verificar código</>}
+              {cargando ? <><span className="fp-btn__spinner" aria-hidden="true" /> Verificando...</> : <><Check size={16} /> Verificar código</>}
             </button>
             <div style={{ fontSize: 12, color: '#999', textAlign: 'center', marginTop: 10 }}>
               {tiempoReenvio > 0
                 ? `Puedes reenviar en ${tiempoReenvio}s`
                 : <>¿No recibiste el correo? <button style={s.link} onClick={reenviarCodigo} disabled={reenviando}>
-                    {reenviando ? 'Enviando...' : 'Reenviar código'}
+                    {reenviando
+                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}><span className="fp-btn__spinner" aria-hidden="true" /> Enviando...</span>
+                      : 'Reenviar código'}
                   </button></>
               }
             </div>

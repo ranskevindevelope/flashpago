@@ -11,7 +11,7 @@ export default function VentasPorHoraChart({ data }) {
             <stop offset="100%" stopColor="#F57C00" stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--dash-border-soft)" vertical={false} />
         <XAxis dataKey="etiqueta" tick={{ fontSize: 10, fill: 'var(--dash-text-faint)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
         <YAxis
           tickFormatter={(v) => v >= 1000 ? `$${Math.round(v / 1000)}k` : `$${v}`}
@@ -21,7 +21,12 @@ export default function VentasPorHoraChart({ data }) {
           formatter={(value) => [formatearMonto(value), 'Ventas']}
           labelFormatter={(label) => `Hora ${label}`}
           cursor={{ stroke: '#F57C00', strokeWidth: 1, strokeDasharray: '4 4' }}
-          contentStyle={{ borderRadius: 10, border: '1px solid var(--dash-border)', fontSize: '0.8rem', boxShadow: '0 8px 20px rgba(25,31,62,0.12)' }}
+          contentStyle={{
+            borderRadius: 10, border: '1px solid var(--dash-border)', fontSize: '0.8rem',
+            boxShadow: '0 8px 20px rgba(25,31,62,0.12)', background: 'var(--dash-surface)',
+          }}
+          labelStyle={{ color: 'var(--dash-text-faint)' }}
+          itemStyle={{ color: 'var(--dash-text)' }}
         />
         <Area
           type="monotone" dataKey="total" stroke="#F57C00" strokeWidth={2.5}

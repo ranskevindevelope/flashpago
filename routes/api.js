@@ -33,6 +33,7 @@ const {
   parsearHoraCierre,
   LIMITES_PLAN,
   contarComprobantesDelMes,
+  tienePagoVerificado,
   verificarTrialActivo,
   guardarTokenGmail,
   obtenerTokenGmail,
@@ -581,6 +582,7 @@ router.get('/negocios/uso/plan', verificarToken, async (req, res) => {
     if (!negocio) return res.status(404).json({ ok: false, error: 'Negocio no encontrado' });
     const usados = await contarComprobantesDelMes(nid);
     const trial = await verificarTrialActivo(nid);
+    const tienePago = await tienePagoVerificado(nid);
     res.json({
       ok: true,
       nombre: negocio.nombre,
@@ -589,6 +591,7 @@ router.get('/negocios/uso/plan', verificarToken, async (req, res) => {
       usados,
       porcentaje: Math.round((usados / negocio.limite_comprobantes) * 100),
       horario_configurado: !!negocio.horario_actualizado_en,
+      tiene_pago_verificado: tienePago,
       trial: {
         activo: trial.activo,
         pagado: trial.pagado || false,
@@ -1229,13 +1232,22 @@ router.delete('/usuarios/:id', verificarToken, soloAdmin, (req, res) => {
 // ─── Exportar (filtrado por negocio) ────────────────────
 router.get('/exportar', verificarToken, soloAdmin, (req, res) => {
   const nid = req.user.negocio_id;
+  const mes = parseInt(req.query.mes);
+  const anio = parseInt(req.query.anio);
+  // Con mes+anio exporta ese mes calendario completo; sin eso, los ultimos 30
+  // dias de siempre (para no romper los botones "Exportar" que no eligen mes).
+  const condicionFecha = mes && anio
+    ? `strftime('%Y-%m', creado_en, 'localtime') = ?`
+    : `creado_en >= datetime('now', '-30 days', 'localtime')`;
+  const valorFecha = mes && anio ? `${anio}-${String(mes).padStart(2, '0')}` : null;
+
   db.all(
-    `SELECT id, monto, referencia, banco, fecha, hora, estado, fuente, nombre_cliente, verificado_por, creado_en 
-     FROM pagos 
+    `SELECT id, monto, referencia, banco, fecha, hora, estado, fuente, nombre_cliente, verificado_por, creado_en
+     FROM pagos
      WHERE estado = 'REAL' AND negocio_id = ?
-     AND creado_en >= datetime('now', '-30 days', 'localtime')
+     AND ${condicionFecha}
      ORDER BY id DESC`,
-    [nid],
+    valorFecha ? [nid, valorFecha] : [nid],
     (err, filas) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(filas);
@@ -1402,7 +1414,9 @@ router.get('/ventas/cierres', verificarToken, soloAdmin, async (req, res) => {
   try {
     const nid = req.user.negocio_id;
     const dias = parseInt(req.query.dias) || 30;
-    const cierres = await listarCierres(nid, dias);
+    const mes = parseInt(req.query.mes) || undefined;
+    const anio = parseInt(req.query.anio) || undefined;
+    const cierres = await listarCierres(nid, { dias, mes, anio });
     res.json({ ok: true, cierres });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -1413,7 +1427,9 @@ router.get('/ventas/cierres', verificarToken, soloAdmin, async (req, res) => {
 router.get('/ventas/semanal', verificarToken, soloAdmin, async (req, res) => {
   try {
     const nid = req.user.negocio_id;
-    const resumen = await resumenSemanal(nid);
+    const mes = parseInt(req.query.mes) || undefined;
+    const anio = parseInt(req.query.anio) || undefined;
+    const resumen = await resumenSemanal(nid, { mes, anio });
     res.json({ ok: true, ...resumen });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -1548,7 +1564,9 @@ router.get('/ventas/gastos/categorias', verificarToken, soloAdmin, async (req, r
   try {
     const nid = req.user.negocio_id;
     const dias = parseInt(req.query.dias) || 30;
-    const categorias = await gastosPorCategoria(nid, dias);
+    const mes = parseInt(req.query.mes) || undefined;
+    const anio = parseInt(req.query.anio) || undefined;
+    const categorias = await gastosPorCategoria(nid, { dias, mes, anio });
     res.json({ ok: true, categorias });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });

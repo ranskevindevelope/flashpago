@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AlertTriangle, Eye, X, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Eye, X, ArrowRight, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../components/ui/Button';
+import EstadoVacio from '../components/ui/EstadoVacio';
 import { formatearMonto } from '../utils/formato';
 import { getBancoBadge } from '../utils/bancos';
 
@@ -104,7 +105,11 @@ export default function SeccionDuplicados({ api, esAdmin, onVerFoto, onRevisionG
           <span className="duplicados-count">{duplicados.length} casos</span>
         </div>
         {duplicados.length === 0 ? (
-          <p className="empty-state">No se han detectado duplicados. ¡Todo limpio!</p>
+          <EstadoVacio
+            icono={<CheckCircle size={20} color="#F57C00" />}
+            titulo="No se han detectado duplicados"
+            subtitulo="¡Todo limpio!"
+          />
         ) : (
           <div className="tabla-container">
             <table className="tabla-pagos">
@@ -137,7 +142,10 @@ export default function SeccionDuplicados({ api, esAdmin, onVerFoto, onRevisionG
         </div>
 
         {!seleccionado ? (
-          <p className="empty-state">Selecciona un caso para revisar sus datos.</p>
+          <EstadoVacio
+            icono={<Eye size={20} color="#F57C00" />}
+            titulo="Selecciona un caso para revisar sus datos"
+          />
         ) : (
           <>
             <div className="duplicado-resumen">

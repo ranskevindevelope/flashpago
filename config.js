@@ -38,6 +38,13 @@ module.exports = {
     return this.WOMPI_AMBIENTE === 'prod' ? 'https://production.wompi.co/v1' : 'https://sandbox.wompi.co/v1';
   },
 
+  // Cloudflare Turnstile — solo se pide después de varios intentos fallidos
+  // de guardar una tarjeta (ver routes/wompi.js). Sin fallback a required():
+  // es una capa extra de defensa, no algo de lo que dependa que la app
+  // arranque; si falta, esa capa simplemente no se activa.
+  TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY || '',
+  TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY || '',
+
   // Cuenta bancaria para pagos de suscripción por transferencia manual
   CUENTA_BANCO: process.env.CUENTA_BANCO || '',
   CUENTA_TIPO: process.env.CUENTA_TIPO || '',

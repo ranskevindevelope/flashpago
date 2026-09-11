@@ -66,6 +66,15 @@ db.run(`
         console.error('[DB] Error migrando plan_vence:', err.message);
       }
     });
+    // Renovación automática: solo puede estar en 1 si hay un metodo_pago
+    // activo para el negocio (se apaga sola al quitar la tarjeta — ver
+    // eliminarMetodoPago). Vive aqui y no en metodos_pago porque decidirlo no
+    // deberia requerir un JOIN en cada chequeo del scheduler.
+    db.run(`ALTER TABLE negocios ADD COLUMN renovar_automatico INTEGER DEFAULT 0`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('[DB] Error migrando renovar_automatico:', err.message);
+      }
+    });
     // Migración: plan ilimitado (nunca vence, sin importar plan_vence). Para
     // cuentas internas o casos especiales que el superadmin exime del cobro
     // mensual — no depende de "pagado" ni de dejar plan_vence vacío.
@@ -342,6 +351,27 @@ db.run(`
 `, (err) => {
   if (!err) console.log('[DB] Tabla "avisos_plan" lista');
 });
+// Nunca guarda numero de tarjeta ni CVV — eso lo tokeniza el navegador
+// directo contra Wompi (nunca pasa por este servidor). Lo unico que se
+// guarda es la referencia reutilizable que devuelve Wompi
+// (wompi_payment_source_id) y datos de pantalla que Wompi ya entrega
+// enmascarados. Un solo metodo de pago activo por negocio.
+db.run(`
+  CREATE TABLE IF NOT EXISTS metodos_pago (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    negocio_id INTEGER NOT NULL UNIQUE,
+    wompi_payment_source_id TEXT NOT NULL,
+    marca TEXT,
+    ultimos4 TEXT,
+    exp_mes TEXT,
+    exp_anio TEXT,
+    activo INTEGER DEFAULT 1,
+    creado_en TEXT DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (negocio_id) REFERENCES negocios(id)
+  )
+`, (err) => {
+  if (!err) console.log('[DB] Tabla "metodos_pago" lista');
+});
 db.run(`
   CREATE TABLE IF NOT EXISTS duplicate_reviews (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -510,6 +540,81 @@ function marcarNegocioPagado(negocio_id, plan) {
   });
 }
 
+// ─── Método de pago guardado (renovación automática) ──────
+function guardarMetodoPago({ negocio_id, wompi_payment_source_id, marca, ultimos4, exp_mes, exp_anio }) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT INTO metodos_pago (negocio_id, wompi_payment_source_id, marca, ultimos4, exp_mes, exp_anio, activo)
+       VALUES (?, ?, ?, ?, ?, ?, 1)
+       ON CONFLICT(negocio_id) DO UPDATE SET
+         wompi_payment_source_id = excluded.wompi_payment_source_id,
+         marca = excluded.marca, ultimos4 = excluded.ultimos4,
+         exp_mes = excluded.exp_mes, exp_anio = excluded.exp_anio, activo = 1`,
+      [negocio_id, wompi_payment_source_id, marca || null, ultimos4 || null, exp_mes || null, exp_anio || null],
+      function (err) { if (err) reject(err); else resolve({ id: this.lastID }); }
+    );
+  });
+}
+
+function obtenerMetodoPago(negocio_id) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT * FROM metodos_pago WHERE negocio_id = ? AND activo = 1`,
+      [negocio_id],
+      (err, row) => (err ? reject(err) : resolve(row || null))
+    );
+  });
+}
+
+// Quita la tarjeta y apaga la renovación automática en la misma operación —
+// dejar `renovar_automatico` prendido sin tarjeta sería un estado imposible
+// que el scheduler tendría que andar descartando en cada revisión.
+function eliminarMetodoPago(negocio_id) {
+  return new Promise((resolve, reject) => {
+    db.serialize(() => {
+      db.run(`DELETE FROM metodos_pago WHERE negocio_id = ?`, [negocio_id]);
+      db.run(`UPDATE negocios SET renovar_automatico = 0 WHERE id = ?`, [negocio_id], function (err) {
+        if (err) reject(err); else resolve({ changes: this.changes });
+      });
+    });
+  });
+}
+
+// Encender solo se permite con tarjeta guardada — lo hace cumplir aquí (no
+// solo en la ruta) para que no haya otro camino que deje el estado inválido.
+function actualizarRenovarAutomatico(negocio_id, activo) {
+  return new Promise((resolve, reject) => {
+    if (!activo) {
+      return db.run(`UPDATE negocios SET renovar_automatico = 0 WHERE id = ?`, [negocio_id], function (err) {
+        if (err) reject(err); else resolve({ changes: this.changes });
+      });
+    }
+    db.get(`SELECT 1 FROM metodos_pago WHERE negocio_id = ? AND activo = 1`, [negocio_id], (err, row) => {
+      if (err) return reject(err);
+      if (!row) return reject(new Error('No hay un método de pago guardado para activar la renovación automática'));
+      db.run(`UPDATE negocios SET renovar_automatico = 1 WHERE id = ?`, [negocio_id], function (err2) {
+        if (err2) reject(err2); else resolve({ changes: this.changes });
+      });
+    });
+  });
+}
+
+// Negocios con renovación automática activa, tarjeta guardada, y su plan
+// (con sufijo _anual si aplica, para cobrar el mismo ciclo que ya tenían).
+function listarNegociosParaRenovarAutomaticamente() {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT n.id, n.nombre, n.plan, n.plan_anual, n.plan_vence, n.pagado,
+              m.wompi_payment_source_id
+         FROM negocios n
+         JOIN metodos_pago m ON m.negocio_id = n.id AND m.activo = 1
+        WHERE n.activo = 1 AND n.renovar_automatico = 1`,
+      [],
+      (err, rows) => (err ? reject(err) : resolve(rows))
+    );
+  });
+}
+
 function registrarTrialCreado({ negocio_id, email, whatsappDigitos }) {
   return new Promise((resolve, reject) => {
     db.run(
@@ -619,6 +724,23 @@ function listarNegocios() {
       if (err) reject(err);
       else resolve(rows);
     });
+  });
+}
+
+// Para el paso "Recibe tu primer pago verificado" del onboarding — a
+// propósito NO se limita al mes actual (ver contarComprobantesDelMes): un
+// negocio con historial no debe ver reaparecer ese paso solo porque
+// empezó un mes nuevo sin pagos todavía.
+function tienePagoVerificado(negocio_id) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT 1 FROM pagos WHERE negocio_id = ? AND estado = 'REAL' LIMIT 1`,
+      [negocio_id],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(!!row);
+      }
+    );
   });
 }
 
@@ -940,14 +1062,22 @@ function obtenerCierreDelDia(negocio_id, fecha) {
   });
 }
 
-function listarCierres(negocio_id, dias = 30) {
+// Con mes+anio trae ese mes calendario completo; sin eso, cae a la ventana
+// movil de "ultimos N dias" de siempre (comportamiento previo intacto).
+function listarCierres(negocio_id, { dias = 30, mes, anio } = {}) {
+  const mesAnioValidos = mes && anio;
+  const condicionFecha = mesAnioValidos
+    ? `strftime('%Y-%m', creado_en, 'localtime') = ?`
+    : `creado_en >= datetime('now', '-' || ? || ' days', 'localtime')`;
+  const valorFecha = mesAnioValidos ? `${anio}-${String(mes).padStart(2, '0')}` : dias;
+
   return new Promise((resolve, reject) => {
     db.all(
       `SELECT * FROM cierres_caja
        WHERE negocio_id = ?
-       AND creado_en >= datetime('now', '-' || ? || ' days', 'localtime')
+       AND ${condicionFecha}
        ORDER BY fecha DESC`,
-      [negocio_id, dias],
+      [negocio_id, valorFecha],
       (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
@@ -956,15 +1086,23 @@ function listarCierres(negocio_id, dias = 30) {
   });
 }
 
-function resumenSemanal(negocio_id) {
+// Con mes+anio resume ese mes calendario completo; sin eso, los ultimos 7
+// dias de siempre (mismo comportamiento previo si nadie manda parametros).
+function resumenSemanal(negocio_id, { mes, anio } = {}) {
+  const mesAnioValidos = mes && anio;
+  const condicionFecha = mesAnioValidos
+    ? `strftime('%Y-%m', creado_en, 'localtime') = ?`
+    : `creado_en >= datetime('now', '-7 days', 'localtime')`;
+  const valorFecha = mesAnioValidos ? `${anio}-${String(mes).padStart(2, '0')}` : null;
+
   return new Promise((resolve, reject) => {
     db.all(
       `SELECT fecha, total_ventas, total_transferencias, total_efectivo, total_gastos
        FROM cierres_caja
        WHERE negocio_id = ?
-       AND creado_en >= datetime('now', '-7 days', 'localtime')
+       AND ${condicionFecha}
        ORDER BY fecha ASC`,
-      [negocio_id],
+      valorFecha ? [negocio_id, valorFecha] : [negocio_id],
       (err, rows) => {
         if (err) reject(err);
         else {
@@ -1075,16 +1213,24 @@ function actualizarCierreCaja(id, negocio_id, campos) {
   });
 }
 
-function gastosPorCategoria(negocio_id, dias = 30) {
+// Con mes+anio filtra por ese mes calendario completo; sin eso, cae a la
+// ventana movil de "ultimos N dias" de siempre (comportamiento previo intacto).
+function gastosPorCategoria(negocio_id, { dias = 30, mes, anio } = {}) {
+  const mesAnioValidos = mes && anio;
+  const condicionFecha = mesAnioValidos
+    ? `strftime('%Y-%m', creado_en, 'localtime') = ?`
+    : `creado_en >= datetime('now', '-' || ? || ' days', 'localtime')`;
+  const valorFecha = mesAnioValidos ? `${anio}-${String(mes).padStart(2, '0')}` : dias;
+
   return new Promise((resolve, reject) => {
     db.all(
       `SELECT categoria, SUM(monto) as total, COUNT(*) as cantidad
        FROM gastos
        WHERE negocio_id = ?
-       AND creado_en >= datetime('now', '-' || ? || ' days', 'localtime')
+       AND ${condicionFecha}
        GROUP BY categoria
        ORDER BY total DESC`,
-      [negocio_id, dias],
+      [negocio_id, valorFecha],
       (err, rows) => {
         if (err) reject(err);
         else resolve(rows);
@@ -1178,6 +1324,7 @@ module.exports = {
   parsearHoraCierre,
   horaCierreDelDia,
   contarComprobantesDelMes,
+  tienePagoVerificado,
   verificarTrialActivo,
   // Pagos de suscripción (Wompi)
   crearPagoPlataforma,
@@ -1192,6 +1339,11 @@ module.exports = {
   LIMITES_PLAN,
   esAnual,
   planBase,
+  guardarMetodoPago,
+  obtenerMetodoPago,
+  eliminarMetodoPago,
+  actualizarRenovarAutomatico,
+  listarNegociosParaRenovarAutomaticamente,
   // Gmail tokens
   guardarTokenGmail,
   obtenerTokenGmail,

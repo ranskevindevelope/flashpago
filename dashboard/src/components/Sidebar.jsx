@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { CreditCard, Download, LayoutDashboard, LogOut, Search, TrendingUp, Users, AlertTriangle, Menu, X, ShoppingBag, Settings, Building2, Sun, Moon, Infinity as InfinityIcon, Clock, CheckCircle2 } from 'lucide-react';
 import { getPlanLabel, getPlanColor } from '../utils/bancos';
 
@@ -45,6 +45,17 @@ function Sidebar({ activeSection, isOpen, isAdmin, isSuperAdmin, paymentCount, u
   const [hover, setHover] = useState(false);
   const expandido = fijado || hover || isOpen;
 
+  // Easter egg: al pasar el mouse por el logo aparece la mascota un momento
+  // y se desvanece sola de vuelta al logo — no depende de seguir con el mouse
+  // encima, es una revelacion cronometrada.
+  const [mostrarMascota, setMostrarMascota] = useState(false);
+  const mascotaTimeoutRef = useRef(null);
+  const activarMascota = () => {
+    if (mascotaTimeoutRef.current) clearTimeout(mascotaTimeoutRef.current);
+    setMostrarMascota(true);
+    mascotaTimeoutRef.current = setTimeout(() => setMostrarMascota(false), 1600);
+  };
+
   const alternarFijado = () => {
     setFijado((prev) => {
       const nuevo = !prev;
@@ -84,8 +95,21 @@ function Sidebar({ activeSection, isOpen, isAdmin, isSuperAdmin, paymentCount, u
           </button>
           {expandido && (
             <>
-              <div className="sidebar-logo-icon-box">
-                <img src="/logo.png" alt="FlashPago" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10 }} />
+              <div className="sidebar-logo-icon-box" onMouseEnter={activarMascota}>
+                <img
+                  src="/logo.png" alt="FlashPago"
+                  style={{
+                    position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10,
+                    opacity: mostrarMascota ? 0 : 1, transition: 'opacity 0.4s ease',
+                  }}
+                />
+                <img
+                  src="/mascota.gif" alt="" aria-hidden="true"
+                  style={{
+                    position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10,
+                    opacity: mostrarMascota ? 1 : 0, transition: 'opacity 0.4s ease',
+                  }}
+                />
               </div>
               <div>
                 <div className="sidebar-logo-text">Flash<span>Pago</span></div>

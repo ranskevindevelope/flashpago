@@ -588,6 +588,8 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
 }
 
 /* ─── TOPBAR TITLE ICON ──────────────────────── */
@@ -797,10 +799,23 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
   transition: all 0.3s;
 }
 .btn-peligro:hover {
-  background: var(--naranja);
-  border-color: var(--naranja);
+  background: #E53935;
+  border-color: #E53935;
   color: white;
 }
+
+.modal-btn-secundario { transition: background 0.15s, border-color 0.15s; }
+.modal-btn-secundario:hover:not(:disabled) { background: var(--dash-surface-2); border-color: var(--dash-text-faint); }
+
+.modal-btn-eliminar-hold { transition: background 0.15s, transform 0.08s; user-select: none; -webkit-tap-highlight-color: transparent; }
+.modal-btn-eliminar-hold:hover:not(:disabled) { background: #d32f2f; }
+.modal-btn-eliminar-hold:active:not(:disabled) { transform: scale(0.98); }
+
+/* Generico para ModalConfirmacion: usa filter en vez de un color fijo para que
+   sirva igual con el acento naranja o el rojo de "peligro". */
+.modal-btn-confirmar { transition: filter 0.15s, transform 0.08s; user-select: none; -webkit-tap-highlight-color: transparent; }
+.modal-btn-confirmar:hover:not(:disabled) { filter: brightness(0.9); }
+.modal-btn-confirmar:active:not(:disabled) { transform: scale(0.98); }
 
 .dia-chip {
   width: 48px;

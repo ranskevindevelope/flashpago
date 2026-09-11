@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, TrendingUp, Download, DollarSign, Calendar, CheckCircle, Shield, Trophy, BarChart3, Eye, X, Moon, Mail, Users, UserX, UserCheck, Edit, Trash2, Save, AlertTriangle, Clock, Bell, Activity, Zap, Wifi, WifiOff, ShoppingBag, Receipt, Wallet, PlusCircle, MinusCircle, ArrowDownUp, Settings, Building2, MailCheck, ChevronDown, ChevronUp, Volume2, Package, Rocket, Lock, Inbox, Circle, ChevronRight } from 'lucide-react';
+import { CreditCard, TrendingUp, Download, DollarSign, Calendar, CheckCircle, Shield, Trophy, BarChart3, Eye, X, Moon, Mail, Users, UserX, UserCheck, Edit, Trash2, Save, AlertTriangle, Clock, Bell, Activity, Zap, Wifi, WifiOff, ShoppingBag, Receipt, Wallet, PlusCircle, MinusCircle, ArrowDownUp, Settings, Building2, MailCheck, ChevronDown, ChevronUp, Volume2, Package, Rocket, Lock, Inbox, Circle, ChevronRight, RefreshCw } from 'lucide-react';
 import { createApiClient } from './services/api';
 import Sidebar from './components/Sidebar';
 import DashboardHeader from './components/DashboardHeader';
 import NotificacionesEnVivo from './components/NotificacionesEnVivo';
 import IndicadorActualizacion from './components/IndicadorActualizacion';
 import Button from './components/ui/Button';
+import ModalConfirmacion from './components/ModalConfirmacion';
+import EstadoVacio from './components/ui/EstadoVacio';
 import { FilaSkeleton, TarjetaSkeleton } from './components/ui/Skeleton';
 import SeccionBuscar from './secciones/SeccionBuscar';
 import SeccionUsuarios from './secciones/SeccionUsuarios';
@@ -97,14 +99,41 @@ function Dashboard({ onLogout }) {
   const sidebarExpandido = sidebarFijado || sidebarHover || sidebarAbierto;
 
   // ─── Estado para Configuración (horario del negocio) ───
+  // Lunes primero (orden natural en Colombia) aunque el valor numerico siga
+  // el de Date.getDay() (0 = domingo) porque asi lo espera el resto del backend.
   const DIAS_SEMANA = [
-    { valor: 0, corto: 'Dom' }, { valor: 1, corto: 'Lun' }, { valor: 2, corto: 'Mar' },
-    { valor: 3, corto: 'Mié' }, { valor: 4, corto: 'Jue' }, { valor: 5, corto: 'Vie' }, { valor: 6, corto: 'Sáb' },
+    { valor: 1, corto: 'Lun', nombre: 'Lunes' }, { valor: 2, corto: 'Mar', nombre: 'Martes' },
+    { valor: 3, corto: 'Mié', nombre: 'Miércoles' }, { valor: 4, corto: 'Jue', nombre: 'Jueves' },
+    { valor: 5, corto: 'Vie', nombre: 'Viernes' }, { valor: 6, corto: 'Sáb', nombre: 'Sábado' },
+    { valor: 0, corto: 'Dom', nombre: 'Domingo' },
   ];
   const [horaCierre, setHoraCierre] = useState({ 0: '21:00', 1: '21:00', 2: '21:00', 3: '21:00', 4: '21:00', 5: '21:00', 6: '21:00' });
   const [diasOperacion, setDiasOperacion] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [cargandoConfig, setCargandoConfig] = useState(false);
   const [guardandoConfig, setGuardandoConfig] = useState(false);
+  const [modalEliminarCuenta, setModalEliminarCuenta] = useState(false);
+  const [eliminandoCuenta, setEliminandoCuenta] = useState(false);
+  const [holdEliminarProgreso, setHoldEliminarProgreso] = useState(0);
+  const holdEliminarRef = useRef(null);
+
+  // Modal de confirmacion generico: reemplaza window.confirm() en toda la app
+  // (quitar tarjeta, desconectar Gmail, eliminar gasto). `pedirConfirmacion`
+  // guarda la accion a ejecutar; el modal la dispara si el usuario confirma.
+  const [confirmacion, setConfirmacion] = useState(null);
+  const [confirmando, setConfirmando] = useState(false);
+  const pedirConfirmacion = ({ titulo, descripcion, textoConfirmar, peligro, accion }) => {
+    setConfirmacion({ titulo, descripcion, textoConfirmar, peligro, accion });
+  };
+  const ejecutarConfirmacion = async () => {
+    if (!confirmacion) return;
+    setConfirmando(true);
+    try {
+      await confirmacion.accion();
+    } finally {
+      setConfirmando(false);
+      setConfirmacion(null);
+    }
+  };
 
   // ─── Avisos del sistema operativo ──────────────────────
   const [permisoAvisos, setPermisoAvisos] = useState(() => permisoNotificaciones());
@@ -140,6 +169,23 @@ function Dashboard({ onLogout }) {
   // Arranca en Anual: es el precio de lanzamiento que queremos que la gente
   // vea primero. Puede cambiar a Mensual con el interruptor si prefiere.
   const [facturacionAnual, setFacturacionAnual] = useState(true);
+
+  // ─── Método de pago ───────────────────────────────────────
+  const [metodoPago, setMetodoPago] = useState(null); // null = sin tarjeta guardada
+  const [cargandoMetodoPago, setCargandoMetodoPago] = useState(true);
+  const [renovarAutomatico, setRenovarAutomatico] = useState(false);
+  const [cambiandoAuto, setCambiandoAuto] = useState(false);
+  const [modalTarjeta, setModalTarjeta] = useState(false);
+  const [guardandoTarjeta, setGuardandoTarjeta] = useState(false);
+  const [formTarjeta, setFormTarjeta] = useState({ numero: '', titular: '', mes: '', anio: '', cvc: '' });
+  // Turnstile solo aparece tras varios intentos fallidos (lo decide el
+  // backend, ver requiereCaptchaTarjeta en routes/wompi.js) — para una
+  // primera tarjeta normal, nunca se monta.
+  const [requiereCaptcha, setRequiereCaptcha] = useState(false);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState(null);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const turnstileContenedorRef = useRef(null);
+  const turnstileWidgetIdRef = useRef(null);
   const [transferenciaInfo, setTransferenciaInfo] = useState(null);
   const [cargandoTransferencia, setCargandoTransferencia] = useState(false);
 
@@ -165,6 +211,7 @@ function Dashboard({ onLogout }) {
   // ─── Estado para Ventas (cierre de caja) ───────────────
   const [ventasResumen, setVentasResumen] = useState(null);
   const [ventasExpandido, setVentasExpandido] = useState(false);
+  const [estadisticasExpandido, setEstadisticasExpandido] = useState(false);
   const [ventasCierres, setVentasCierres] = useState([]);
   const [ventasSemanal, setVentasSemanal] = useState(null);
   const [ventasGastosCategorias, setVentasGastosCategorias] = useState([]);
@@ -178,6 +225,12 @@ function Dashboard({ onLogout }) {
   // ─── Estado para filtro por periodo ────────────────────
   const [periodoMes, setPeriodoMes] = useState(new Date().getMonth() + 1);
   const [periodoAnio, setPeriodoAnio] = useState(new Date().getFullYear());
+  const [gastosMes, setGastosMes] = useState(new Date().getMonth() + 1);
+  const [gastosAnio, setGastosAnio] = useState(new Date().getFullYear());
+  const [exportarMes, setExportarMes] = useState(new Date().getMonth() + 1);
+  const [exportarAnio, setExportarAnio] = useState(new Date().getFullYear());
+  const [historialMes, setHistorialMes] = useState(new Date().getMonth() + 1);
+  const [historialAnio, setHistorialAnio] = useState(new Date().getFullYear());
   const [resumenPeriodo, setResumenPeriodo] = useState(null);
   const [statsPeriodo, setStatsPeriodo] = useState([]);
   const [pagosPeriodo, setPagosPeriodo] = useState([]);
@@ -258,12 +311,15 @@ function Dashboard({ onLogout }) {
   }, [diasGrafica, api]);
 
   useEffect(() => {
-    if (seccionActiva === 'configuracion') cargarConfiguracion();
+    if (seccionActiva === 'configuracion') {
+      cargarConfiguracion();
+      cargarMetodoPago();
+    }
   }, [seccionActiva]);
 
   useEffect(() => {
     if (seccionActiva === 'ventas') cargarVentas();
-  }, [seccionActiva]);
+  }, [seccionActiva, gastosMes, gastosAnio, historialMes, historialAnio]);
 
   useEffect(() => {
     if (seccionActiva === 'estadisticas' || seccionActiva === 'pagos' || seccionActiva === 'panel') cargarPeriodo();
@@ -340,6 +396,33 @@ function Dashboard({ onLogout }) {
     });
   };
 
+  // ─── Resumen legible del horario (para la tarjeta de arriba) ──
+  const formatearHora12 = (hhmm) => {
+    if (!hhmm) return '';
+    const [h, m] = hhmm.split(':').map(Number);
+    const periodo = h >= 12 ? 'p.m.' : 'a.m.';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${String(m).padStart(2, '0')} ${periodo}`;
+  };
+
+  const diasActivosOrdenados = () => DIAS_SEMANA.filter((d) => diasOperacion.includes(d.valor));
+
+  const listaDias = (diasObjs) => {
+    const nombres = diasObjs.map((d) => d.nombre.toLowerCase());
+    if (nombres.length === 1) return nombres[0];
+    return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+  };
+
+  const resumenHorario = () => {
+    if (diasOperacion.length === 0) return 'Selecciona al menos un día de operación.';
+    const horas = [...new Set(diasOperacion.map((d) => horaCierre[d] || '21:00'))].sort();
+    const cierre = horas.length === 1
+      ? `cierra a las ${formatearHora12(horas[0])}`
+      : `cierra entre las ${formatearHora12(horas[0])} y las ${formatearHora12(horas[horas.length - 1])}`;
+    const dias = diasOperacion.length === 7 ? 'todos los días' : `los ${listaDias(diasActivosOrdenados())}`;
+    return `Abierto ${dias}, ${cierre}`;
+  };
+
   const guardarConfiguracion = async () => {
     if (diasOperacion.length === 0) {
       toast.error('Selecciona al menos un día de operación');
@@ -361,6 +444,202 @@ function Dashboard({ onLogout }) {
     }
     setGuardandoConfig(false);
   };
+
+  // ─── Funciones de método de pago ───────────────────────
+  const cargarMetodoPago = async () => {
+    setCargandoMetodoPago(true);
+    try {
+      const data = await api.request('/api/wompi/metodo-pago');
+      if (data.ok) {
+        setMetodoPago(data.metodo);
+        setRenovarAutomatico(data.renovarAutomatico);
+        setRequiereCaptcha(Boolean(data.requiereCaptcha));
+        setTurnstileSiteKey(data.turnstileSiteKey || null);
+      }
+    } catch (err) {
+      // Silencioso: si Wompi no está configurado el endpoint da 503 y la
+      // sección simplemente no muestra tarjeta — no es un error que deba
+      // interrumpir el resto de Configuración.
+    }
+    setCargandoMetodoPago(false);
+  };
+
+  // La tarjeta se tokeniza EN EL NAVEGADOR, directo contra la API de Wompi
+  // con la clave pública — el número y el CVV nunca pasan por nuestro
+  // servidor. Solo el token (y los últimos 4 dígitos que Wompi ya entrega
+  // enmascarados) se manda al backend, que crea la fuente de pago reutilizable.
+  // Reinicia Turnstile tras cualquier intento fallido: el token es de un solo
+  // uso, así que sin esto el segundo intento se rechazaría aunque el usuario
+  // ya haya resuelto el desafío una vez.
+  const reiniciarCaptcha = () => {
+    setCaptchaToken(null);
+    if (turnstileWidgetIdRef.current && window.turnstile) {
+      window.turnstile.reset(turnstileWidgetIdRef.current);
+    }
+  };
+
+  const guardarTarjeta = async ({ numero, mes, anio, cvc, titular }) => {
+    if (requiereCaptcha && !captchaToken) {
+      toast.error('Resuelve la verificación de seguridad');
+      return false;
+    }
+    setGuardandoTarjeta(true);
+    try {
+      const cfg = await api.request('/api/wompi/config');
+      if (!cfg.ok) {
+        toast.error('Wompi no está configurado todavía');
+        return false;
+      }
+
+      const [tokenRes, aceptacion] = await Promise.all([
+        fetch(`${cfg.apiUrl}/tokens/cards`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.publicKey}` },
+          body: JSON.stringify({
+            number: numero.replace(/\s+/g, ''),
+            exp_month: mes.padStart(2, '0'),
+            exp_year: anio.length === 4 ? anio.slice(-2) : anio,
+            cvc,
+            card_holder: titular,
+          }),
+        }).then((r) => r.json()),
+        api.request('/api/wompi/aceptacion'),
+      ]);
+
+      const datosTarjeta = tokenRes?.data;
+      if (!datosTarjeta?.id) {
+        toast.error(tokenRes?.error?.reason || 'No pudimos validar la tarjeta. Revisa los datos.');
+        reiniciarCaptcha();
+        return false;
+      }
+      if (!aceptacion.ok || !aceptacion.acceptanceToken || !aceptacion.personalAuthToken) {
+        toast.error('No se pudo contactar a Wompi. Intenta de nuevo.');
+        reiniciarCaptcha();
+        return false;
+      }
+
+      const guardado = await api.request('/api/wompi/metodo-pago', {
+        method: 'POST',
+        body: JSON.stringify({
+          token: datosTarjeta.id,
+          acceptanceToken: aceptacion.acceptanceToken,
+          personalAuthToken: aceptacion.personalAuthToken,
+          marca: datosTarjeta.brand || null,
+          ultimos4: datosTarjeta.last_four || numero.replace(/\s+/g, '').slice(-4),
+          expMes: mes.padStart(2, '0'),
+          expAnio: anio.length === 4 ? anio.slice(-2) : anio,
+          captchaToken,
+        }),
+      });
+      if (!guardado.ok) {
+        toast.error(guardado.error || 'No se pudo guardar la tarjeta');
+        reiniciarCaptcha();
+        // El fallo puede haber cruzado el umbral en el backend — refresca
+        // para que el captcha aparezca en el siguiente intento si toca.
+        await cargarMetodoPago();
+        return false;
+      }
+
+      toast.success('Tarjeta guardada');
+      await cargarMetodoPago();
+      return true;
+    } catch (err) {
+      // api.request lanza en cualquier respuesta no-2xx: el mensaje real que
+      // manda el backend (tarjeta rechazada, captcha fallido, etc.) viaja en
+      // err.message. Sin esto, cualquier 400 se veía como "error de conexión"
+      // generico aunque el backend si supiera explicar que paso.
+      toast.error(err?.message || 'Error de conexión con Wompi');
+      reiniciarCaptcha();
+      // El fallo puede haber cruzado el umbral de captcha en el backend —
+      // refresca para que aparezca en el siguiente intento si toca.
+      await cargarMetodoPago();
+      return false;
+    } finally {
+      setGuardandoTarjeta(false);
+    }
+  };
+
+  const quitarTarjeta = () => {
+    pedirConfirmacion({
+      titulo: '¿Quitar la tarjeta guardada?',
+      descripcion: 'Se desactivará también la renovación automática.',
+      textoConfirmar: 'Quitar tarjeta',
+      accion: quitarTarjetaConfirmado,
+    });
+  };
+
+  const quitarTarjetaConfirmado = async () => {
+    try {
+      const data = await api.request('/api/wompi/metodo-pago', { method: 'DELETE' });
+      if (data.ok) {
+        setMetodoPago(null);
+        setRenovarAutomatico(false);
+        toast.success('Tarjeta eliminada');
+      } else {
+        toast.error(data.error || 'Error eliminando la tarjeta');
+      }
+    } catch (err) {
+      toast.error('Error de conexión');
+    }
+  };
+
+  const alternarRenovarAutomatico = async () => {
+    const nuevo = !renovarAutomatico;
+    setCambiandoAuto(true);
+    try {
+      const data = await api.request('/api/wompi/metodo-pago/auto', {
+        method: 'PATCH',
+        body: JSON.stringify({ activo: nuevo }),
+      });
+      if (data.ok) {
+        setRenovarAutomatico(nuevo);
+      } else {
+        toast.error(data.error || 'No se pudo cambiar la renovación automática');
+      }
+    } catch (err) {
+      toast.error('Error de conexión');
+    }
+    setCambiandoAuto(false);
+  };
+
+  // Monta el widget de Turnstile solo cuando hace falta: el modal está
+  // abierto, el backend pidió captcha, y hay una site key configurada. Se
+  // carga el script una sola vez (window.turnstile ya cacheado si vuelve a
+  // hacer falta) y se limpia el widget al cerrar el modal para no dejar uno
+  // fantasma si se vuelve a abrir.
+  useEffect(() => {
+    if (!modalTarjeta || !requiereCaptcha || !turnstileSiteKey) return;
+
+    let cancelado = false;
+    const montar = () => {
+      if (cancelado || !turnstileContenedorRef.current || !window.turnstile) return;
+      turnstileWidgetIdRef.current = window.turnstile.render(turnstileContenedorRef.current, {
+        sitekey: turnstileSiteKey,
+        callback: (token) => setCaptchaToken(token),
+        'error-callback': () => setCaptchaToken(null),
+        'expired-callback': () => setCaptchaToken(null),
+      });
+    };
+
+    if (window.turnstile) {
+      montar();
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.onload = montar;
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      cancelado = true;
+      if (turnstileWidgetIdRef.current && window.turnstile) {
+        window.turnstile.remove(turnstileWidgetIdRef.current);
+      }
+      turnstileWidgetIdRef.current = null;
+      setCaptchaToken(null);
+    };
+  }, [modalTarjeta, requiereCaptcha, turnstileSiteKey]);
 
   // ─── Funciones de voz de notificaciones ────────────────
   useEffect(() => {
@@ -479,28 +758,59 @@ function Dashboard({ onLogout }) {
   };
 
   const eliminarNegocio = async () => {
-    if (!window.confirm(
-      '¿Eliminar tu cuenta de FlashPago?\n\nEsto desactiva tu negocio y a todos sus usuarios de inmediato — nadie podrá volver a iniciar sesión ni el bot seguirá verificando pagos. Tus datos históricos se conservan; contacta soporte si necesitas reactivarla.'
-    )) return;
+    setEliminandoCuenta(true);
     try {
       const data = await api.request('/api/negocio', { method: 'DELETE' });
       if (data.ok) {
         onLogout();
       } else {
         toast.error(data.error || 'No se pudo eliminar la cuenta');
+        setEliminandoCuenta(false);
       }
     } catch (err) {
       toast.error('Error de conexión');
+      setEliminandoCuenta(false);
     }
   };
 
-  const exportarPagos = async () => {
+  // Eliminar la cuenta pide mantener presionado ~1.8s (barra 0-100) en vez de
+  // un solo clic — para algo irreversible, un clic accidental es demasiado
+  // fácil. Se cancela si sueltas el botón o el mouse se sale antes de llenarla.
+  const DURACION_HOLD_ELIMINAR = 1800;
+  const iniciarHoldEliminar = (e) => {
+    if (eliminandoCuenta || holdEliminarRef.current) return;
+    e.preventDefault();
+    const inicio = performance.now();
+    const tick = (ahora) => {
+      const pct = Math.min(100, ((ahora - inicio) / DURACION_HOLD_ELIMINAR) * 100);
+      setHoldEliminarProgreso(pct);
+      if (pct >= 100) {
+        holdEliminarRef.current = null;
+        eliminarNegocio();
+        return;
+      }
+      holdEliminarRef.current = requestAnimationFrame(tick);
+    };
+    holdEliminarRef.current = requestAnimationFrame(tick);
+  };
+  const cancelarHoldEliminar = () => {
+    if (holdEliminarRef.current) {
+      cancelAnimationFrame(holdEliminarRef.current);
+      holdEliminarRef.current = null;
+    }
+    setHoldEliminarProgreso(0);
+  };
+
+  const exportarPagos = async (mes, anio) => {
     try {
-      const blob = await api.download('/exportar');
+      const query = mes && anio ? `?mes=${mes}&anio=${anio}` : '';
+      const blob = await api.download('/exportar' + query);
       const url = window.URL.createObjectURL(blob);
       const enlace = document.createElement('a');
       enlace.href = url;
-      enlace.download = 'pagos.csv';
+      enlace.download = mes && anio
+        ? `pagos-${mesesNombres[mes - 1].toLowerCase()}-${anio}.csv`
+        : 'pagos.csv';
       enlace.click();
       window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
     } catch (err) {
@@ -524,8 +834,16 @@ function Dashboard({ onLogout }) {
     setGmailCargando(false);
   };
 
-  const desconectarGmail = async () => {
-    if (!window.confirm('¿Desconectar Gmail? El bot no podrá verificar pagos automáticamente.')) return;
+  const desconectarGmail = () => {
+    pedirConfirmacion({
+      titulo: '¿Desconectar Gmail?',
+      descripcion: 'El bot no podrá verificar pagos automáticamente.',
+      textoConfirmar: 'Desconectar',
+      accion: desconectarGmailConfirmado,
+    });
+  };
+
+  const desconectarGmailConfirmado = async () => {
     try {
       const data = await api.request('/api/gmail/desconectar', { method: 'DELETE' });
       if (data.ok) {
@@ -625,25 +943,53 @@ function Dashboard({ onLogout }) {
 
   const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-  const cambiarMes = (direccion) => {
-    let nuevoMes = periodoMes + direccion;
-    let nuevoAnio = periodoAnio;
+  // Suma/resta un mes, pasando de diciembre a enero del año siguiente (y
+  // viceversa) — la misma cuenta la necesitan periodoMes, gastosMes y
+  // exportarMes, cada uno con su propio par de estados independientes.
+  const sumarMes = (mes, anio, direccion) => {
+    let nuevoMes = mes + direccion;
+    let nuevoAnio = anio;
     if (nuevoMes > 12) { nuevoMes = 1; nuevoAnio++; }
     if (nuevoMes < 1) { nuevoMes = 12; nuevoAnio--; }
-    setPeriodoMes(nuevoMes);
-    setPeriodoAnio(nuevoAnio);
+    return { mes: nuevoMes, anio: nuevoAnio };
   };
 
-  const esMesActual = periodoMes === new Date().getMonth() + 1 && periodoAnio === new Date().getFullYear();
+  const esMesActualGenerico = (mes, anio) => mes === new Date().getMonth() + 1 && anio === new Date().getFullYear();
+
+  const cambiarMes = (direccion) => {
+    const { mes, anio } = sumarMes(periodoMes, periodoAnio, direccion);
+    setPeriodoMes(mes);
+    setPeriodoAnio(anio);
+  };
+
+  const cambiarGastosMes = (direccion) => {
+    const { mes, anio } = sumarMes(gastosMes, gastosAnio, direccion);
+    setGastosMes(mes);
+    setGastosAnio(anio);
+  };
+
+  const cambiarExportarMes = (direccion) => {
+    const { mes, anio } = sumarMes(exportarMes, exportarAnio, direccion);
+    setExportarMes(mes);
+    setExportarAnio(anio);
+  };
+
+  const cambiarHistorialMes = (direccion) => {
+    const { mes, anio } = sumarMes(historialMes, historialAnio, direccion);
+    setHistorialMes(mes);
+    setHistorialAnio(anio);
+  };
+
+  const esMesActual = esMesActualGenerico(periodoMes, periodoAnio);
 
   // ─── Funciones de Ventas ─────────────────────────────────
   const cargarVentas = async () => {
     try {
       const [resResumen, resCierres, resSemanal, resCategorias] = await Promise.all([
         api.request('/api/ventas/resumen'),
-        api.request('/api/ventas/cierres?dias=30'),
-        api.request('/api/ventas/semanal'),
-        api.request('/api/ventas/gastos/categorias'),
+        api.request(`/api/ventas/cierres?mes=${historialMes}&anio=${historialAnio}`),
+        api.request(`/api/ventas/semanal?mes=${historialMes}&anio=${historialAnio}`),
+        api.request(`/api/ventas/gastos/categorias?mes=${gastosMes}&anio=${gastosAnio}`),
       ]);
       if (resResumen?.ok) setVentasResumen(resResumen);
       if (resCierres?.ok) setVentasCierres(resCierres.cierres || []);
@@ -686,8 +1032,16 @@ function Dashboard({ onLogout }) {
     setGuardandoGasto(false);
   };
 
-  const eliminarGastoHandler = async (id) => {
-    if (!window.confirm('¿Eliminar este gasto?')) return;
+  const eliminarGastoHandler = (id) => {
+    pedirConfirmacion({
+      titulo: '¿Eliminar este gasto?',
+      textoConfirmar: 'Eliminar',
+      peligro: true,
+      accion: () => eliminarGastoConfirmado(id),
+    });
+  };
+
+  const eliminarGastoConfirmado = async (id) => {
     try {
       const data = await api.request(`/api/ventas/gasto/${id}`, { method: 'DELETE' });
       if (data.ok) cargarVentas();
@@ -993,7 +1347,9 @@ function Dashboard({ onLogout }) {
                         transition: 'all 0.2s',
                       }}
                     >
-                      {gmailCargando ? '...' : gmailEstado.conectado ? <Wifi size={13} /> : <WifiOff size={13} />}
+                      {gmailCargando
+                        ? <span className="fp-btn__spinner" style={{ width: 13, height: 13 }} aria-hidden="true" />
+                        : gmailEstado.conectado ? <Wifi size={13} /> : <WifiOff size={13} />}
                       {gmailEstado.conectado ? `Gmail: ${gmailEstado.email}` : 'Conectar Gmail'}
                     </button>
                   )}
@@ -1048,7 +1404,7 @@ function Dashboard({ onLogout }) {
                   {
                     id: 'pago', icon: CreditCard, titulo: 'Recibe tu primer pago verificado',
                     desc: 'Pide a un empleado que envíe un comprobante por WhatsApp para probar el flujo.',
-                    hecho: (totales?.mes?.cantidad || 0) > 0, accion: () => cambiarSeccion('pagos'),
+                    hecho: !!planInfo?.tiene_pago_verificado, accion: () => cambiarSeccion('pagos'),
                   },
                 ];
                 const completados = pasos.filter(p => p.hecho).length;
@@ -1562,6 +1918,60 @@ function Dashboard({ onLogout }) {
                   </div>
                 )}
               </div>
+
+              <div className="seccion" style={{ padding: 0, overflow: 'hidden', marginTop: '1.25rem' }}>
+                <button
+                  onClick={() => setEstadisticasExpandido(!estadisticasExpandido)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '1.25rem', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span className="seccion-titulo" style={{ margin: 0 }}>
+                    <BarChart3 size={18} /> Resumen de {mesesNombres[periodoMes - 1]}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    {resumenPeriodo && (
+                      <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#F57C00' }}>
+                        {formatearMonto(resumenPeriodo.total)}
+                      </span>
+                    )}
+                    {estadisticasExpandido ? <ChevronUp size={18} color="var(--dash-text-faint)" /> : <ChevronDown size={18} color="var(--dash-text-faint)" />}
+                  </div>
+                </button>
+
+                {estadisticasExpandido && (
+                  <div style={{ padding: '0 1.25rem 1.25rem', borderTop: '1px solid var(--dash-border-soft)' }}>
+                    {resumenPeriodo ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', paddingTop: '1rem' }}>
+                        {[
+                          { label: 'Total del mes', valor: resumenPeriodo.total, color: 'var(--dash-text)' },
+                          { label: 'Pagos verificados', valor: resumenPeriodo.cantidad, color: '#1565C0', esCantidad: true },
+                          { label: 'Ticket promedio', valor: resumenPeriodo.ticket_promedio, color: 'var(--dash-text)' },
+                          { label: 'Pago más alto', valor: resumenPeriodo.pago_mas_alto, color: '#2E7D32' },
+                        ].map((item, i) => (
+                          <div key={i} style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '0.5rem 0', borderBottom: i < 3 ? '1px solid var(--dash-border-soft)' : 'none',
+                          }}>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--dash-text-muted)' }}>{item.label}</span>
+                            <span style={{ fontSize: '1rem', fontWeight: 700, color: item.color }}>
+                              {item.esCantidad ? item.valor : formatearMonto(item.valor)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: '0.85rem', color: 'var(--dash-text-muted)', paddingTop: '1rem' }}>
+                        Todavía no hay pagos verificados este mes.
+                      </p>
+                    )}
+                    <button className="ver-mas-btn" style={{ marginTop: '0.75rem' }} onClick={() => cambiarSeccion('estadisticas')}>
+                      Ir a Estadísticas →
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           )}
 
@@ -1598,7 +2008,7 @@ function Dashboard({ onLogout }) {
                   <span style={{ fontSize: '0.85rem', color: 'var(--dash-text-muted)', fontWeight: 500 }}>
                     {pagosPeriodo.length} pagos — {formatearMonto(pagosPeriodo.reduce((s, p) => s + p.monto, 0))}
                   </span>
-                  <button className="exportar-btn" onClick={exportarPagos}>
+                  <button className="exportar-btn" onClick={() => exportarPagos(periodoMes, periodoAnio)}>
                     <Download size={14} /> Exportar
                   </button>
                 </div>
@@ -1739,7 +2149,11 @@ function Dashboard({ onLogout }) {
                     <div className="skeleton-block" style={{ width: '100%', height: '100%' }} />
                   </div>
                 ) : statsPeriodo.length === 0 ? (
-                  <p className="empty-state">No hay ventas registradas en este mes.</p>
+                  <EstadoVacio
+                    icono={<TrendingUp size={20} color="#F57C00" />}
+                    titulo="No hay ventas registradas en este mes"
+                    subtitulo="En cuanto el bot verifique un pago, aparece aquí"
+                  />
                 ) : (
                   <div className="grafica-container">
                     <Suspense fallback={<GraficaCargando alto={300} />}>
@@ -1800,8 +2214,34 @@ function Dashboard({ onLogout }) {
               <div className="exportar-card">
                 <div className="exportar-icon-box"><Download size={32} color="#F57C00" /></div>
                 <h2>Exportar pagos a Excel</h2>
-                <p>Descarga un archivo con todos los pagos de los últimos 30 días. Se abre en Excel, Google Sheets o cualquier programa de hojas de cálculo.</p>
-                <button className="exportar-btn" onClick={exportarPagos}>
+                <p>Elige el mes y descarga sus pagos verificados. Se abre en Excel, Google Sheets o cualquier programa de hojas de cálculo.</p>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'center', margin: '1rem 0' }}>
+                  <button onClick={() => cambiarExportarMes(-1)} style={{
+                    width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
+                    background: 'var(--dash-surface)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ fontSize: '1rem' }}>‹</span>
+                  </button>
+                  <div style={{
+                    padding: '0.4rem 1rem', borderRadius: 9, background: '#F57C00',
+                    color: '#fff', fontWeight: 700, fontSize: '0.85rem', minWidth: 140, textAlign: 'center',
+                  }}>
+                    {mesesNombres[exportarMes - 1]} {exportarAnio}
+                  </div>
+                  <button onClick={() => cambiarExportarMes(1)} disabled={esMesActualGenerico(exportarMes, exportarAnio)} style={{
+                    width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
+                    background: esMesActualGenerico(exportarMes, exportarAnio) ? 'var(--dash-surface-2)' : 'var(--dash-surface)',
+                    cursor: esMesActualGenerico(exportarMes, exportarAnio) ? 'default' : 'pointer',
+                    opacity: esMesActualGenerico(exportarMes, exportarAnio) ? 0.4 : 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ fontSize: '1rem' }}>›</span>
+                  </button>
+                </div>
+
+                <button className="exportar-btn" onClick={() => exportarPagos(exportarMes, exportarAnio)}>
                   <Download size={14} /> Exportar Excel
                 </button>
               </div>
@@ -2033,7 +2473,32 @@ function Dashboard({ onLogout }) {
               {/* ── TAB: HISTORIAL ────────────────────── */}
               {ventasTab === 'historial' && (
                 <>
-                  {/* Resumen semanal cards */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
+                    <button onClick={() => cambiarHistorialMes(-1)} style={{
+                      width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
+                      background: 'var(--dash-surface)', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: '1rem' }}>‹</span>
+                    </button>
+                    <div style={{
+                      padding: '0.4rem 1rem', borderRadius: 9, background: '#F57C00',
+                      color: '#fff', fontWeight: 700, fontSize: '0.85rem', minWidth: 140, textAlign: 'center',
+                    }}>
+                      {mesesNombres[historialMes - 1]} {historialAnio}
+                    </div>
+                    <button onClick={() => cambiarHistorialMes(1)} disabled={esMesActualGenerico(historialMes, historialAnio)} style={{
+                      width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
+                      background: esMesActualGenerico(historialMes, historialAnio) ? 'var(--dash-surface-2)' : 'var(--dash-surface)',
+                      cursor: esMesActualGenerico(historialMes, historialAnio) ? 'default' : 'pointer',
+                      opacity: esMesActualGenerico(historialMes, historialAnio) ? 0.4 : 1,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: '1rem' }}>›</span>
+                    </button>
+                  </div>
+
+                  {/* Resumen del mes seleccionado */}
                   {!ventasResumen ? (
                     <div className="tarjetas-grid">
                       <TarjetaSkeleton />
@@ -2046,7 +2511,7 @@ function Dashboard({ onLogout }) {
                       <div className="tarjeta tarjeta-accent">
                         <div className="tarjeta-icon-box tarjeta-icon-naranja"><ShoppingBag size={22} /></div>
                         <div className="tarjeta-info">
-                          <span className="tarjeta-label">Ventas (7 días)</span>
+                          <span className="tarjeta-label">Ventas — {mesesNombres[historialMes - 1]}</span>
                           <span className="tarjeta-valor">{formatearMonto(ventasSemanal.totales?.ventas || 0)}</span>
                           <span className="tarjeta-sub">{ventasSemanal.dias?.length || 0} cierres</span>
                         </div>
@@ -2056,7 +2521,7 @@ function Dashboard({ onLogout }) {
                         <div className="tarjeta-info">
                           <span className="tarjeta-label">Transferencias</span>
                           <span className="tarjeta-valor">{formatearMonto(ventasSemanal.totales?.transferencias || 0)}</span>
-                          <span className="tarjeta-sub">Verificadas en la semana</span>
+                          <span className="tarjeta-sub">Verificadas en el mes</span>
                         </div>
                       </div>
                       <div className="tarjeta">
@@ -2072,7 +2537,7 @@ function Dashboard({ onLogout }) {
                         <div className="tarjeta-info">
                           <span className="tarjeta-label">Gastos</span>
                           <span className="tarjeta-valor" style={{ color: '#E53935' }}>{formatearMonto(ventasSemanal.totales?.gastos || 0)}</span>
-                          <span className="tarjeta-sub">En la semana</span>
+                          <span className="tarjeta-sub">En el mes</span>
                         </div>
                       </div>
                     </div>
@@ -2081,7 +2546,7 @@ function Dashboard({ onLogout }) {
                   {/* Gráfica semanal */}
                   {ventasSemanal?.dias?.length > 0 && (
                     <div className="seccion" style={{ marginBottom: '1.25rem' }}>
-                      <h2 className="seccion-titulo"><BarChart3 size={18} /> Ventas vs Efectivo (7 días)</h2>
+                      <h2 className="seccion-titulo"><BarChart3 size={18} /> Ventas vs Efectivo — {mesesNombres[historialMes - 1]}</h2>
                       <div className="grafica-container">
                         <Suspense fallback={<GraficaCargando alto={260} />}>
                           <VentasVsEfectivoChart dias={ventasSemanal.dias} />
@@ -2117,7 +2582,11 @@ function Dashboard({ onLogout }) {
                         </table>
                       </div>
                     ) : ventasCierres.length === 0 ? (
-                      <p className="empty-state">No hay cierres registrados aún.</p>
+                      <EstadoVacio
+                        icono={<Receipt size={20} color="#F57C00" />}
+                        titulo={`No hay cierres registrados en ${mesesNombres[historialMes - 1]}`}
+                        subtitulo={esMesActualGenerico(historialMes, historialAnio) ? 'Cuando cierres caja por primera vez, aparece aquí' : undefined}
+                      />
                     ) : (
                       <div className="tabla-container">
                         <table className="tabla-pagos">
@@ -2153,6 +2622,31 @@ function Dashboard({ onLogout }) {
               {/* ── TAB: GASTOS ───────────────────────── */}
               {ventasTab === 'gastos' && (
                 <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
+                    <button onClick={() => cambiarGastosMes(-1)} style={{
+                      width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
+                      background: 'var(--dash-surface)', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: '1rem' }}>‹</span>
+                    </button>
+                    <div style={{
+                      padding: '0.4rem 1rem', borderRadius: 9, background: '#F57C00',
+                      color: '#fff', fontWeight: 700, fontSize: '0.85rem', minWidth: 140, textAlign: 'center',
+                    }}>
+                      {mesesNombres[gastosMes - 1]} {gastosAnio}
+                    </div>
+                    <button onClick={() => cambiarGastosMes(1)} disabled={esMesActualGenerico(gastosMes, gastosAnio)} style={{
+                      width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
+                      background: esMesActualGenerico(gastosMes, gastosAnio) ? 'var(--dash-surface-2)' : 'var(--dash-surface)',
+                      cursor: esMesActualGenerico(gastosMes, gastosAnio) ? 'default' : 'pointer',
+                      opacity: esMesActualGenerico(gastosMes, gastosAnio) ? 0.4 : 1,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: '1rem' }}>›</span>
+                    </button>
+                  </div>
+
                   {/* Gastos por categoría */}
                   {ventasGastosCategorias.length > 0 && (
                     <>
@@ -2160,7 +2654,7 @@ function Dashboard({ onLogout }) {
                         <div className="tarjeta tarjeta-accent">
                           <div className="tarjeta-icon-box tarjeta-icon-rojo"><MinusCircle size={22} /></div>
                           <div className="tarjeta-info">
-                            <span className="tarjeta-label">Total gastos (30 días)</span>
+                            <span className="tarjeta-label">Total gastos — {mesesNombres[gastosMes - 1]}</span>
                             <span className="tarjeta-valor" style={{ color: '#E53935' }}>
                               {formatearMonto(ventasGastosCategorias.reduce((s, c) => s + c.total, 0))}
                             </span>
@@ -2170,7 +2664,7 @@ function Dashboard({ onLogout }) {
                       </div>
 
                       <div className="seccion">
-                        <h2 className="seccion-titulo"><BarChart3 size={18} /> Gastos por categoría (30 días)</h2>
+                        <h2 className="seccion-titulo"><BarChart3 size={18} /> Gastos por categoría — {mesesNombres[gastosMes - 1]} {gastosAnio}</h2>
                         <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '1rem' }}>
                           <div style={{ position: 'relative', width: 190, height: 190, flexShrink: 0, margin: '0 auto' }}>
                             <Suspense fallback={<GraficaCargando />}>
@@ -2215,7 +2709,10 @@ function Dashboard({ onLogout }) {
 
                   {ventasGastosCategorias.length === 0 && (
                     <div className="seccion">
-                      <p className="empty-state">No hay gastos registrados en los últimos 30 días.</p>
+                      <EstadoVacio
+                        icono={<Wallet size={20} color="#F57C00" />}
+                        titulo={`No hay gastos registrados en ${mesesNombres[gastosMes - 1]}`}
+                      />
                     </div>
                   )}
                 </>
@@ -2236,65 +2733,44 @@ function Dashboard({ onLogout }) {
 
 
               {cargandoConfig ? (
-                <div style={{ maxWidth: 480 }}>
+                <div style={{ maxWidth: 520 }}>
                   <span className="skeleton-bar" style={{ width: '100%', height: '0.9rem', marginBottom: 6 }} />
-                  <span className="skeleton-bar" style={{ width: '85%', height: '0.9rem', marginBottom: '1.5rem' }} />
+                  <span className="skeleton-bar" style={{ width: '85%', height: '0.9rem', marginBottom: '1.25rem' }} />
 
-                  <span className="skeleton-bar" style={{ width: 140, marginBottom: '0.5rem' }} />
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-                    {Array.from({ length: 7 }).map((_, i) => (
-                      <span key={i} className="skeleton-block" style={{ width: 44, height: 38, borderRadius: 10 }} />
-                    ))}
-                  </div>
+                  <span className="skeleton-block" style={{ width: '100%', height: 46, borderRadius: 12, display: 'block', marginBottom: '1.1rem' }} />
 
-                  <span className="skeleton-bar" style={{ width: 160, marginBottom: '0.5rem' }} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '1.5rem' }}>
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <span key={i} className="skeleton-block" style={{ width: '100%', height: 40, borderRadius: 10 }} />
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <span key={i} className="skeleton-block" style={{ width: '100%', height: 48, borderRadius: 10 }} />
                     ))}
                   </div>
 
                   <span className="skeleton-block" style={{ width: 190, height: 40, borderRadius: 10, display: 'block' }} />
                 </div>
               ) : (
-                <div style={{ maxWidth: 480 }}>
-                  <p style={{ color: 'var(--dash-text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+                <div style={{ maxWidth: 520 }}>
+                  <p style={{ color: 'var(--dash-text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: 1.6 }}>
                     Define qué días opera tu negocio y a qué hora cierra cada uno (puede variar, por ejemplo
                     cerrar más tarde el fin de semana). El bot usa esta información para saber cuándo hacer
                     las verificaciones nocturnas de pagos y enviar el reporte diario.
                   </p>
 
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--dash-text-muted)', marginBottom: '0.5rem' }}>
-                      Días de operación
-                    </label>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {DIAS_SEMANA.map((d) => {
-                        const activo = diasOperacion.includes(d.valor);
-                        return (
-                          <button
-                            key={d.valor}
-                            type="button"
-                            className="dia-chip"
-                            onClick={() => alternarDia(d.valor)}
-                            style={{
-                              border: activo ? '2px solid #F57C00' : '2px solid var(--dash-border)',
-                              background: activo ? 'var(--tint-orange-bg)' : 'var(--dash-surface)',
-                              color: activo ? '#F57C00' : 'var(--dash-text-faint)',
-                            }}
-                          >
-                            {d.corto}
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '0.85rem 1.1rem', borderRadius: 12, marginBottom: '1.4rem',
+                    background: 'var(--tint-orange-bg)', border: '1px solid var(--tint-orange-fg)',
+                  }}>
+                    <Clock size={17} color="var(--tint-orange-fg)" style={{ flexShrink: 0 }} />
+                    <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--tint-orange-fg)' }}>
+                      {resumenHorario()}
+                    </span>
                   </div>
 
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--dash-text-muted)' }}>
-                        Hora de cierre por día
-                      </label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--dash-text-muted)' }}>
+                      Días y hora de cierre
+                    </label>
+                    {diasOperacion.length > 1 && (
                       <button
                         type="button"
                         onClick={() => aplicarHoraATodos(horaCierre[diasOperacion[0]] || '21:00')}
@@ -2305,27 +2781,67 @@ function Dashboard({ onLogout }) {
                       >
                         Usar la misma hora todos los días
                       </button>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {DIAS_SEMANA.filter((d) => diasOperacion.includes(d.valor)).map((d) => (
-                        <div key={d.valor} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <span style={{ width: 40, fontSize: '0.85rem', color: 'var(--dash-text-muted)', fontWeight: 600 }}>{d.corto}</span>
-                          <input
-                            type="time"
-                            value={horaCierre[d.valor] || '21:00'}
-                            onChange={(e) => cambiarHoraCierreDia(d.valor, e.target.value)}
-                            style={{
-                              padding: '0.6rem 0.9rem', border: '2px solid var(--dash-border)', borderRadius: 10,
-                              fontSize: '0.9rem', outline: 'none', fontFamily: 'inherit',
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--dash-text-faint)', marginTop: '0.6rem' }}>
-                      Las verificaciones se hacen a esa hora y una hora después; el reporte diario se envía junto con la segunda verificación.
-                    </p>
+                    )}
                   </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '0.6rem' }}>
+                    {DIAS_SEMANA.map((d) => {
+                      const activo = diasOperacion.includes(d.valor);
+                      return (
+                        <div
+                          key={d.valor}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 12,
+                            padding: '0.6rem 0.9rem', borderRadius: 10,
+                            background: activo ? 'var(--dash-surface)' : 'var(--dash-surface-2)',
+                            border: `1px solid ${activo ? 'var(--dash-border)' : 'var(--dash-border-soft)'}`,
+                            opacity: activo ? 1 : 0.62, transition: 'opacity 0.15s, background 0.15s',
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => alternarDia(d.valor)}
+                            aria-label={`Activar o desactivar ${d.nombre}`}
+                            style={{
+                              width: 34, height: 19, borderRadius: 999, border: 'none', cursor: 'pointer', flexShrink: 0,
+                              background: activo ? 'linear-gradient(135deg, #F57C00, #E65100)' : 'var(--dash-border)',
+                              position: 'relative', padding: 0, transition: 'background 0.2s',
+                            }}
+                          >
+                            <span style={{
+                              position: 'absolute', top: 2, left: activo ? 17 : 2, width: 15, height: 15,
+                              borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+                            }} />
+                          </button>
+
+                          <span style={{ flex: 1, fontSize: '0.88rem', fontWeight: 600, color: 'var(--dash-text)' }}>
+                            {d.nombre}
+                          </span>
+
+                          {activo ? (
+                            <input
+                              type="time"
+                              value={horaCierre[d.valor] || '21:00'}
+                              onChange={(e) => cambiarHoraCierreDia(d.valor, e.target.value)}
+                              style={{
+                                padding: '0.4rem 0.65rem', border: '2px solid var(--dash-border)', borderRadius: 8,
+                                fontSize: '0.85rem', outline: 'none', fontFamily: 'inherit', background: 'var(--dash-surface)',
+                                color: 'var(--dash-text)',
+                              }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: '0.8rem', color: 'var(--dash-text-faint)', fontStyle: 'italic' }}>
+                              Cerrado
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p style={{ fontSize: '0.8rem', color: 'var(--dash-text-faint)', marginBottom: '1.5rem' }}>
+                    Las verificaciones se hacen a esa hora y una hora después; el reporte diario se envía junto con la segunda verificación.
+                  </p>
 
                   <Button onClick={guardarConfiguracion} loading={guardandoConfig} icon={<Save size={15} />}>
                     {guardandoConfig ? 'Guardando...' : 'Guardar configuración'}
@@ -2343,20 +2859,32 @@ function Dashboard({ onLogout }) {
                 La cuenta de Gmail conectada es la que el bot revisa para confirmar pagos por notificación del banco.
               </p>
               <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
-                padding: '1rem 1.2rem', borderRadius: 12,
-                background: gmailEstado?.conectado ? 'var(--tint-green-bg)' : 'var(--tint-orange-bg)',
-                border: `1px solid ${gmailEstado?.conectado ? 'var(--tint-green-fg)' : 'var(--tint-orange-fg)'}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14,
+                padding: '1.1rem 1.3rem', borderRadius: 14,
+                background: gmailEstado?.conectado ? 'var(--tint-green-bg)' : 'var(--dash-surface-2)',
+                border: `1px solid ${gmailEstado?.conectado ? 'var(--tint-green-fg)' : 'var(--dash-border)'}`,
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {gmailEstado?.conectado ? <Wifi size={18} color="var(--tint-green-fg)" /> : <WifiOff size={18} color="var(--tint-orange-fg)" />}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: gmailEstado?.conectado ? 'linear-gradient(135deg, #34a853, #0f9d58)' : 'var(--dash-border)',
+                    boxShadow: gmailEstado?.conectado ? '0 4px 14px -3px rgba(52,168,83,.5)' : 'none',
+                  }}>
+                    <Mail size={20} color={gmailEstado?.conectado ? '#fff' : 'var(--dash-text-faint)'} />
+                  </div>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: gmailEstado?.conectado ? 'var(--tint-green-fg)' : 'var(--tint-orange-fg)' }}>
-                      {gmailEstado?.conectado ? 'Gmail conectado' : 'Gmail no conectado'}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      {gmailEstado?.conectado && (
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--tint-green-fg)', flexShrink: 0 }} />
+                      )}
+                      <span style={{ fontWeight: 700, fontSize: '0.92rem', color: gmailEstado?.conectado ? 'var(--tint-green-fg)' : 'var(--dash-text)' }}>
+                        {gmailEstado?.conectado ? 'Gmail conectado' : 'Gmail no conectado'}
+                      </span>
                     </div>
-                    {gmailEstado?.conectado && (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--dash-text-muted)' }}>{gmailEstado.email}</div>
-                    )}
+                    <div style={{ fontSize: '0.82rem', color: 'var(--dash-text-muted)' }}>
+                      {gmailEstado?.conectado ? gmailEstado.email : 'Necesaria para verificar pagos automáticamente'}
+                    </div>
                   </div>
                 </div>
                 <button
@@ -2367,7 +2895,15 @@ function Dashboard({ onLogout }) {
                   {gmailCargando ? 'Conectando...' : gmailEstado?.conectado ? <><X size={15} /> Desconectar</> : <><Mail size={15} /> Conectar Gmail</>}
                 </button>
               </div>
-              {!gmailEstado?.conectado && (
+
+              {gmailEstado?.conectado ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: '0.8rem' }}>
+                  <Lock size={13} color="var(--dash-text-faint)" style={{ flexShrink: 0 }} />
+                  <p style={{ fontSize: '0.78rem', color: 'var(--dash-text-faint)', margin: 0 }}>
+                    Solo lee correos de notificación bancaria — nunca envía nada en tu nombre.
+                  </p>
+                </div>
+              ) : (
                 <div style={{
                   display: 'flex', gap: 10, marginTop: '0.9rem',
                   padding: '0.9rem 1.1rem', borderRadius: 10,
@@ -2457,16 +2993,180 @@ function Dashboard({ onLogout }) {
               )}
             </div>
 
-            {/* ─── Zona de peligro ────────────────── */}
-            <div className="seccion" style={{ border: '1px solid #FFCDD2' }}>
+            {/* ─── Método de pago ─────────────────────
+                Conectado de verdad: la tarjeta se tokeniza en el navegador
+                contra Wompi (nunca toca este servidor), y el backend guarda
+                solo la referencia reutilizable. Ver routes/wompi.js y
+                bot/cobros-automaticos.js. */}
+            <div className="seccion">
               <div className="seccion-header">
-                <h2 className="seccion-titulo" style={{ color: '#C62828' }}><AlertTriangle size={18} /> Zona de peligro</h2>
+                <h2 className="seccion-titulo"><CreditCard size={18} /> Método de pago</h2>
               </div>
-              <p style={{ color: 'var(--dash-text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: 1.6, maxWidth: 520 }}>
+              <p style={{ color: 'var(--dash-text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.6, maxWidth: 480 }}>
+                Guarda una tarjeta para que tu plan se renueve solo, sin que tengas que entrar al dashboard cada vez que esté por vencer.
+              </p>
+
+              {cargandoMetodoPago ? (
+                <div style={{ display: 'flex', gap: '1.5rem', maxWidth: 620 }}>
+                  <span className="skeleton-block" style={{ width: 280, height: 168, borderRadius: 18 }} />
+                  <div style={{ flex: 1 }}>
+                    <span className="skeleton-block" style={{ width: '100%', height: 58, borderRadius: 12, display: 'block', marginBottom: 12 }} />
+                    <span className="skeleton-block" style={{ width: 180, height: 32, borderRadius: 8, display: 'block' }} />
+                  </div>
+                </div>
+              ) : !metodoPago ? (
+                /* Sin tarjeta guardada */
+                <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                  border: '2px dashed var(--dash-border)', borderRadius: 16, padding: '2.2rem 1.5rem',
+                  maxWidth: 420, textAlign: 'center',
+                }}>
+                  <div style={{
+                    width: 46, height: 46, borderRadius: 12, background: 'var(--tint-orange-bg)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <CreditCard size={21} color="#F57C00" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--dash-text)', marginBottom: 3 }}>Aún no tienes un método de pago guardado</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--dash-text-faint)' }}>Agrega una tarjeta para activar la renovación automática</div>
+                  </div>
+                  <Button variant="primary" size="sm" icon={<CreditCard size={14} />} onClick={() => setModalTarjeta(true)}>
+                    Agregar tarjeta
+                  </Button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start', maxWidth: 620 }}>
+                  {/* Visual de la tarjeta guardada */}
+                  <div style={{
+                    position: 'relative', width: 280, minHeight: 168, borderRadius: 18, padding: '1.3rem 1.4rem',
+                    background: `linear-gradient(135deg, #1A1A2E 0%, #2A2A4E 60%, #1A1A2E 100%)`,
+                    boxShadow: '0 14px 32px rgba(26,26,46,0.28)', color: '#fff', overflow: 'hidden',
+                    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                    flexShrink: 0,
+                  }}>
+                    {/* brillo diagonal, puramente decorativo */}
+                    <div style={{
+                      position: 'absolute', top: -40, right: -60, width: 180, height: 180, borderRadius: '50%',
+                      background: 'radial-gradient(circle, rgba(245,124,0,0.35) 0%, transparent 70%)',
+                    }} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+                      <div style={{
+                        width: 38, height: 28, borderRadius: 6,
+                        background: 'linear-gradient(135deg, #FFD98A, #F57C00)',
+                      }} />
+                      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5, color: 'rgba(255,255,255,0.85)' }}>
+                        {metodoPago.marca || 'Tarjeta'}
+                      </span>
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: 2.5, fontFamily: "'Space Grotesk',sans-serif", marginBottom: 14 }}>
+                        •••• &nbsp;•••• &nbsp;•••• &nbsp;{metodoPago.ultimos4 || '••••'}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                        <div>
+                          <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', letterSpacing: 0.6, marginBottom: 2 }}>VENCE</div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>
+                            {metodoPago.expMes && metodoPago.expAnio ? `${metodoPago.expMes}/${metodoPago.expAnio}` : '—'}
+                          </div>
+                        </div>
+                        <div style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700,
+                          color: '#FFB74D', background: 'rgba(245,124,0,0.18)', padding: '3px 8px', borderRadius: 999,
+                        }}>
+                          <Shield size={10} /> Guardada
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Controles */}
+                  <div style={{ flex: 1, minWidth: 240 }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                      padding: '0.9rem 1rem', background: 'var(--dash-surface-2)', borderRadius: 12, marginBottom: 12,
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                          width: 34, height: 34, borderRadius: 10, background: 'var(--tint-orange-bg)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                          <RefreshCw size={16} color="#F57C00" />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--dash-text)' }}>Renovar automáticamente</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--dash-text-faint)' }}>Se cobra un día antes de vencer, sin recordatorios</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={alternarRenovarAutomatico}
+                        disabled={cambiandoAuto}
+                        aria-label="Activar o desactivar la renovación automática"
+                        style={{
+                          width: 42, height: 23, borderRadius: 999, border: 'none', cursor: cambiandoAuto ? 'wait' : 'pointer', flexShrink: 0,
+                          background: renovarAutomatico ? 'linear-gradient(135deg, #F57C00, #E65100)' : 'var(--dash-border)',
+                          position: 'relative', padding: 0, transition: 'background 0.2s', opacity: cambiandoAuto ? 0.6 : 1,
+                        }}
+                      >
+                        <span style={{
+                          position: 'absolute', top: 2, left: renovarAutomatico ? 21 : 2, width: 19, height: 19,
+                          borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                        }} />
+                      </button>
+                    </div>
+
+                    {renovarAutomatico && planInfo?.trial?.plan_vence && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'var(--dash-text-faint)',
+                        marginBottom: 14, padding: '0 2px',
+                      }}>
+                        <Clock size={13} /> Próximo cobro automático: {new Date(planInfo.trial.plan_vence).toLocaleDateString('es-CO')}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <Button variant="secondary" size="sm" icon={<CreditCard size={14} />} onClick={() => setModalTarjeta(true)}>
+                        Cambiar tarjeta
+                      </Button>
+                      <Button variant="ghost" size="sm" icon={<Trash2 size={14} />} onClick={quitarTarjeta}>
+                        Quitar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{
+                marginTop: '1.5rem', display: 'inline-flex', alignItems: 'center', gap: 7,
+                background: 'var(--dash-surface-2)', borderRadius: 50, padding: '0.55rem 1.1rem',
+              }}>
+                <Shield size={14} color="var(--dash-text-faint)" style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: '0.78rem', color: 'var(--dash-text-muted)' }}>
+                  Pago seguro procesado por Wompi. Nunca vemos ni guardamos tu número de tarjeta.
+                </span>
+              </div>
+            </div>
+
+            {/* ─── Zona de peligro ────────────────── */}
+            <div className="seccion" style={{ background: 'var(--tint-red-bg)', border: '1px solid var(--tint-red-fg)' }}>
+              <div className="seccion-header" style={{ gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'var(--dash-surface)',
+                  }}>
+                    <AlertTriangle size={18} color="var(--tint-red-fg)" />
+                  </div>
+                  <h2 className="seccion-titulo" style={{ color: 'var(--tint-red-fg)', margin: 0 }}>Zona de peligro</h2>
+                </div>
+              </div>
+              <p style={{ color: 'var(--tint-red-fg)', opacity: 0.85, fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: 1.6, maxWidth: 520 }}>
                 Eliminar tu cuenta desactiva tu negocio y a todos sus usuarios de inmediato. El bot deja de verificar
                 pagos y nadie podrá volver a iniciar sesión. Tu historial de pagos se conserva.
               </p>
-              <button className="btn-peligro" onClick={eliminarNegocio}>
+              <button className="btn-peligro" onClick={() => setModalEliminarCuenta(true)}>
                 <Trash2 size={15} /> Eliminar mi cuenta
               </button>
             </div>
@@ -2567,7 +3267,10 @@ function Dashboard({ onLogout }) {
                 )}
 
                 {cargandoNegocios ? (
-                  <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--dash-text-faint)' }}>Cargando negocios...</p>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: '2rem', color: 'var(--dash-text-faint)' }}>
+                    <span className="fp-btn__spinner" style={{ width: 16, height: 16, color: '#F57C00' }} aria-hidden="true" />
+                    Cargando negocios...
+                  </div>
                 ) : (
                   <div className="tabla-container">
                     <table className="tabla-pagos">
@@ -2776,6 +3479,206 @@ function Dashboard({ onLogout }) {
           </div>
         </div>
       )}
+
+      {modalTarjeta && (
+        <div onClick={() => !guardandoTarjeta && setModalTarjeta(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(20,20,40,0.55)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: 'var(--dash-surface)', borderRadius: 18, padding: '1.75rem',
+            width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+              <div>
+                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--dash-text)' }}>
+                  Agregar tarjeta
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--dash-text-faint)', display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                  <Shield size={12} /> Va directo a Wompi, nunca por FlashPago
+                </div>
+              </div>
+              <button
+                onClick={() => !guardandoTarjeta && setModalTarjeta(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+              >
+                <X size={20} color="var(--dash-text-faint)" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const ok = await guardarTarjeta(formTarjeta);
+                if (ok) {
+                  setModalTarjeta(false);
+                  setFormTarjeta({ numero: '', titular: '', mes: '', anio: '', cvc: '' });
+                }
+              }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+            >
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dash-text-muted)', marginBottom: 4 }}>
+                  Número de la tarjeta
+                </label>
+                <input
+                  type="text" inputMode="numeric" autoComplete="cc-number" placeholder="0000 0000 0000 0000"
+                  required maxLength={19}
+                  value={formTarjeta.numero}
+                  onChange={(e) => {
+                    const limpio = e.target.value.replace(/[^\d]/g, '').slice(0, 16);
+                    const conEspacios = limpio.replace(/(.{4})/g, '$1 ').trim();
+                    setFormTarjeta((f) => ({ ...f, numero: conEspacios }));
+                  }}
+                  style={{ width: '100%', padding: '0.7rem 0.9rem', border: '2px solid var(--dash-border)', borderRadius: 10, fontSize: 14, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dash-text-muted)', marginBottom: 4 }}>
+                  Nombre del titular
+                </label>
+                <input
+                  type="text" autoComplete="cc-name" placeholder="Como aparece en la tarjeta"
+                  required minLength={5}
+                  value={formTarjeta.titular}
+                  onChange={(e) => setFormTarjeta((f) => ({ ...f, titular: e.target.value }))}
+                  style={{ width: '100%', padding: '0.7rem 0.9rem', border: '2px solid var(--dash-border)', borderRadius: 10, fontSize: 14, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1.4 }}>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dash-text-muted)', marginBottom: 4 }}>
+                    Vencimiento
+                  </label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input
+                      type="text" inputMode="numeric" placeholder="MM" required maxLength={2}
+                      value={formTarjeta.mes}
+                      onChange={(e) => setFormTarjeta((f) => ({ ...f, mes: e.target.value.replace(/[^\d]/g, '').slice(0, 2) }))}
+                      style={{ width: '100%', padding: '0.7rem 0.6rem', border: '2px solid var(--dash-border)', borderRadius: 10, fontSize: 14, outline: 'none', fontFamily: 'inherit', textAlign: 'center', boxSizing: 'border-box' }}
+                    />
+                    <input
+                      type="text" inputMode="numeric" placeholder="AA" required maxLength={2}
+                      value={formTarjeta.anio}
+                      onChange={(e) => setFormTarjeta((f) => ({ ...f, anio: e.target.value.replace(/[^\d]/g, '').slice(0, 2) }))}
+                      style={{ width: '100%', padding: '0.7rem 0.6rem', border: '2px solid var(--dash-border)', borderRadius: 10, fontSize: 14, outline: 'none', fontFamily: 'inherit', textAlign: 'center', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--dash-text-muted)', marginBottom: 4 }}>
+                    CVC
+                  </label>
+                  <input
+                    type="text" inputMode="numeric" autoComplete="cc-csc" placeholder="123" required maxLength={4}
+                    value={formTarjeta.cvc}
+                    onChange={(e) => setFormTarjeta((f) => ({ ...f, cvc: e.target.value.replace(/[^\d]/g, '').slice(0, 4) }))}
+                    style={{ width: '100%', padding: '0.7rem 0.6rem', border: '2px solid var(--dash-border)', borderRadius: 10, fontSize: 14, outline: 'none', fontFamily: 'inherit', textAlign: 'center', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              {/* Solo se monta cuando el backend lo exige (ver useEffect de
+                  Turnstile) — para una tarjeta normal, este div queda vacío. */}
+              {requiereCaptcha && (
+                <div ref={turnstileContenedorRef} style={{ display: 'flex', justifyContent: 'center', margin: '4px 0' }} />
+              )}
+
+              <Button
+                type="submit" variant="primary" fullWidth icon={<Shield size={15} />} style={{ marginTop: 6 }}
+                loading={guardandoTarjeta}
+                disabled={requiereCaptcha && !captchaToken}
+              >
+                Guardar tarjeta
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {modalEliminarCuenta && (
+        <div onClick={() => { if (!eliminandoCuenta) { cancelarHoldEliminar(); setModalEliminarCuenta(false); } }} style={{
+          position: 'fixed', inset: 0, background: 'rgba(20,20,40,0.55)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: 'var(--dash-surface)', borderRadius: 18, padding: '1.75rem',
+            width: '100%', maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{
+              width: 46, height: 46, borderRadius: 12, marginBottom: 14,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'var(--tint-red-bg)',
+            }}>
+              <AlertTriangle size={22} color="var(--tint-red-fg)" />
+            </div>
+
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 18, color: 'var(--dash-text)', marginBottom: 8 }}>
+              ¿Eliminar tu cuenta de FlashPago?
+            </div>
+            <p style={{ fontSize: 13.5, color: 'var(--dash-text-muted)', lineHeight: 1.6, marginBottom: 22 }}>
+              Esto desactiva tu negocio y a todos sus usuarios de inmediato — nadie podrá volver a iniciar
+              sesión ni el bot seguirá verificando pagos. Tus datos históricos se conservan; contacta
+              soporte si necesitas reactivarla.
+            </p>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                className="modal-btn-secundario"
+                onClick={() => { cancelarHoldEliminar(); setModalEliminarCuenta(false); }}
+                disabled={eliminandoCuenta}
+                style={{
+                  flex: 1, padding: '0.7rem', borderRadius: 10, border: '2px solid var(--dash-border)',
+                  background: 'var(--dash-surface)', color: 'var(--dash-text)', fontWeight: 600, fontSize: 13.5,
+                  cursor: eliminandoCuenta ? 'wait' : 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="modal-btn-eliminar-hold"
+                onMouseDown={iniciarHoldEliminar}
+                onMouseUp={cancelarHoldEliminar}
+                onMouseLeave={cancelarHoldEliminar}
+                onTouchStart={iniciarHoldEliminar}
+                onTouchEnd={cancelarHoldEliminar}
+                disabled={eliminandoCuenta}
+                style={{
+                  flex: 1, padding: '0.7rem', borderRadius: 10, border: 'none',
+                  background: '#E53935', color: '#fff', fontWeight: 600, fontSize: 13.5,
+                  cursor: eliminandoCuenta ? 'wait' : 'pointer', opacity: eliminandoCuenta ? 0.7 : 1,
+                  position: 'relative', overflow: 'hidden',
+                }}
+              >
+                <span style={{
+                  position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.3)',
+                  width: `${holdEliminarProgreso}%`,
+                  transition: holdEliminarProgreso === 0 ? 'width 0.2s ease-out' : 'none',
+                }} />
+                <span style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+                  <Trash2 size={14} />
+                  {eliminandoCuenta ? 'Eliminando...' : holdEliminarProgreso > 0 ? 'Mantén presionado...' : 'Mantén para eliminar'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ModalConfirmacion
+        abierto={!!confirmacion}
+        titulo={confirmacion?.titulo}
+        descripcion={confirmacion?.descripcion}
+        textoConfirmar={confirmacion?.textoConfirmar}
+        peligro={confirmacion?.peligro}
+        cargando={confirmando}
+        onConfirmar={ejecutarConfirmacion}
+        onCancelar={() => !confirmando && setConfirmacion(null)}
+      />
     </div>
   );
 }

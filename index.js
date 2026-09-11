@@ -11,6 +11,7 @@ const { verificarToken, soloAdmin } = require('./auth');
 const { obtenerPagosExportables, listarNegocios, horaCierreDelDia } = require('./db');
 const { verificacionNocturna, enviarReporteDiario, buscarIngresosSinComprobante } = require('./bot/reportes');
 const { revisarVencimientos } = require('./bot/avisos');
+const { ejecutarCobrosAutomaticos } = require('./bot/cobros-automaticos');
 const { esFestivo, esFinDeSemana } = require('./bot/festivos');
 
 // ─── Opciones según festivos / fin de semana ──────────────
@@ -54,8 +55,10 @@ app.use(
   helmet.contentSecurityPolicy({
     directives: {
       defaultSrc: ["'self'"],
-      // El dashboard no tiene scripts inline; el unico externo es el widget de Wompi.
-      scriptSrc: ["'self'", 'https://checkout.wompi.co'],
+      // El dashboard no tiene scripts inline; los externos son el widget de
+      // Wompi y el captcha de Cloudflare Turnstile (solo aparece tras varios
+      // intentos fallidos al guardar tarjeta, ver routes/wompi.js).
+      scriptSrc: ["'self'", 'https://checkout.wompi.co', 'https://challenges.cloudflare.com'],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:'],
       fontSrc: ["'self'", 'data:'],
@@ -64,8 +67,9 @@ app.use(
         'https://checkout.wompi.co',
         'https://production.wompi.co',
         'https://sandbox.wompi.co',
+        'https://challenges.cloudflare.com',
       ],
-      frameSrc: ['https://checkout.wompi.co'],
+      frameSrc: ['https://checkout.wompi.co', 'https://challenges.cloudflare.com'],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
@@ -393,6 +397,16 @@ setInterval(async () => {
 // avisos_plan garantiza que cada aviso salga una sola vez por vencimiento.
 setInterval(() => {
   revisarVencimientos().catch((err) => console.error('[Avisos] Error en la revisión:', err.message));
+}, 60 * 60 * 1000);
+
+// ─── Renovación automática con tarjeta guardada ───────────
+// Independiente del aviso de arriba a propósito: un negocio con renovación
+// automática puede recibir igual el recordatorio de "tu plan está por
+// vencer" mientras el cobro todavía no se confirma (el webhook de Wompi es
+// asíncrono) — no es un error, es sólo que la confirmación tarda unos
+// segundos o minutos más que el aviso.
+setInterval(() => {
+  ejecutarCobrosAutomaticos().catch((err) => console.error('[CobroAuto] Error en la revisión:', err.message));
 }, 60 * 60 * 1000);
 
 // ─── 404 (cualquier ruta no encontrada) ────────────────────

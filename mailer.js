@@ -429,4 +429,48 @@ Renovar: ${DASHBOARD_URL}${PIE_TEXTO}`,
   console.log(`[Mailer] Aviso de plan (${vencido ? 'vencido' : diasRestantes + 'd'}) enviado a ${email}`);
 }
 
-module.exports = { enviarCodigoVerificacion, enviarBienvenida, enviarCodigoRecuperacion, enviarGraciasPago, enviarAvisoPlan, formatearFecha, NOMBRE_PLAN };
+// Se manda cuando bot/cobros-automaticos.js intenta la renovación automática
+// y Wompi la rechaza (tarjeta vencida, fondos insuficientes, etc.) — sin esto
+// el negocio no se entera de que falló hasta que le llega el aviso normal de
+// "tu plan está por vencer/venció" de enviarAvisoPlan, ya sin margen.
+async function enviarAvisoCobroFallido(email, nombre, plan, fechaVence) {
+  const nombrePlan = NOMBRE_PLAN[plan] || plan || '';
+  const fecha = formatearFecha(fechaVence);
+
+  const contenido = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: #FFF1F1; border-left: 3px solid #D93025; border-radius: 8px; margin: 4px 0 18px;">
+      <tr>
+        <td style="padding: 14px 16px;">
+          <p style="margin: 0; font-size: 13px; color: #8A1F1B; line-height: 1.6;">
+            Tu servicio sigue activo por ahora, pero si no actualizas la tarjeta antes del <strong>${fecha}</strong> el bot dejará de verificar comprobantes.
+          </p>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  await transporter.sendMail({
+    from: REMITENTE,
+    replyTo: RESPUESTA_A,
+    to: email,
+    subject: `No pudimos cobrar tu plan ${nombrePlan} — actualiza tu tarjeta`,
+    text: `No pudimos cobrar tu renovación automática
+
+Hola ${nombre}, intentamos cobrar tu plan ${nombrePlan} con la tarjeta guardada y el banco la rechazó. Tu servicio sigue activo por ahora, pero si no actualizas la tarjeta antes del ${fecha} el bot dejará de verificar comprobantes.
+
+Actualizar tarjeta: ${DASHBOARD_URL}${PIE_TEXTO}`,
+    html: plantilla({
+      preheader: `Tu tarjeta guardada fue rechazada al renovar el plan ${nombrePlan}`,
+      titulo: 'No pudimos cobrar tu tarjeta',
+      descripcion: `Hola ${nombre}, intentamos renovar tu plan <strong>${nombrePlan}</strong> con la tarjeta guardada y el banco la rechazó.`,
+      contenido,
+      ctaTexto: 'Actualizar mi tarjeta',
+      ctaUrl: DASHBOARD_URL,
+    }),
+    attachments: ADJUNTOS,
+  });
+
+  console.log(`[Mailer] Aviso de cobro automático fallido enviado a ${email}`);
+}
+
+module.exports = { enviarCodigoVerificacion, enviarBienvenida, enviarCodigoRecuperacion, enviarGraciasPago, enviarAvisoPlan, enviarAvisoCobroFallido, formatearFecha, NOMBRE_PLAN };

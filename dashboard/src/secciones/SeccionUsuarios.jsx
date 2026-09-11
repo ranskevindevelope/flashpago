@@ -4,6 +4,7 @@ import { Users, UserPlus, UserCheck, UserX, Shield, CreditCard, Edit, Trash2, Sa
 import toast from 'react-hot-toast';
 import { FilaSkeleton, TarjetaSkeleton } from '../components/ui/Skeleton';
 import Button from '../components/ui/Button';
+import ModalConfirmacion from '../components/ModalConfirmacion';
 import { useUsuarios } from '../hooks/useUsuarios';
 import { PASSWORD_VALIDA, PASSWORD_ERROR } from '../utils/password';
 
@@ -17,6 +18,8 @@ export default function SeccionUsuarios({ api }) {
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState(FORM_VACIO);
   const [guardando, setGuardando] = useState(false);
+  const [confirmacion, setConfirmacion] = useState(null);
+  const [confirmando, setConfirmando] = useState(false);
 
   const refrescar = () => queryClient.invalidateQueries({ queryKey: ['usuarios'] });
 
@@ -76,18 +79,35 @@ export default function SeccionUsuarios({ api }) {
     setGuardando(false);
   };
 
-  const desactivarUsuario = async (id, nombre) => {
-    if (!window.confirm(`¿Desactivar al usuario "${nombre}"?`)) return;
+  const desactivarUsuario = (id, nombre) => {
+    setConfirmacion({
+      titulo: `¿Desactivar al usuario "${nombre}"?`,
+      textoConfirmar: 'Desactivar',
+      peligro: true,
+      accion: async () => {
+        try {
+          const data = await api.request(`/api/usuarios/${id}`, { method: 'DELETE' });
+          if (data.ok) {
+            toast.success(`Usuario "${nombre}" desactivado`);
+            refrescar();
+          } else {
+            toast.error(data.error);
+          }
+        } catch (err) {
+          toast.error(err.message || 'Error de conexión');
+        }
+      },
+    });
+  };
+
+  const ejecutarConfirmacion = async () => {
+    if (!confirmacion) return;
+    setConfirmando(true);
     try {
-      const data = await api.request(`/api/usuarios/${id}`, { method: 'DELETE' });
-      if (data.ok) {
-        toast.success(`Usuario "${nombre}" desactivado`);
-        refrescar();
-      } else {
-        toast.error(data.error);
-      }
-    } catch (err) {
-      toast.error(err.message || 'Error de conexión');
+      await confirmacion.accion();
+    } finally {
+      setConfirmando(false);
+      setConfirmacion(null);
     }
   };
 
@@ -264,6 +284,17 @@ export default function SeccionUsuarios({ api }) {
           </table>
         </div>
       </div>
+
+      <ModalConfirmacion
+        abierto={!!confirmacion}
+        titulo={confirmacion?.titulo}
+        descripcion={confirmacion?.descripcion}
+        textoConfirmar={confirmacion?.textoConfirmar}
+        peligro={confirmacion?.peligro}
+        cargando={confirmando}
+        onConfirmar={ejecutarConfirmacion}
+        onCancelar={() => !confirmando && setConfirmacion(null)}
+      />
     </>
   );
 }

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Zap, Mail, KeyRound, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, ShieldCheck, Clock, BarChart3 } from 'lucide-react';
 
 import { PASSWORD_VALIDA, PASSWORD_ERROR } from './utils/password';
+import './components/ui/ui.css';
 
 function RecuperarPassword({ onVolver }) {
   const [paso, setPaso] = useState(1); // 1: email, 2: código + nueva contraseña, 3: éxito
@@ -136,7 +137,9 @@ function RecuperarPassword({ onVolver }) {
                 cursor: cargando ? 'not-allowed' : 'pointer', opacity: cargando ? 0.7 : 1,
                 transition: 'all 0.3s', fontFamily: "'Inter',sans-serif",
               }}>
-                {cargando ? 'Enviando...' : 'Enviar código'}
+                {cargando
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%' }}><span className="fp-btn__spinner" aria-hidden="true" /> Enviando...</span>
+                  : 'Enviar código'}
               </button>
             </form>
           )}
@@ -217,7 +220,9 @@ function RecuperarPassword({ onVolver }) {
                 cursor: cargando ? 'not-allowed' : 'pointer', opacity: cargando ? 0.7 : 1,
                 transition: 'all 0.3s', fontFamily: "'Inter',sans-serif",
               }}>
-                {cargando ? 'Guardando...' : 'Cambiar contraseña'}
+                {cargando
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%' }}><span className="fp-btn__spinner" aria-hidden="true" /> Guardando...</span>
+                  : 'Cambiar contraseña'}
               </button>
 
               <p style={{ textAlign: 'center', marginTop: '1rem' }}>
