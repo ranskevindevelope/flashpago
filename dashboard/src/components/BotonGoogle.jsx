@@ -12,10 +12,9 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
 
   // `onResultado` llega como función nueva en cada render del padre (Login/
   // Registro no la envuelven en useCallback) — si quedara en las deps del
-  // efecto de abajo, éste se reconstruía por completo (borra y vuelve a
-  // dibujar el botón de Google desde cero) en cada tecla que se escribiera
-  // en CUALQUIER campo del formulario, no solo al redimensionar. Guardarla
-  // en un ref deja el efecto sin depender de su identidad.
+  // efecto de abajo, éste se reconstruía por completo en cada tecla que se
+  // escribiera en cualquier campo del formulario. Guardarla en un ref deja
+  // el efecto sin depender de su identidad.
   const onResultadoRef = useRef(onResultado);
   useEffect(() => { onResultadoRef.current = onResultado; }, [onResultado]);
 
@@ -49,39 +48,31 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
 
     // Google no acepta un ancho en porcentaje, solo un número fijo de px.
     // Si se usa `ancho` tal cual en pantallas angostas, el botón se sale del
-    // contenedor y desborda el layout en móvil (se ve cortado a la derecha).
-    // Por eso se mide el espacio real disponible y se limita entre el
-    // mínimo (200) y máximo (400) que soporta el botón de Google.
+    // contenedor y desborda el layout en móvil. Por eso se mide el espacio
+    // real disponible una sola vez y se limita entre el mínimo (200) y
+    // máximo (400) que soporta el botón de Google.
     const anchoEfectivo = () => {
       const disponible = contenedorRef.current?.getBoundingClientRect().width || ancho;
       return Math.max(200, Math.min(ancho, Math.floor(disponible)));
     };
 
-    // En móvil, abrir/cerrar el teclado dispara "resize" (cambia el alto de
-    // la ventana, no el ancho) — sin este chequeo, el botón se borraba y
-    // volvía a dibujar cada vez que tocabas cualquier campo del formulario,
-    // aunque el ancho real no hubiera cambiado. El margen de 20px además
-    // ignora el "resize" real pero chico que dispara la barra de scroll al
-    // aparecer/desaparecer (~15-17px) — por ejemplo justo cuando el botón
-    // recién insertado hace crecer el alto de la página.
-    const TOLERANCIA_PX = 20;
-    let ultimoAncho = null;
-    const renderizar = () => {
+    // Google mismo desaconseja llamar initialize()/renderButton() más de una
+    // vez sobre el mismo elemento — volver a redibujarlo (como se hacía
+    // antes, reaccionando a cada resize) es justo lo que causaba que el
+    // botón parpadeara/temblara. Por eso ahora se dibuja UNA sola vez, y ya:
+    // ni el teclado del celular, ni la barra de scroll, ni nada más lo
+    // vuelve a tocar. requestAnimationFrame espera un frame a que el layout
+    // esté asentado antes de medir, para no quedarse con un ancho de 0 o
+    // incorrecto tomado a mitad de un reflow.
+    const dibujar = () => {
       if (cancelado || !contenedorRef.current || !window.google?.accounts?.id) return;
-      const nuevoAncho = anchoEfectivo();
-      if (ultimoAncho !== null && Math.abs(nuevoAncho - ultimoAncho) < TOLERANCIA_PX) return;
-      ultimoAncho = nuevoAncho;
-      contenedorRef.current.innerHTML = '';
+      window.google.accounts.id.initialize({ client_id: clientId, callback: manejarCredencial });
       window.google.accounts.id.renderButton(contenedorRef.current, {
-        theme: 'outline', size: 'large', width: nuevoAncho, text: 'continue_with', logo_alignment: 'center',
+        theme: 'outline', size: 'large', width: anchoEfectivo(), text: 'continue_with', logo_alignment: 'center',
       });
     };
 
-    const montar = () => {
-      if (cancelado || !contenedorRef.current || !window.google?.accounts?.id) return;
-      window.google.accounts.id.initialize({ client_id: clientId, callback: manejarCredencial });
-      renderizar();
-    };
+    const montar = () => requestAnimationFrame(dibujar);
 
     if (window.google?.accounts?.id) {
       montar();
@@ -93,22 +84,16 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
       document.head.appendChild(script);
     }
 
-    // Reajusta el ancho si cambia el tamaño de pantalla (ej: rotar el celular).
-    // Con ResizeObserver en vez de "resize" de window: solo avisa cuando el
-    // propio contenedor cambia de tamaño (no cualquier resize de la ventana,
-    // como el que dispara el teclado del celular al abrirse), y el navegador
-    // agrupa varios cambios seguidos en un solo aviso en vez de dispararlos
-    // sueltos — eso evitaba que, justo al abrir la página, el botón se
-    // redibujara 2-3 veces mientras el layout terminaba de acomodarse
-    // (aparece la barra de scroll, cargan las fuentes, etc.).
-    const observer = new ResizeObserver(() => renderizar());
-    if (contenedorRef.current) observer.observe(contenedorRef.current);
-    return () => { cancelado = true; observer.disconnect(); };
+    return () => { cancelado = true; };
   }, [clientId, ancho]);
 
   // Sin Client ID configurado (todavía no se activó en el backend): no se
   // muestra nada, en vez de un botón roto que no hace nada al hacerle clic.
   if (noDisponible || !clientId) return null;
 
-  return <div ref={contenedorRef} style={{ display: 'flex', justifyContent: 'center', width: '100%' }} />;
+  // minHeight fijo (alto real del botón "large" de Google): reserva el
+  // espacio desde antes de que el iframe termine de cargar su propio ícono
+  // y su fuente, para que ese ajuste interno no empuje el resto de la
+  // página.
+  return <div ref={contenedorRef} style={{ display: 'flex', justifyContent: 'center', width: '100%', minHeight: 44 }} />;
 }
