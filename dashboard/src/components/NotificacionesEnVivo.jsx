@@ -56,12 +56,19 @@ function NotificacionesEnVivo({ onLogout }) {
     }
   }, []);
 
-  // Con la pestaña oculta el toast no se ve y el navegador bloquea el audio,
-  // así que ahí se avisa por notificación del sistema. Con la pestaña al
-  // frente se usa el toast de siempre, con campana y voz.
+  // Con la pestaña oculta el toast no se ve, así que ahí se avisa por
+  // notificación del sistema. Un pago verificado además debe sonar aunque
+  // esté minimizada o en otra ventana/programa — es plata entrando, no
+  // debería depender de que alguien esté mirando el dashboard en ese
+  // momento (el navegador no bloquea el audio por estar oculta, solo exige
+  // que haya habido alguna interacción previa del usuario con la página).
+  // La voz se deja solo con la pestaña al frente: son 2-3 segundos de
+  // audio por pago, y encimados con otras cosas sonando en el fondo es
+  // más molesto que útil.
   const mostrarNotificacion = useCallback(({ tipo, titulo, detalle, monto, nombreCliente }) => {
     if (document.hidden) {
       notificarSistema({ titulo, cuerpo: detalle, tag: `flashpago-${tipo}` });
+      if (tipo === 'real') reproducirSonido();
       return;
     }
 
