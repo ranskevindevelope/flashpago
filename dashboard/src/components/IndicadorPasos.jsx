@@ -2,7 +2,7 @@ import { Fragment } from 'react';
 import { motion } from 'motion/react';
 import { Check } from 'lucide-react';
 
-const POP_SPRING = { type: 'spring', duration: 0.42, bounce: 0.35 };
+const POP_SPRING = { type: 'spring', stiffness: 500, damping: 12 };
 
 // Indicador de pasos del registro — inspirado en el Step Player de RareUI
 // (rareui.com), pero adaptado: el de ellos es una barra sin etiquetas
@@ -28,7 +28,7 @@ export default function IndicadorPasos({ pasos, pasoActual, onIrAPaso }) {
               <motion.div
                 onClick={() => puedeVolver && onIrAPaso(st.n)}
                 animate={{
-                  scale: activo ? [1, 1.22, 1] : 1,
+                  scale: activo ? 1.15 : 1,
                   background: hecho ? '#E8F5E9' : activo ? '#F57C00' : 'rgba(0,0,0,0)',
                   color: hecho ? '#2E7D32' : activo ? '#fff' : '#999',
                 }}

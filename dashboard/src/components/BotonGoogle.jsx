@@ -48,11 +48,19 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
       return Math.max(200, Math.min(ancho, Math.floor(disponible)));
     };
 
+    // En móvil, abrir/cerrar el teclado dispara "resize" (cambia el alto de
+    // la ventana, no el ancho) — sin este chequeo, el botón se borraba y
+    // volvía a dibujar cada vez que tocabas cualquier campo del formulario,
+    // aunque el ancho real no hubiera cambiado.
+    let ultimoAncho = null;
     const renderizar = () => {
       if (cancelado || !contenedorRef.current || !window.google?.accounts?.id) return;
+      const nuevoAncho = anchoEfectivo();
+      if (nuevoAncho === ultimoAncho) return;
+      ultimoAncho = nuevoAncho;
       contenedorRef.current.innerHTML = '';
       window.google.accounts.id.renderButton(contenedorRef.current, {
-        theme: 'outline', size: 'large', width: anchoEfectivo(), text: 'continue_with', logo_alignment: 'center',
+        theme: 'outline', size: 'large', width: nuevoAncho, text: 'continue_with', logo_alignment: 'center',
       });
     };
 

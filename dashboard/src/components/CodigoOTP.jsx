@@ -23,6 +23,7 @@ const ROLL_SPRING = { type: 'spring', stiffness: 500, damping: 34 };
 const CARET_SPRING = { type: 'spring', stiffness: 500, damping: 40 };
 const BLINK = { duration: 1.1, times: [0, 0.5, 0.5, 1], repeat: Infinity, ease: 'linear' };
 const SHAKE = [0, -5, 4, -2, 0];
+const CARET_PARPADEO = [1, 1, 0, 0];
 const ROLL = {
   initial: { y: '110%' },
   exit: (limpiado) => ({ y: limpiado ? '110%' : '-110%' }),
@@ -176,7 +177,7 @@ export default function CodigoOTP({
         <motion.span
           aria-hidden
           initial={false}
-          animate={{ x: caretX - 1, y: '-50%', opacity: [1, 1, 0, 0] }}
+          animate={{ x: caretX - 1, y: '-50%', opacity: CARET_PARPADEO }}
           transition={{ x: reduceMotion ? { duration: 0 } : CARET_SPRING, opacity: BLINK }}
           style={{
             position: 'absolute', left: 0, top: '50%', width: 2, height: tam.caret,
