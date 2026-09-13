@@ -10,6 +10,15 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
   const [clientId, setClientId] = useState(null);
   const [noDisponible, setNoDisponible] = useState(false);
 
+  // `onResultado` llega como función nueva en cada render del padre (Login/
+  // Registro no la envuelven en useCallback) — si quedara en las deps del
+  // efecto de abajo, éste se reconstruía por completo (borra y vuelve a
+  // dibujar el botón de Google desde cero) en cada tecla que se escribiera
+  // en CUALQUIER campo del formulario, no solo al redimensionar. Guardarla
+  // en un ref deja el efecto sin depender de su identidad.
+  const onResultadoRef = useRef(onResultado);
+  useEffect(() => { onResultadoRef.current = onResultado; }, [onResultado]);
+
   useEffect(() => {
     fetch('/api/config-publica')
       .then((r) => r.json())
@@ -32,9 +41,9 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
           body: JSON.stringify({ credential: respuesta.credential }),
         });
         const data = await res.json();
-        onResultado(data);
+        onResultadoRef.current(data);
       } catch (err) {
-        onResultado({ ok: false, error: 'Error de conexión con Google' });
+        onResultadoRef.current({ ok: false, error: 'Error de conexión con Google' });
       }
     };
 
@@ -83,7 +92,7 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
     // Reajusta el ancho si cambia el tamaño de pantalla (ej: rotar el celular).
     window.addEventListener('resize', renderizar);
     return () => { cancelado = true; window.removeEventListener('resize', renderizar); };
-  }, [clientId, ancho, onResultado]);
+  }, [clientId, ancho]);
 
   // Sin Client ID configurado (todavía no se activó en el backend): no se
   // muestra nada, en vez de un botón roto que no hace nada al hacerle clic.
