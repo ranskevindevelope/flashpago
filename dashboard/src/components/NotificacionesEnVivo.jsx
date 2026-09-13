@@ -15,7 +15,7 @@ import { notificarSistema } from '../utils/notificaciones';
  * estado visto para saber qué es "nuevo". No modifica ningún componente existente.
  */
 
-function NotificacionesEnVivo({ onLogout }) {
+function NotificacionesEnVivo({ onLogout, onNotificacion }) {
   const api = useMemo(() => createApiClient(onLogout), [onLogout]);
   const [notificaciones, setNotificaciones] = useState([]); // cola de toasts
   const audioRef = useRef(null);
@@ -66,6 +66,10 @@ function NotificacionesEnVivo({ onLogout }) {
   // audio por pago, y encimados con otras cosas sonando en el fondo es
   // más molesto que útil.
   const mostrarNotificacion = useCallback(({ tipo, titulo, detalle, monto, nombreCliente }) => {
+    // Se guarda en el historial de la campana pase lo que pase con el toast
+    // (pestaña oculta o no) — antes esto solo vivía 5s y desaparecía.
+    onNotificacion?.({ tipo, titulo, detalle });
+
     if (document.hidden) {
       notificarSistema({ titulo, cuerpo: detalle, tag: `flashpago-${tipo}` });
       if (tipo === 'real') reproducirSonido();
@@ -82,7 +86,7 @@ function NotificacionesEnVivo({ onLogout }) {
     setTimeout(() => {
       setNotificaciones((prev) => prev.filter((n) => n.id !== id));
     }, 5000);
-  }, [reproducirSonido, anunciarPagoEnVoz]);
+  }, [reproducirSonido, anunciarPagoEnVoz, onNotificacion]);
 
   // Detección de novedades.
   // `modoResumen` se usa al volver a la pestaña: en vez de un aviso por cada

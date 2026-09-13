@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, TrendingUp, Download, DollarSign, Calendar, CheckCircle, Shield, Trophy, BarChart3, Eye, X, Moon, Mail, Users, UserX, UserCheck, Edit, Trash2, Save, AlertTriangle, Clock, Bell, Activity, Zap, Wifi, WifiOff, ShoppingBag, Receipt, Wallet, PlusCircle, MinusCircle, ArrowDownUp, Settings, Building2, MailCheck, ChevronDown, ChevronUp, Volume2, Package, Rocket, Lock, Inbox, Circle, ChevronRight, RefreshCw } from 'lucide-react';
+import { CreditCard, TrendingUp, Download, DollarSign, Calendar, CheckCircle, Shield, Trophy, BarChart3, Eye, X, Moon, Mail, Users, UserX, UserCheck, Edit, Trash2, Save, AlertTriangle, Clock, Bell, Activity, Zap, Wifi, WifiOff, ShoppingBag, Receipt, Wallet, PlusCircle, MinusCircle, ArrowDownUp, ArrowUp, ArrowDown, Settings, Building2, MailCheck, ChevronDown, ChevronUp, Volume2, Package, Rocket, Lock, Inbox, Circle, ChevronRight, RefreshCw } from 'lucide-react';
 import { createApiClient } from './services/api';
 import Sidebar from './components/Sidebar';
 import DashboardHeader from './components/DashboardHeader';
@@ -17,8 +17,10 @@ import SeccionDuplicados from './secciones/SeccionDuplicados';
 import CierreCaja from './secciones/CierreCaja';
 import { useUsuarios } from './hooks/useUsuarios';
 import { formatearMonto, formatearMiles, soloDigitos } from './utils/formato';
-import { getBancoBadge, getPlanLabel, getPlanColor } from './utils/bancos';
+import { getBancoBadge, getPlanLabel, getPlanColor, agruparBancosParaEstadisticas, COLOR_BANCO_ESTADISTICAS } from './utils/bancos';
 import { permisoNotificaciones, pedirPermisoNotificaciones } from './utils/notificaciones';
+import EstadisticasHeatmap from './components/EstadisticasHeatmap';
+import SelectorMesCalendario from './components/SelectorMesCalendario';
 
 // Recharts pesa ~366 KB: se carga solo cuando el usuario abre una sección
 // que realmente muestra una gráfica, no al entrar al dashboard.
@@ -26,6 +28,8 @@ const VentasPorDiaChart = lazy(() => import('./components/charts/VentasPorDiaCha
 const VentasPorHoraChart = lazy(() => import('./components/charts/VentasPorHoraChart'));
 const VentasVsEfectivoChart = lazy(() => import('./components/charts/VentasVsEfectivoChart'));
 const GastosPorCategoriaChart = lazy(() => import('./components/charts/GastosPorCategoriaChart'));
+const VentasAreaChart = lazy(() => import('./components/charts/VentasAreaChart'));
+const BancosDonutChart = lazy(() => import('./components/charts/BancosDonutChart'));
 
 const GraficaCargando = ({ alto = '100%' }) => (
   <div className="skeleton-block" style={{ width: '100%', height: alto }} />
@@ -84,6 +88,20 @@ function Dashboard({ onLogout }) {
   const [fotoActiva, setFotoActiva] = useState(null);
   const [seccionActiva, setSeccionActiva] = useState(getInitialSection);
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
+  // Historial de notificaciones para la campana del header — antes se
+  // perdían al desaparecer el toast a los 5s. Vive en memoria (no persiste
+  // al recargar), tope de 20 para no acumular indefinidamente en una sesión
+  // larga.
+  const [historialNotificaciones, setHistorialNotificaciones] = useState([]);
+  const agregarNotificacion = (n) => {
+    setHistorialNotificaciones((prev) => [
+      { id: Date.now() + Math.random(), leida: false, fecha: new Date(), ...n },
+      ...prev,
+    ].slice(0, 20));
+  };
+  const marcarNotificacionesLeidas = () => {
+    setHistorialNotificaciones((prev) => prev.map((n) => ({ ...n, leida: true })));
+  };
   const [onboardingOculto, setOnboardingOculto] = useState(() => {
     try { return localStorage.getItem('fp_onboarding_oculto') === '1'; } catch { return false; }
   });
@@ -273,6 +291,9 @@ function Dashboard({ onLogout }) {
   const [statsPeriodo, setStatsPeriodo] = useState([]);
   const [pagosPeriodo, setPagosPeriodo] = useState([]);
   const [cargandoPeriodo, setCargandoPeriodo] = useState(false);
+  // Bancos crudos (texto libre) agrupados en los 4 grupos que muestra
+  // Estadísticas — ver utils/bancos.js.
+  const bancosAgrupados = useMemo(() => agruparBancosParaEstadisticas(resumenPeriodo?.bancos), [resumenPeriodo]);
 
   const api = useMemo(() => createApiClient(onLogout), [onLogout]);
   const queryClient = useQueryClient();
@@ -1145,7 +1166,7 @@ function Dashboard({ onLogout }) {
 
   return (
     <div className="layout" data-theme={tema === 'dark' ? 'dark' : undefined}>
-      <NotificacionesEnVivo onLogout={onLogout} />
+      <NotificacionesEnVivo onLogout={onLogout} onNotificacion={agregarNotificacion} />
       {sidebarAbierto && <div className="sidebar-overlay" onClick={() => setSidebarAbierto(false)} />}
       <Sidebar
         activeSection={seccionActiva}
@@ -1167,6 +1188,8 @@ function Dashboard({ onLogout }) {
         <DashboardHeader
           activeSection={seccionActiva}
           onToggleSidebar={() => setSidebarAbierto(!sidebarAbierto)}
+          notificaciones={historialNotificaciones}
+          onAbrirNotificaciones={marcarNotificacionesLeidas}
         />
 
         <div className="main-body">
@@ -2103,27 +2126,14 @@ function Dashboard({ onLogout }) {
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <button onClick={() => cambiarMes(-1)} style={{
-                    width: 36, height: 36, borderRadius: 10, border: '2px solid var(--dash-border)',
-                    background: 'var(--dash-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <span style={{ fontSize: '1.1rem' }}>‹</span>
-                  </button>
-                  <div style={{
-                    padding: '0.5rem 1.25rem', borderRadius: 10, background: '#F57C00',
-                    color: '#fff', fontWeight: 700, fontSize: '0.95rem', minWidth: 160, textAlign: 'center',
-                  }}>
-                    {mesesNombres[periodoMes - 1]} {periodoAnio}
-                  </div>
-                  <button onClick={() => cambiarMes(1)} disabled={esMesActual} style={{
-                    width: 36, height: 36, borderRadius: 10, border: '2px solid var(--dash-border)',
-                    background: esMesActual ? 'var(--dash-surface-2)' : 'var(--dash-surface)', cursor: esMesActual ? 'default' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: esMesActual ? 0.4 : 1,
-                  }}>
-                    <span style={{ fontSize: '1.1rem' }}>›</span>
-                  </button>
-                </div>
+                <SelectorMesCalendario
+                  mes={periodoMes}
+                  anio={periodoAnio}
+                  onCambiar={(m, a) => { setPeriodoMes(m); setPeriodoAnio(a); }}
+                  sumarMes={sumarMes}
+                  esMesActualGenerico={esMesActualGenerico}
+                  mesesNombres={mesesNombres}
+                />
               </div>
 
               {/* Cards del periodo */}
@@ -2142,7 +2152,17 @@ function Dashboard({ onLogout }) {
                       <div className="tarjeta-info">
                         <span className="tarjeta-label">Total {mesesNombres[periodoMes - 1]}</span>
                         <span className="tarjeta-valor">{formatearMonto(resumenPeriodo?.total || 0)}</span>
-                        <span className="tarjeta-sub">{resumenPeriodo?.cantidad || 0} transacciones</span>
+                        {typeof resumenPeriodo?.delta_vs_anterior === 'number' ? (
+                          <span className="tarjeta-sub" style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            color: resumenPeriodo.delta_vs_anterior >= 0 ? 'var(--tint-green-fg)' : 'var(--tint-red-fg)',
+                          }}>
+                            {resumenPeriodo.delta_vs_anterior >= 0 ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+                            {Math.abs(resumenPeriodo.delta_vs_anterior)}% vs mes anterior
+                          </span>
+                        ) : (
+                          <span className="tarjeta-sub">{resumenPeriodo?.cantidad || 0} transacciones</span>
+                        )}
                       </div>
                     </div>
                     <div className="tarjeta">
@@ -2150,7 +2170,7 @@ function Dashboard({ onLogout }) {
                       <div className="tarjeta-info">
                         <span className="tarjeta-label">Promedio diario</span>
                         <span className="tarjeta-valor">
-                          {resumenPeriodo?.dias_con_ventas > 0 ? formatearMonto(Math.round(resumenPeriodo.total / resumenPeriodo.dias_con_ventas)) : '$0'}
+                          {formatearMonto(resumenPeriodo?.promedio_diario || 0)}
                         </span>
                         <span className="tarjeta-sub">{resumenPeriodo?.dias_con_ventas || 0} días con ventas</span>
                       </div>
@@ -2179,7 +2199,7 @@ function Dashboard({ onLogout }) {
                 )}
               </div>
 
-              {/* Gráfica del periodo */}
+              {/* Ventas por día — area chart con línea de promedio */}
               <div className="seccion" style={{ marginBottom: '1.25rem' }}>
                 <div className="seccion-header">
                   <h2 className="seccion-titulo"><TrendingUp size={18} /> Ventas por día — {mesesNombres[periodoMes - 1]} {periodoAnio}</h2>
@@ -2195,50 +2215,112 @@ function Dashboard({ onLogout }) {
                     subtitulo="En cuanto el bot verifique un pago, aparece aquí"
                   />
                 ) : (
-                  <div className="grafica-container">
-                    <Suspense fallback={<GraficaCargando alto={300} />}>
-                      <VentasPorDiaChart
-                        height={300}
-                        data={statsPeriodo.map(s => ({
-                          ...s,
-                          fecha: s.fecha ? s.fecha.slice(8, 10) + '/' + s.fecha.slice(5, 7) : '',
-                          totalK: Math.round(s.total / 1000),
-                        }))}
-                      />
-                    </Suspense>
-                  </div>
+                  <>
+                    <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 3, background: '#1565C0', display: 'inline-block' }} />
+                        <span style={{ fontSize: 12.5, color: 'var(--dash-text-muted)' }}>Ventas diarias</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 16, borderTop: '2px dashed #F57C00', display: 'inline-block' }} />
+                        <span style={{ fontSize: 12.5, color: 'var(--dash-text-muted)' }}>
+                          Promedio {formatearMonto(resumenPeriodo?.promedio_diario || 0)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="grafica-container">
+                      <Suspense fallback={<GraficaCargando alto={300} />}>
+                        <VentasAreaChart
+                          height={300}
+                          promedioK={Math.round((resumenPeriodo?.promedio_diario || 0) / 1000)}
+                          data={statsPeriodo.map(s => ({
+                            ...s,
+                            fecha: s.fecha ? s.fecha.slice(8, 10) + '/' + s.fecha.slice(5, 7) : '',
+                            totalK: Math.round(s.total / 1000),
+                          }))}
+                        />
+                      </Suspense>
+                    </div>
+                  </>
                 )}
               </div>
 
-              {/* Bancos más usados */}
-              {resumenPeriodo?.bancos?.length > 0 && (
-                <div className="seccion">
+              {/* Bancos más usados + distribución (donut) */}
+              <div className="estadisticas-bancos-grid" style={{ marginBottom: '1.25rem' }}>
+                <div className="seccion" style={{ marginBottom: 0 }}>
                   <h2 className="seccion-titulo"><CreditCard size={18} /> Bancos más usados</h2>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '0.75rem' }}>
-                    {resumenPeriodo.bancos.map((b) => {
-                      const max = Math.max(...resumenPeriodo.bancos.map(x => x.total));
-                      const pct = max > 0 ? Math.round((b.total / max) * 100) : 0;
-                      const banco = getBancoBadge(b.banco);
-                      return (
-                        <div key={b.banco}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>
-                              <span className={`banco-badge ${banco.clase}`} style={{ marginRight: '0.4rem' }}>{banco.nombre}</span>
-                              {b.cantidad} pagos
-                            </span>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                              {formatearMonto(b.total)}
-                            </span>
+                  {bancosAgrupados.length === 0 ? (
+                    <EstadoVacio
+                      icono={<CreditCard size={20} color="#F57C00" />}
+                      titulo="Sin pagos este mes"
+                      subtitulo="En cuanto el bot verifique un pago, aparece aquí"
+                    />
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', marginTop: '0.75rem' }}>
+                      {bancosAgrupados.map((b) => {
+                        const max = Math.max(...bancosAgrupados.map(x => x.total));
+                        const pct = max > 0 ? Math.round((b.total / max) * 100) : 0;
+                        const color = COLOR_BANCO_ESTADISTICAS[b.nombre] || COLOR_BANCO_ESTADISTICAS.Otro;
+                        return (
+                          <div key={b.nombre}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--dash-text)' }}>{b.nombre}</span>
+                              <span style={{ fontSize: '0.8rem', color: 'var(--dash-text-muted)' }}>
+                                {b.pagos} pagos / {formatearMonto(b.total)}
+                              </span>
+                            </div>
+                            <div style={{ height: 8, background: 'var(--dash-surface-2)', borderRadius: 4, overflow: 'hidden' }}>
+                              <div style={{
+                                width: `${pct}%`, height: '100%', background: color,
+                                borderRadius: 4, transition: 'width 0.5s ease',
+                              }} />
+                            </div>
                           </div>
-                          <div style={{ height: 8, background: 'var(--dash-surface-2)', borderRadius: 4, overflow: 'hidden' }}>
-                            <div style={{
-                              width: `${pct}%`, height: '100%', background: '#F57C00',
-                              borderRadius: 4, transition: 'width 0.5s ease',
-                            }} />
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="seccion" style={{ marginBottom: 0 }}>
+                  <h2 className="seccion-titulo"><Package size={18} /> Distribución por banco</h2>
+                  {bancosAgrupados.length === 0 ? (
+                    <EstadoVacio icono={<Package size={20} color="#F57C00" />} titulo="Sin datos" subtitulo="" />
+                  ) : (
+                    <>
+                      <div style={{ height: 190, marginTop: '0.5rem' }}>
+                        <Suspense fallback={<GraficaCargando alto={190} />}>
+                          <BancosDonutChart
+                            data={bancosAgrupados}
+                            getColor={(n) => COLOR_BANCO_ESTADISTICAS[n] || COLOR_BANCO_ESTADISTICAS.Otro}
+                          />
+                        </Suspense>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginTop: '1rem' }}>
+                        {bancosAgrupados.map((b) => {
+                          const totalGeneral = bancosAgrupados.reduce((s, x) => s + x.total, 0);
+                          const pct = totalGeneral > 0 ? Math.round((b.total / totalGeneral) * 100) : 0;
+                          const color = COLOR_BANCO_ESTADISTICAS[b.nombre] || COLOR_BANCO_ESTADISTICAS.Otro;
+                          return (
+                            <div key={b.nombre} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem' }}>
+                              <span style={{ width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
+                              <span style={{ color: 'var(--dash-text)', fontWeight: 500 }}>{b.nombre}</span>
+                              <span style={{ color: 'var(--dash-text-faint)', marginLeft: 'auto' }}>{pct}%</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Heatmap de actividad semanal */}
+              {resumenPeriodo?.heatmap_semanal?.length > 0 && (
+                <div className="seccion">
+                  <h2 className="seccion-titulo"><Activity size={18} /> Actividad semanal</h2>
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <EstadisticasHeatmap matriz={resumenPeriodo.heatmap_semanal} />
                   </div>
                 </div>
               )}

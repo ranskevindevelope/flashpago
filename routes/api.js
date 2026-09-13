@@ -1246,52 +1246,98 @@ router.get('/dashboard/resumen-periodo', verificarToken, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Falta mes o anio' });
     }
 
+    const mesNum = parseInt(mes);
+    const anioNum = parseInt(anio);
     const fechaInicio = `${anio}-${mes.padStart(2, '0')}-01`;
     const fechaFin = `${anio}-${mes.padStart(2, '0')}-31 23:59:59`;
 
-    db.get(
-      `SELECT COUNT(*) as cantidad, COALESCE(SUM(monto), 0) as total,
-              MAX(monto) as pago_mas_alto, MIN(monto) as pago_mas_bajo
-       FROM pagos WHERE estado = 'REAL' AND negocio_id = ?
-       AND creado_en >= ? AND creado_en <= ?`,
-      [nid, fechaInicio, fechaFin],
-      (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
+    // Mes anterior (diciembre del año previo si toca cruzar de enero) — solo
+    // para el delta porcentual que muestra Estadísticas.
+    const mesAnteriorNum = mesNum === 1 ? 12 : mesNum - 1;
+    const anioAnteriorNum = mesNum === 1 ? anioNum - 1 : anioNum;
+    const fechaInicioAnterior = `${anioAnteriorNum}-${String(mesAnteriorNum).padStart(2, '0')}-01`;
+    const fechaFinAnterior = `${anioAnteriorNum}-${String(mesAnteriorNum).padStart(2, '0')}-31 23:59:59`;
 
-        db.get(
-          `SELECT COUNT(DISTINCT date(creado_en)) as dias_con_ventas
-           FROM pagos WHERE estado = 'REAL' AND negocio_id = ?
-           AND creado_en >= ? AND creado_en <= ?`,
-          [nid, fechaInicio, fechaFin],
-          (err2, diasRow) => {
-            if (err2) return res.status(500).json({ error: err2.message });
+    const consulta = (sql, params) => new Promise((resolve, reject) => {
+      db.get(sql, params, (err, r) => (err ? reject(err) : resolve(r)));
+    });
+    const consultaVarias = (sql, params) => new Promise((resolve, reject) => {
+      db.all(sql, params, (err, r) => (err ? reject(err) : resolve(r)));
+    });
 
-            db.all(
-              `SELECT banco, COUNT(*) as cantidad, SUM(monto) as total
-               FROM pagos WHERE estado = 'REAL' AND negocio_id = ?
-               AND creado_en >= ? AND creado_en <= ?
-               GROUP BY banco ORDER BY cantidad DESC LIMIT 5`,
-              [nid, fechaInicio, fechaFin],
-              (err3, bancos) => {
-                if (err3) return res.status(500).json({ error: err3.message });
+    const [row, diasRow, bancos, anteriorRow, diasDelMes] = await Promise.all([
+      consulta(
+        `SELECT COUNT(*) as cantidad, COALESCE(SUM(monto), 0) as total,
+                MAX(monto) as pago_mas_alto, MIN(monto) as pago_mas_bajo
+         FROM pagos WHERE estado = 'REAL' AND negocio_id = ?
+         AND creado_en >= ? AND creado_en <= ?`,
+        [nid, fechaInicio, fechaFin]
+      ),
+      consulta(
+        `SELECT COUNT(DISTINCT date(creado_en)) as dias_con_ventas
+         FROM pagos WHERE estado = 'REAL' AND negocio_id = ?
+         AND creado_en >= ? AND creado_en <= ?`,
+        [nid, fechaInicio, fechaFin]
+      ),
+      consultaVarias(
+        `SELECT banco, COUNT(*) as cantidad, SUM(monto) as total
+         FROM pagos WHERE estado = 'REAL' AND negocio_id = ?
+         AND creado_en >= ? AND creado_en <= ?
+         GROUP BY banco ORDER BY cantidad DESC LIMIT 5`,
+        [nid, fechaInicio, fechaFin]
+      ),
+      consulta(
+        `SELECT COALESCE(SUM(monto), 0) as total
+         FROM pagos WHERE estado = 'REAL' AND negocio_id = ?
+         AND creado_en >= ? AND creado_en <= ?`,
+        [nid, fechaInicioAnterior, fechaFinAnterior]
+      ),
+      consultaVarias(
+        `SELECT date(creado_en) as fecha, COUNT(*) as cantidad
+         FROM pagos WHERE estado = 'REAL' AND negocio_id = ?
+         AND creado_en >= ? AND creado_en <= ?
+         GROUP BY date(creado_en)`,
+        [nid, fechaInicio, fechaFin]
+      ),
+    ]);
 
-                res.json({
-                  ok: true,
-                  periodo: { mes: parseInt(mes), anio: parseInt(anio) },
-                  total: row.total,
-                  cantidad: row.cantidad,
-                  pago_mas_alto: row.pago_mas_alto || 0,
-                  pago_mas_bajo: row.pago_mas_bajo || 0,
-                  ticket_promedio: row.cantidad > 0 ? Math.round(row.total / row.cantidad) : 0,
-                  dias_con_ventas: diasRow.dias_con_ventas,
-                  bancos: bancos || [],
-                });
-              }
-            );
-          }
-        );
+    const totalAnterior = anteriorRow.total || 0;
+    const delta_vs_anterior = totalAnterior > 0
+      ? Math.round(((row.total - totalAnterior) / totalAnterior) * 100)
+      : (row.total > 0 ? 100 : 0);
+
+    // Heatmap semanal: grilla de 7 columnas (Lun a Dom) x semanas del mes,
+    // como un calendario. Los días que caen fuera del mes en la primera o
+    // última semana quedan en 0.
+    const cantidadPorFecha = {};
+    diasDelMes.forEach((f) => { cantidadPorFecha[f.fecha] = f.cantidad; });
+    const ultimoDia = new Date(anioNum, mesNum, 0).getDate();
+    const heatmap_semanal = [];
+    let semana = new Array(7).fill(0);
+    for (let dia = 1; dia <= ultimoDia; dia++) {
+      const fechaStr = `${anio}-${mes.padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+      const diaSemana = (new Date(anioNum, mesNum - 1, dia).getDay() + 6) % 7; // 0=Lun..6=Dom
+      semana[diaSemana] = cantidadPorFecha[fechaStr] || 0;
+      if (diaSemana === 6 || dia === ultimoDia) {
+        heatmap_semanal.push(semana);
+        semana = new Array(7).fill(0);
       }
-    );
+    }
+
+    res.json({
+      ok: true,
+      periodo: { mes: mesNum, anio: anioNum },
+      total: row.total,
+      cantidad: row.cantidad,
+      pago_mas_alto: row.pago_mas_alto || 0,
+      pago_mas_bajo: row.pago_mas_bajo || 0,
+      ticket_promedio: row.cantidad > 0 ? Math.round(row.total / row.cantidad) : 0,
+      dias_con_ventas: diasRow.dias_con_ventas,
+      promedio_diario: diasRow.dias_con_ventas > 0 ? Math.round(row.total / diasRow.dias_con_ventas) : 0,
+      delta_vs_anterior,
+      bancos: bancos || [],
+      heatmap_semanal,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

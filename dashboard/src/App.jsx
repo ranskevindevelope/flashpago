@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import FlashPagoLanding from './Flashpagolanding';
 import Login from './Login';
-import Registro from './Registro';
 import RecuperarPassword from './RecuperarPassword';
 import Dashboard from './Dashboard';
 import Terminos from './Terminos';
 import Privacidad from './Privacidad';
 import './App.css';
+
+// Registro es el único que usa `motion` (animaciones de CodigoOTP) — cargarlo
+// perezoso evita que ese ~40KB extra le toque a todo el mundo en cada visita
+// al dashboard, cuando en realidad casi nadie vuelve a pasar por esta pantalla
+// después de crear su cuenta una vez.
+const Registro = lazy(() => import('./Registro'));
 
 const queryClient = new QueryClient();
 
@@ -82,7 +87,9 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {pantalla}
+      <Suspense fallback={null}>
+        {pantalla}
+      </Suspense>
       <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
     </QueryClientProvider>
   );

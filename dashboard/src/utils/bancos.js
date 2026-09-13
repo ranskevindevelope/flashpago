@@ -13,6 +13,31 @@ export function getBancoBadge(banco) {
   return { clase: 'badge-otro', nombre: banco || 'Otro' };
 }
 
+// Paleta fija para los gráficos de Estadísticas (bancos más usados + donut)
+// — distinta de los badges de la tabla de pagos, que ya tienen sus propios
+// colores por marca. Solo 4 grupos para que el gráfico se lea de un vistazo.
+export const COLOR_BANCO_ESTADISTICAS = {
+  'Bre-B': '#2196F3',
+  'Nequi': '#E91E63',
+  'Bancolombia': '#F57C00',
+  'Otro': '#9E9E9E',
+};
+
+// Agrupa los bancos crudos (texto libre, viene del OCR o del correo) en los
+// 4 grupos que muestra Estadísticas, reusando getBancoBadge para no duplicar
+// la lógica de "a qué banco pertenece este texto".
+export function agruparBancosParaEstadisticas(bancos) {
+  const grupos = {};
+  (bancos || []).forEach((b) => {
+    const { nombre } = getBancoBadge(b.banco);
+    const clave = ['Bre-B', 'Nequi', 'Bancolombia'].includes(nombre) ? nombre : 'Otro';
+    if (!grupos[clave]) grupos[clave] = { nombre: clave, pagos: 0, total: 0 };
+    grupos[clave].pagos += b.cantidad;
+    grupos[clave].total += b.total;
+  });
+  return Object.values(grupos).sort((a, b) => b.total - a.total);
+}
+
 export function getPlanLabel(plan) {
   const labels = { basico: 'Básico', premium: 'Premium', premium_plus: 'Premium Plus', empresarial: 'Empresarial' };
   return labels[plan] || plan;

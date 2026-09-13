@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Users, UserPlus, UserCheck, UserX, Shield, CreditCard, Edit, Trash2, Save, X, MessageCircle } from 'lucide-react';
+import { Users, UserPlus, UserCheck, UserX, Shield, CreditCard, Edit, Save, X, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { FilaSkeleton, TarjetaSkeleton } from '../components/ui/Skeleton';
 import Button from '../components/ui/Button';
-import ModalConfirmacion from '../components/ModalConfirmacion';
+import BotonEliminar from '../components/BotonEliminar';
 import ModalConfirmarWhatsapp from '../components/ModalConfirmarWhatsapp';
 import { useUsuarios } from '../hooks/useUsuarios';
 import { PASSWORD_VALIDA, PASSWORD_ERROR } from '../utils/password';
@@ -19,8 +19,6 @@ export default function SeccionUsuarios({ api }) {
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState(FORM_VACIO);
   const [guardando, setGuardando] = useState(false);
-  const [confirmacion, setConfirmacion] = useState(null);
-  const [confirmando, setConfirmando] = useState(false);
   const [confirmacionWpp, setConfirmacionWpp] = useState({ abierto: false, waLink: '', confirmado: false, usuarioId: null });
 
   const refrescar = () => queryClient.invalidateQueries({ queryKey: ['usuarios'] });
@@ -116,35 +114,17 @@ export default function SeccionUsuarios({ api }) {
     setGuardando(false);
   };
 
-  const desactivarUsuario = (id, nombre) => {
-    setConfirmacion({
-      titulo: `¿Desactivar al usuario "${nombre}"?`,
-      textoConfirmar: 'Desactivar',
-      peligro: true,
-      accion: async () => {
-        try {
-          const data = await api.request(`/api/usuarios/${id}`, { method: 'DELETE' });
-          if (data.ok) {
-            toast.success(`Usuario "${nombre}" desactivado`);
-            refrescar();
-          } else {
-            toast.error(data.error);
-          }
-        } catch (err) {
-          toast.error(err.message || 'Error de conexión');
-        }
-      },
-    });
-  };
-
-  const ejecutarConfirmacion = async () => {
-    if (!confirmacion) return;
-    setConfirmando(true);
+  const desactivarUsuario = async (id, nombre) => {
     try {
-      await confirmacion.accion();
-    } finally {
-      setConfirmando(false);
-      setConfirmacion(null);
+      const data = await api.request(`/api/usuarios/${id}`, { method: 'DELETE' });
+      if (data.ok) {
+        toast.success(`Usuario "${nombre}" desactivado`);
+        refrescar();
+      } else {
+        toast.error(data.error);
+      }
+    } catch (err) {
+      toast.error(err.message || 'Error de conexión');
     }
   };
 
@@ -307,9 +287,10 @@ export default function SeccionUsuarios({ api }) {
                           <MessageCircle size={13} />
                         </button>
                         {user.activo ? (
-                          <button className="ver-foto-btn" onClick={() => desactivarUsuario(user.id, user.nombre)} title="Desactivar" style={{ color: '#E53935' }}>
-                            <Trash2 size={13} />
-                          </button>
+                          <BotonEliminar
+                            etiqueta={`Desactivar a ${user.nombre}`}
+                            onConfirmar={() => desactivarUsuario(user.id, user.nombre)}
+                          />
                         ) : (
                           <button className="ver-foto-btn" onClick={() => reactivarUsuario(user.id)} title="Reactivar" style={{ color: '#43A047' }}>
                             <UserCheck size={13} />
@@ -324,17 +305,6 @@ export default function SeccionUsuarios({ api }) {
           </table>
         </div>
       </div>
-
-      <ModalConfirmacion
-        abierto={!!confirmacion}
-        titulo={confirmacion?.titulo}
-        descripcion={confirmacion?.descripcion}
-        textoConfirmar={confirmacion?.textoConfirmar}
-        peligro={confirmacion?.peligro}
-        cargando={confirmando}
-        onConfirmar={ejecutarConfirmacion}
-        onCancelar={() => !confirmando && setConfirmacion(null)}
-      />
 
       <ModalConfirmarWhatsapp
         abierto={confirmacionWpp.abierto}

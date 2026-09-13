@@ -312,6 +312,10 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .seccion-header .seccion-titulo { margin-bottom: 0; }
 
 .dashboard-overview-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1fr); gap: 1.25rem; align-items: stretch; }
+.estadisticas-bancos-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(220px, 1fr); gap: 1.25rem; align-items: stretch; }
+@media (max-width: 800px) {
+  .estadisticas-bancos-grid { grid-template-columns: 1fr; }
+}
 .dashboard-chart-card, .alertas-card { margin-bottom: 1.5rem; }
 .alertas-card { min-height: 340px; }
 .alertas-count { min-width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--naranja); color: #fff; font-size: 0.75rem; font-weight: 700; }
@@ -497,6 +501,64 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .exportar-btn:hover { background: var(--naranja); color: white; }
 .ver-foto-btn { background: none; border: 1px solid var(--dash-border); color: var(--dash-text-muted); padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; transition: all 0.3s; }
 .ver-foto-btn:hover { border-color: var(--naranja) !important; color: var(--naranja) !important; }
+
+/* ─── BotonEliminar (confirmación inline, sin modal) ──── */
+.boton-eliminar {
+  position: relative; display: inline-flex; align-items: center; height: 34px;
+  border-radius: 17px; background: var(--dash-surface-2); overflow: hidden;
+  transition: width 0.32s cubic-bezier(.32,.72,0,1);
+}
+.boton-eliminar__disparador {
+  position: relative; z-index: 1; width: 34px; height: 34px; flex-shrink: 0;
+  border-radius: 50%; border: none; background: transparent; color: var(--dash-text-muted);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.boton-eliminar__disparador:disabled { cursor: default; opacity: 0.5; }
+.boton-eliminar__disparador:hover:not(:disabled) { color: var(--tint-red-fg); }
+.boton-eliminar__panel {
+  display: flex; align-items: center; gap: 6px; padding-right: 8px;
+  animation: boton-eliminar-panel 0.3s cubic-bezier(.32,.72,0,1) both;
+}
+.boton-eliminar__accion {
+  width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.boton-eliminar__accion--confirmar { background: var(--tint-red-bg); color: var(--tint-red-fg); }
+.boton-eliminar__accion--cancelar { background: var(--dash-surface); color: var(--dash-text-muted); }
+.boton-eliminar__rebote { display: inline-flex; animation: boton-eliminar-rebote 0.45s ease; }
+.boton-eliminar__check { stroke-dasharray: 20; stroke-dashoffset: 20; animation: boton-eliminar-dibujar 0.4s ease forwards; }
+@keyframes boton-eliminar-panel {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes boton-eliminar-rebote {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.82); }
+  100% { transform: scale(1); }
+}
+@keyframes boton-eliminar-dibujar {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ─── CampanaNotificaciones ─────────────────────── */
+.campana-notif__badge {
+  position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 3px;
+  border-radius: 999px; background: var(--tint-red-fg); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+  animation: campana-notif-pop 0.25s cubic-bezier(.34,1.56,.64,1) both;
+}
+.campana-notif__rebote { animation: campana-notif-rebote 0.5s ease; }
+@keyframes campana-notif-pop {
+  from { transform: scale(0); }
+  to   { transform: scale(1); }
+}
+@keyframes campana-notif-rebote {
+  0%, 100% { transform: rotate(0); }
+  20%      { transform: rotate(-12deg); }
+  40%      { transform: rotate(10deg); }
+  60%      { transform: rotate(-6deg); }
+  80%      { transform: rotate(4deg); }
+}
 
 .btn-registrar-gasto { transition: background 0.2s, transform 0.15s; }
 .btn-registrar-gasto:hover:not(:disabled) { background: #C62828 !important; transform: translateY(-1px); }

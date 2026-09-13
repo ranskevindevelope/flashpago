@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { DollarSign, ArrowRight, ArrowLeft, Check, Mail, Users, ShoppingBag, Shield, Zap, Sparkles, Gift, Package, Rocket } from 'lucide-react';
 
 import { PASSWORD_VALIDA, PASSWORD_ERROR } from './utils/password';
 import BotonGoogle from './components/BotonGoogle';
+import CodigoOTP from './components/CodigoOTP';
+import IndicadorPasos from './components/IndicadorPasos';
 import './components/ui/ui.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -61,6 +63,10 @@ function Registro({ onBack, datosGoogle }) {
   const [wppCodigo, setWppCodigo] = useState('');
   const [wppEnviando, setWppEnviando] = useState(false);
   const [wppMensaje, setWppMensaje] = useState('');
+  // Fuerza un remount de <CodigoOTP> (limpia las cajitas) cuando el código
+  // de WhatsApp resulta incorrecto.
+  const [otpWppKey, setOtpWppKey] = useState(0);
+  const [otpWppStatus, setOtpWppStatus] = useState('idle');
 
   // Paso 3: Cuenta (con Google, nombre/email ya vienen confirmados)
   const [nombre, setNombre] = useState(datosGoogle?.nombre || '');
@@ -70,7 +76,11 @@ function Registro({ onBack, datosGoogle }) {
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
 
   // Paso 4: Verificación
-  const [codigoDigitos, setCodigoDigitos] = useState(['', '', '', '', '', '']);
+  const [codigoEmail, setCodigoEmail] = useState('');
+  // Fuerza un remount de <CodigoOTP> (limpia las cajitas) cuando el código
+  // de correo resulta incorrecto.
+  const [otpEmailKey, setOtpEmailKey] = useState(0);
+  const [otpEmailStatus, setOtpEmailStatus] = useState('idle');
   const [reenviando, setReenviando] = useState(false);
   const [tiempoReenvio, setTiempoReenvio] = useState(0);
 
@@ -136,6 +146,8 @@ function Registro({ onBack, datosGoogle }) {
       } else {
         setWppMensaje(data.error || 'Código incorrecto');
         setWppCodigo('');
+        setOtpWppKey((k) => k + 1);
+        setOtpWppStatus('error');
       }
     } catch (err) {
       setWppMensaje('Error de conexión');
@@ -183,7 +195,7 @@ function Registro({ onBack, datosGoogle }) {
 
   // ─── Verificar código ──────────────────────────────────
   const verificarCodigo = async () => {
-    const codigo = codigoDigitos.join('');
+    const codigo = codigoEmail;
     if (codigo.length !== 6) { setError('Ingresa los 6 dígitos'); return; }
 
     setError('');
@@ -200,12 +212,25 @@ function Registro({ onBack, datosGoogle }) {
         setPaso(5);
       } else {
         setError(data.error || 'Código incorrecto');
-        setCodigoDigitos(['', '', '', '', '', '']);
+        setCodigoEmail('');
+        setOtpEmailKey((k) => k + 1);
+        setOtpEmailStatus('error');
       }
     } catch (err) {
       setError('Error de conexión');
     }
     setCargando(false);
+  };
+
+  // Vuelve a "idle" el estado visual de error (borde rojo + shake) en cuanto
+  // el usuario empieza a escribir un dígito nuevo.
+  const manejarCambioCodigoEmail = (valor) => {
+    setCodigoEmail(valor);
+    if (valor) setOtpEmailStatus('idle');
+  };
+  const manejarCambioWppCodigo = (valor) => {
+    setWppCodigo(valor);
+    if (valor) setOtpWppStatus('idle');
   };
 
   // ─── Reenviar código ───────────────────────────────────
@@ -252,41 +277,6 @@ function Registro({ onBack, datosGoogle }) {
         user: JSON.stringify(registroExitoso.user),
       });
       window.location.href = `https://app.flashpago.co/?${params.toString()}`;
-    }
-  };
-
-  // ─── Input de código ──────────────────────────────────
-  const handleCodigoInput = (index, value) => {
-    if (value.length > 1) value = value.slice(-1);
-    if (value && !/^\d$/.test(value)) return;
-
-    const nuevo = [...codigoDigitos];
-    nuevo[index] = value;
-    setCodigoDigitos(nuevo);
-
-    if (value && index < 5) {
-      const next = document.getElementById(`code-${index + 1}`);
-      if (next) next.focus();
-    }
-  };
-
-  const handleCodigoKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !codigoDigitos[index] && index > 0) {
-      const prev = document.getElementById(`code-${index - 1}`);
-      if (prev) prev.focus();
-    }
-    if (e.key === 'Enter' && codigoDigitos.join('').length === 6) {
-      verificarCodigo();
-    }
-  };
-
-  const handleCodigoPaste = (e) => {
-    e.preventDefault();
-    const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (text.length === 6) {
-      setCodigoDigitos(text.split(''));
-      const last = document.getElementById('code-5');
-      if (last) last.focus();
     }
   };
 
@@ -366,19 +356,6 @@ function Registro({ onBack, datosGoogle }) {
     sub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', maxWidth: 240, textAlign: 'center', lineHeight: 1.5 },
     feat: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'rgba(255,255,255,0.7)', textAlign: 'left' },
     featDot: { width: 6, height: 6, background: '#F57C00', borderRadius: '50%', flexShrink: 0 },
-    steps: { display: 'flex', alignItems: 'center', gap: 0, marginBottom: '1.5rem' },
-    step: (active, done) => ({
-      display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
-      color: done ? '#43A047' : active ? '#F57C00' : '#999', fontWeight: active ? 600 : 400,
-    }),
-    stepDot: (active, done) => ({
-      width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: 12, fontWeight: 600,
-      background: done ? '#E8F5E9' : active ? '#F57C00' : 'transparent',
-      color: done ? '#2E7D32' : active ? '#fff' : '#999',
-      border: done ? '2px solid #A5D6A7' : active ? 'none' : '2px solid #ddd',
-    }),
-    stepLine: { width: 32, height: 2, background: '#e0e0e0', margin: '0 6px' },
     title: { fontSize: 22, fontWeight: 600, color: '#1A1A2E', marginBottom: 4 },
     desc: { fontSize: 13, color: '#666', marginBottom: '1.5rem', lineHeight: 1.5 },
     field: { marginBottom: 12 },
@@ -422,11 +399,6 @@ function Registro({ onBack, datosGoogle }) {
     infoBox: {
       background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: '14px 18px', marginTop: '1.5rem',
     },
-    codeInput: (filled) => ({
-      width: 46, height: 54, borderRadius: 10, textAlign: 'center', fontSize: 22, fontWeight: 600,
-      border: filled ? '2px solid #F57C00' : '2px solid #e8e8f0',
-      background: filled ? '#FFF8F0' : '#fff', outline: 'none', fontFamily: 'inherit',
-    }),
     link: { color: '#F57C00', fontWeight: 600, textDecoration: 'none', cursor: 'pointer', background: 'none', border: 'none', fontSize: 'inherit', fontFamily: 'inherit' },
   };
 
@@ -670,24 +642,16 @@ function Registro({ onBack, datosGoogle }) {
       <div style={s.right} className="registro-right">
         {/* Steps indicator */}
         {paso <= 4 && (
-          <div style={s.steps}>
-            {[
+          <IndicadorPasos
+            pasos={[
               { n: 1, label: 'Plan' },
               { n: 2, label: 'Datos' },
               { n: 3, label: 'Cuenta' },
               { n: 4, label: 'Verificar' },
-            ].map((st, i) => (
-              <React.Fragment key={st.n}>
-                <div style={s.step(paso === st.n, paso > st.n)}>
-                  <div style={s.stepDot(paso === st.n, paso > st.n)}>
-                    {paso > st.n ? <Check size={14} /> : st.n}
-                  </div>
-                  {st.label}
-                </div>
-                {i < 3 && <div style={s.stepLine} />}
-              </React.Fragment>
-            ))}
-          </div>
+            ]}
+            pasoActual={paso}
+            onIrAPaso={setPaso}
+          />
         )}
 
         {error && <div style={s.error}><Shield size={14} /> {error}</div>}
@@ -890,26 +854,32 @@ function Registro({ onBack, datosGoogle }) {
                       }}>{wppMensaje}</div>
                     )}
                     {wppMensaje.includes('enviado') && !wppVerificado && (
-                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                        <input
-                          style={{ ...s.input, flex: 1, letterSpacing: 4, textAlign: 'center', fontWeight: 600 }}
-                          placeholder="000000"
-                          value={wppCodigo}
-                          onChange={e => setWppCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                          maxLength={6}
-                          inputMode="numeric"
-                          onKeyDown={e => e.key === 'Enter' && wppCodigo.length === 6 && confirmarWhatsapp()}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                        <CodigoOTP
+                          key={otpWppKey}
+                          longitud={6}
+                          tamano="chico"
+                          autoFocus={false}
+                          disabled={wppEnviando}
+                          status={otpWppStatus}
+                          onChange={manejarCambioWppCodigo}
+                          onEnterCompleto={confirmarWhatsapp}
                         />
-                        <button onClick={confirmarWhatsapp} disabled={wppEnviando || wppCodigo.length !== 6}
+                        <button
+                          onClick={confirmarWhatsapp}
+                          disabled={wppEnviando || wppCodigo.length !== 6}
+                          aria-label="Verificar código"
+                          title="Verificar código"
                           style={{
-                            padding: '0 14px', borderRadius: 10, border: 'none', fontSize: 12, fontWeight: 600,
+                            width: 38, height: 38, borderRadius: '50%', border: 'none', padding: 0,
                             background: wppCodigo.length === 6 ? '#43A047' : '#e0e0e0',
                             color: wppCodigo.length === 6 ? '#fff' : '#999',
                             cursor: wppCodigo.length === 6 ? 'pointer' : 'default',
-                            whiteSpace: 'nowrap',
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            boxShadow: wppCodigo.length === 6 ? '0 3px 10px rgba(67,160,71,0.35)' : 'none',
+                            transition: 'background 0.15s, box-shadow 0.15s',
                           }}>
-                          {wppEnviando ? <span className="fp-btn__spinner" aria-hidden="true" /> : <Check size={14} />}
+                          {wppEnviando ? <span className="fp-btn__spinner" aria-hidden="true" /> : <Check size={18} strokeWidth={3} />}
                         </button>
                       </div>
                     )}
@@ -1075,25 +1045,21 @@ function Registro({ onBack, datosGoogle }) {
             <div style={{ fontSize: 13, color: '#666', textAlign: 'center', marginBottom: 10 }}>
               Ingresa el código de 6 dígitos
             </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: '1.25rem' }}>
-              {codigoDigitos.map((d, i) => (
-                <input
-                  key={i}
-                  id={`code-${i}`}
-                  style={s.codeInput(!!d)}
-                  value={d}
-                  onChange={e => handleCodigoInput(i, e.target.value)}
-                  onKeyDown={e => handleCodigoKeyDown(i, e)}
-                  onPaste={i === 0 ? handleCodigoPaste : undefined}
-                  maxLength={1}
-                  inputMode="numeric"
-                />
-              ))}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <CodigoOTP
+                key={otpEmailKey}
+                longitud={6}
+                tamano="grande"
+                disabled={cargando}
+                status={otpEmailStatus}
+                onChange={manejarCambioCodigoEmail}
+                onEnterCompleto={verificarCodigo}
+              />
             </div>
             <button
-              style={s.btn(codigoDigitos.join('').length === 6 && !cargando)}
+              style={s.btn(codigoEmail.length === 6 && !cargando)}
               onClick={verificarCodigo}
-              disabled={codigoDigitos.join('').length !== 6 || cargando}
+              disabled={codigoEmail.length !== 6 || cargando}
             >
               {cargando ? <><span className="fp-btn__spinner" aria-hidden="true" /> Verificando...</> : <><Check size={16} /> Verificar código</>}
             </button>

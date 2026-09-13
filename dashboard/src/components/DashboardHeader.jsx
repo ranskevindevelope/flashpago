@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, CreditCard, Download, LayoutDashboard, Menu, Search, TrendingUp, Users, Settings, Building2 } from 'lucide-react';
+import CampanaNotificaciones from './CampanaNotificaciones';
 
 const titles = {
   panel: ['Panel general', LayoutDashboard],
@@ -13,7 +14,7 @@ const titles = {
   negocios: ['Negocios', Building2],
 };
 
-function DashboardHeader({ activeSection, onToggleSidebar }) {
+function DashboardHeader({ activeSection, onToggleSidebar, notificaciones, onAbrirNotificaciones }) {
   const [title, Icon] = titles[activeSection] || titles.panel;
 
   return (
@@ -25,6 +26,7 @@ function DashboardHeader({ activeSection, onToggleSidebar }) {
       <span className="topbar-fecha">
         {new Date().toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
       </span>
+      <CampanaNotificaciones notificaciones={notificaciones} onAbrir={onAbrirNotificaciones} />
     </header>
   );
 }

@@ -14,6 +14,11 @@ export default defineConfig({
           if (!id.includes('node_modules')) return undefined;
           if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-')) return 'charts';
           if (id.includes('react-dom') || id.includes('scheduler')) return 'react';
+          // Aparte del resto: solo lo usa Registro.jsx (animaciones de
+          // CodigoOTP), y ese ya carga perezoso (React.lazy en App.jsx). Si
+          // cae en "vendor" arrastra ese peso a todo el mundo aunque nunca
+          // visiten el registro.
+          if (id.includes('framer-motion') || id.includes('/motion/') || id.includes('motion-dom') || id.includes('motion-utils')) return 'motion';
           return 'vendor';
         },
       },
