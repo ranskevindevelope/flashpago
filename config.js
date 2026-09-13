@@ -45,6 +45,14 @@ module.exports = {
   TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY || '',
   TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY || '',
 
+  // "Iniciar sesión con Google" (login/registro) — distinto del OAuth de
+  // credentials.json, que es para conectar el Gmail del negocio y leer sus
+  // notificaciones bancarias. Este es un cliente tipo "Aplicación web" nuevo,
+  // solo necesita el Client ID (no hay secreto en este flujo). Sin fallback a
+  // required(): mientras no se configure, el botón de Google simplemente no
+  // se activa en el login.
+  GOOGLE_WEB_CLIENT_ID: process.env.GOOGLE_WEB_CLIENT_ID || '',
+
   // Cuenta bancaria para pagos de suscripción por transferencia manual
   CUENTA_BANCO: process.env.CUENTA_BANCO || '',
   CUENTA_TIPO: process.env.CUENTA_TIPO || '',

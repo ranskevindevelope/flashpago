@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Zap, Lock, User, Eye, EyeOff, ShieldCheck, Clock, BarChart3 } from 'lucide-react';
+import BotonGoogle from './components/BotonGoogle';
 
 function Login({ onLogin , onRegistro, onRecuperar }) {
   const [usuario, setUsuario] = useState('');
@@ -35,6 +36,23 @@ function Login({ onLogin , onRegistro, onRecuperar }) {
     }
 
     setCargando(false);
+  };
+
+  const manejarResultadoGoogle = (data) => {
+    setError('');
+    if (data.ok && data.accion === 'login') {
+      localStorage.setItem('fp_token', data.token);
+      localStorage.setItem('fp_user', JSON.stringify(data.user));
+      onLogin();
+    } else if (data.ok && data.accion === 'registro_pendiente') {
+      onRegistro({
+        googleToken: data.googleToken,
+        email: data.email,
+        nombre: data.nombre,
+      });
+    } else {
+      setError(data.error || 'No se pudo continuar con Google');
+    }
   };
 
   return (
@@ -130,9 +148,16 @@ function Login({ onLogin , onRegistro, onRecuperar }) {
             </button>
           </form>
 
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '1.5rem 0' }}>
+            <div style={{ flex: 1, height: 1, background: '#e8e8f0' }} />
+            <span style={{ fontSize: 11, color: '#999' }}>o continúa con</span>
+            <div style={{ flex: 1, height: 1, background: '#e8e8f0' }} />
+          </div>
+          <BotonGoogle onResultado={manejarResultadoGoogle} ancho={400} />
+
                     <p style={{ textAlign: 'center', color: '#666', fontSize: '0.85rem', marginTop: '1.5rem' }}>
             ¿No tienes cuenta?{' '}
-            <button onClick={onRegistro} style={{
+            <button onClick={() => onRegistro()} style={{
               background: 'none', border: 'none', color: '#F57C00',
               fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'inherit',
             }}>

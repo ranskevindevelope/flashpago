@@ -56,9 +56,10 @@ app.use(
     directives: {
       defaultSrc: ["'self'"],
       // El dashboard no tiene scripts inline; los externos son el widget de
-      // Wompi y el captcha de Cloudflare Turnstile (solo aparece tras varios
-      // intentos fallidos al guardar tarjeta, ver routes/wompi.js).
-      scriptSrc: ["'self'", 'https://checkout.wompi.co', 'https://challenges.cloudflare.com'],
+      // Wompi, el captcha de Cloudflare Turnstile (solo aparece tras varios
+      // intentos fallidos al guardar tarjeta, ver routes/wompi.js) y el botón
+      // de "Iniciar sesión con Google" del login/registro.
+      scriptSrc: ["'self'", 'https://checkout.wompi.co', 'https://challenges.cloudflare.com', 'https://accounts.google.com'],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:'],
       fontSrc: ["'self'", 'data:'],
@@ -68,8 +69,9 @@ app.use(
         'https://production.wompi.co',
         'https://sandbox.wompi.co',
         'https://challenges.cloudflare.com',
+        'https://accounts.google.com',
       ],
-      frameSrc: ['https://checkout.wompi.co', 'https://challenges.cloudflare.com'],
+      frameSrc: ['https://checkout.wompi.co', 'https://challenges.cloudflare.com', 'https://accounts.google.com'],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],

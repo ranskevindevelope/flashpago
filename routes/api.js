@@ -8,6 +8,15 @@ const path = require('path');
 
 const { google } = require('googleapis');
 
+// Detecta correos desechables (Mailinator, 10minutemail, etc.) contra una
+// lista que mantiene la librería, no nosotros, porque aparecen dominios
+// nuevos todo el tiempo. mailchecker se eligió sobre disposable-email-domains
+// porque esta ultima lleva ~4 años sin actualizarse en npm.
+const MailChecker = require('mailchecker');
+function esCorreoDesechable(email) {
+  return !!email && !MailChecker.isValid(email);
+}
+
 // Mínimo 8 caracteres, al menos una mayúscula y una minúscula
 const PASSWORD_VALIDA = /^(?=.*[a-z])(?=.*[A-Z]).{8,}$/;
 const PASSWORD_ERROR = 'La contraseña debe tener mínimo 8 caracteres, con mayúsculas y minúsculas';
@@ -69,6 +78,13 @@ function getOAuth2Client(redirectUri) {
   );
 }
 
+// Config pública para las pantallas de login/registro (antes de iniciar
+// sesión, así que no puede vivir detrás de verificarToken). El Client ID de
+// Google no es secreto — está pensado para ir en el frontend.
+router.get('/config-publica', (req, res) => {
+  res.json({ ok: true, googleClientId: config.GOOGLE_WEB_CLIENT_ID || null });
+});
+
 // ═══════════════════════════════════════════════════════════
 //  AUTH
 // ═══════════════════════════════════════════════════════════
@@ -127,6 +143,67 @@ router.post('/login', limitarLogin, (req, res) => {
   });
 });
 
+// ─── Iniciar sesión / registrarse con Google ───────────────
+// Distinto del OAuth de credentials.json (ese conecta el Gmail del negocio
+// para leer notificaciones bancarias) — este solo identifica quién es la
+// persona que entra, con el botón de Google del login/registro.
+// Si el correo ya tiene cuenta, inicia sesión de una. Si es nuevo, todavía
+// faltan los datos del negocio (plan, WhatsApp, etc.) que Google no sabe —
+// se manda un token propio de corta duración para completar el registro sin
+// repetir la verificación de correo que Google ya hizo.
+router.post('/auth/google', limitarLogin, async (req, res) => {
+  try {
+    const { credential } = req.body || {};
+    if (!credential) return res.status(400).json({ ok: false, error: 'Falta el token de Google' });
+    if (!config.GOOGLE_WEB_CLIENT_ID) {
+      return res.status(503).json({ ok: false, error: 'Inicio de sesión con Google no está disponible todavía' });
+    }
+
+    const cliente = new google.auth.OAuth2(config.GOOGLE_WEB_CLIENT_ID);
+    const ticket = await cliente.verifyIdToken({ idToken: credential, audience: config.GOOGLE_WEB_CLIENT_ID });
+    const payload = ticket.getPayload();
+
+    if (!payload?.email_verified) {
+      return res.status(400).json({ ok: false, error: 'Ese correo de Google no está verificado' });
+    }
+    const email = payload.email.trim().toLowerCase();
+    const googleId = payload.sub;
+    const nombre = payload.name || email.split('@')[0];
+
+    const usuarioExistente = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM usuarios WHERE google_id = ? OR email = ?', [googleId, email], (err, row) => (err ? reject(err) : resolve(row)));
+    });
+
+    if (usuarioExistente) {
+      // Cuenta creada antes con usuario/contraseña: se vincula, porque Google
+      // ya verificó que este correo es de la misma persona que entra ahora.
+      if (!usuarioExistente.google_id) {
+        db.run('UPDATE usuarios SET google_id = ? WHERE id = ?', [googleId, usuarioExistente.id]);
+      }
+      const token = jwt.sign(
+        { id: usuarioExistente.id, usuario: usuarioExistente.usuario, rol: usuarioExistente.rol, negocio_id: usuarioExistente.negocio_id || 1 },
+        config.JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+      res.cookie(COOKIE_SESION, token, opcionesCookieSesion(req));
+      return res.json({
+        ok: true, accion: 'login', token,
+        user: { id: usuarioExistente.id, nombre: usuarioExistente.nombre, rol: usuarioExistente.rol, negocio_id: usuarioExistente.negocio_id || 1 },
+      });
+    }
+
+    const googleToken = jwt.sign(
+      { tipo: 'google_pendiente', email, nombre, google_id: googleId },
+      config.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+    res.json({ ok: true, accion: 'registro_pendiente', googleToken, email, nombre });
+  } catch (err) {
+    console.error('[AuthGoogle] Error:', err.message);
+    res.status(400).json({ ok: false, error: 'No se pudo verificar la sesión de Google' });
+  }
+});
+
 // Cierre de sesión: la cookie es httpOnly, así que el navegador no puede
 // borrarla por su cuenta — tiene que pedirlo al servidor.
 router.post('/logout', (req, res) => {
@@ -150,6 +227,21 @@ function formatearWhatsapp(num) {
 const { enviarCodigoVerificacion, enviarBienvenida, enviarCodigoRecuperacion } = require('../mailer');
 const { generarCodigo, guardarCodigoVerificacion, verificarCodigo, registrarTrialCreado, emailYaUsoTrial, whatsappYaUsoTrial } = require('../db');
 
+// Deriva un nombre de usuario del correo (para cuentas creadas por Google,
+// que no piden uno) y le agrega un sufijo si ya existe.
+async function generarUsuarioDesdeEmail(email) {
+  const base = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'usuario';
+  let candidato = base;
+  for (let intento = 0; intento < 10; intento++) {
+    const existe = await new Promise((resolve, reject) => {
+      db.get('SELECT id FROM usuarios WHERE usuario = ?', [candidato], (err, row) => (err ? reject(err) : resolve(!!row)));
+    });
+    if (!existe) return candidato;
+    candidato = `${base}${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+  throw new Error('No se pudo generar un usuario único');
+}
+
 // Paso 1: Enviar código de verificación
 router.post('/registro/enviar-codigo', limitarLogin, async (req, res) => {
   try {
@@ -164,6 +256,9 @@ router.post('/registro/enviar-codigo', limitarLogin, async (req, res) => {
     }
     if (!['basico', 'premium', 'premium_plus', 'empresarial'].includes(plan)) {
       return res.status(400).json({ ok: false, error: 'Plan no válido' });
+    }
+    if (esCorreoDesechable(email)) {
+      return res.status(400).json({ ok: false, error: 'Usa un correo real, no uno temporal — lo necesitas para recuperar tu cuenta.' });
     }
 
     // Verificar que el usuario no exista
@@ -326,6 +421,116 @@ router.post('/registro/verificar', limitarLogin, async (req, res) => {
     });
   } catch (err) {
     console.error('[Registro] Error verificando:', err.message);
+    if (err.message?.includes('UNIQUE')) {
+      return res.status(409).json({ ok: false, error: 'Ese usuario ya existe' });
+    }
+    res.status(500).json({ ok: false, error: 'Error creando la cuenta' });
+  }
+});
+
+// Paso 2 (variante Google): sin contraseña ni código de correo — Google ya
+// verificó el correo en /auth/google, se valida ese token corto en su lugar.
+router.post('/registro/completar-google', limitarLogin, async (req, res) => {
+  try {
+    const { googleToken, nombre_negocio, plan, ciudad, banco, whatsapp_negocio } = req.body || {};
+    if (!googleToken || !nombre_negocio || !plan || !whatsapp_negocio) {
+      return res.status(400).json({ ok: false, error: 'Faltan campos obligatorios' });
+    }
+    if (!['basico', 'premium', 'premium_plus', 'empresarial'].includes(plan)) {
+      return res.status(400).json({ ok: false, error: 'Plan no válido' });
+    }
+
+    let payload;
+    try {
+      payload = jwt.verify(googleToken, config.JWT_SECRET);
+    } catch {
+      return res.status(400).json({ ok: false, error: 'Tu sesión de Google expiró, intenta de nuevo.' });
+    }
+    if (payload.tipo !== 'google_pendiente') {
+      return res.status(400).json({ ok: false, error: 'Token inválido' });
+    }
+    const { email, nombre, google_id: googleId } = payload;
+
+    const existeCuenta = await new Promise((resolve, reject) => {
+      db.get('SELECT id FROM usuarios WHERE email = ? OR google_id = ?', [email, googleId], (err, row) => (err ? reject(err) : resolve(row)));
+    });
+    if (existeCuenta) {
+      return res.status(409).json({ ok: false, error: 'Ese correo ya está registrado. Inicia sesión en vez de crear cuenta.' });
+    }
+    if (await emailYaUsoTrial(email)) {
+      return res.status(409).json({ ok: false, error: 'Ese email ya usó su prueba gratis antes.' });
+    }
+
+    // Mismo chequeo de WhatsApp verificado que el registro normal.
+    const wppLimpioReg = whatsapp_negocio.replace(/\D/g, '');
+    const numeroReg = wppLimpioReg.startsWith('3') && wppLimpioReg.length === 10 ? '57' + wppLimpioReg : wppLimpioReg;
+    const expiraVerificado = whatsappVerificados.get(numeroReg);
+    if (!expiraVerificado || Date.now() > expiraVerificado) {
+      return res.status(400).json({ ok: false, error: 'Primero debes verificar tu número de WhatsApp.' });
+    }
+
+    const whatsappFormateado = formatearWhatsapp(whatsapp_negocio);
+    const ultimosDiez = whatsappFormateado.replace(/\D/g, '').slice(-10);
+    const existeWhatsapp = await new Promise((resolve, reject) => {
+      db.get('SELECT id FROM usuarios WHERE whatsapp LIKE ?', [`%${ultimosDiez}%`], (err, row) => (err ? reject(err) : resolve(row)));
+    });
+    if (existeWhatsapp) {
+      return res.status(409).json({ ok: false, error: 'Ese número de WhatsApp ya tiene una cuenta registrada.' });
+    }
+    if (await whatsappYaUsoTrial(ultimosDiez)) {
+      return res.status(409).json({ ok: false, error: 'Ese número de WhatsApp ya usó su prueba gratis antes.' });
+    }
+
+    whatsappVerificados.delete(numeroReg);
+
+    const LIMITE_TRIAL = 300;
+    const negocio = await crearNegocio({
+      nombre: nombre_negocio, whatsapp: whatsappFormateado || null, plan, limite_comprobantes: LIMITE_TRIAL, ciudad, banco,
+    });
+
+    // Sin contraseña propia: esta cuenta siempre entra por Google. El hash
+    // guardado es de un valor aleatorio que nadie conoce — solo cumple la
+    // columna NOT NULL, nunca sirve para entrar por el formulario normal.
+    const salt = crypto.randomBytes(32).toString('hex');
+    const passwordInutilizable = crypto.randomBytes(32).toString('hex');
+    const hash = crypto.pbkdf2Sync(passwordInutilizable, salt, 10000, 64, 'sha512').toString('hex');
+    const usuarioGenerado = await generarUsuarioDesdeEmail(email);
+
+    const userId = await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO usuarios (usuario, password_hash, salt, nombre, rol, whatsapp, negocio_id, email, google_id)
+         VALUES (?, ?, ?, ?, 'admin', ?, ?, ?, ?)`,
+        [usuarioGenerado, hash, salt, nombre, whatsappFormateado, negocio.id, email, googleId],
+        function (err) { if (err) reject(err); else resolve(this.lastID); }
+      );
+    });
+
+    try {
+      await registrarTrialCreado({ negocio_id: negocio.id, email, whatsappDigitos: (whatsapp_negocio || '').replace(/\D/g, '') });
+    } catch (e) { console.error('[RegistroGoogle] Error guardando registro_trial:', e.message); }
+
+    try {
+      await enviarBienvenida(email, nombre, usuarioGenerado, negocio.plan, negocio.trial_fin);
+    } catch (e) { console.error('[RegistroGoogle] Error enviando bienvenida:', e.message); }
+
+    const token = jwt.sign(
+      { id: userId, usuario: usuarioGenerado, rol: 'admin', negocio_id: negocio.id },
+      config.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log(`[RegistroGoogle] Nuevo negocio: ${nombre_negocio} (${plan}) — ${email}`);
+
+    res.cookie(COOKIE_SESION, token, opcionesCookieSesion(req));
+    res.status(201).json({
+      ok: true,
+      token,
+      user: { id: userId, nombre, rol: 'admin', negocio_id: negocio.id },
+      negocio: { id: negocio.id, nombre: nombre_negocio, plan },
+      usuario: usuarioGenerado,
+    });
+  } catch (err) {
+    console.error('[RegistroGoogle] Error:', err.message);
     if (err.message?.includes('UNIQUE')) {
       return res.status(409).json({ ok: false, error: 'Ese usuario ya existe' });
     }
@@ -727,6 +932,23 @@ router.post('/gmail/token', verificarToken, soloAdmin, async (req, res) => {
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// ─── Confirmación de WhatsApp (paso final tras conectar Gmail) ──
+// Ver bot/confirmacionWhatsapp.js para el porqué: capturamos el
+// identificador exacto (número o @lid) con el que el negocio le escribe al
+// bot, en vez de intentar adivinarlo después.
+const { prepararConfirmacion, estadoConfirmacion } = require('../bot/confirmacionWhatsapp');
+
+router.post('/whatsapp/preparar-confirmacion', verificarToken, soloAdmin, (req, res) => {
+  const codigo = prepararConfirmacion(req.user.negocio_id);
+  const mensaje = `confirmar ${codigo}`;
+  const waLink = `https://wa.me/${config.FLASHPAGO_WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
+  res.json({ ok: true, codigo, waLink, numero: config.FLASHPAGO_WHATSAPP });
+});
+
+router.get('/whatsapp/estado-confirmacion', verificarToken, (req, res) => {
+  res.json({ ok: true, ...estadoConfirmacion(req.user.negocio_id) });
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -1551,9 +1773,14 @@ router.get('/eventos', verificarToken, (req, res) => {
 // Reporta fallas que ocurrieron de verdad (OCR, Gmail, envío de mensajes,
 // errores del webhook) en los últimos minutos. No intenta adivinar si los
 // componentes están vivos: eso daba falsas alarmas.
-router.get('/bot/estado', verificarToken, (req, res) => {
+router.get('/bot/estado', verificarToken, async (req, res) => {
   try {
-    res.json({ ok: true, ...salud.resumen(req.user.negocio_id) });
+    // Fallas generales de la plataforma (sesión/conexión) solo se muestran a
+    // negocios que ya tienen Gmail conectado — o sea, que de verdad están
+    // verificando pagos. A uno recién registrado que aún no ha terminado el
+    // onboarding no le sirve de nada, y solo lo confunde.
+    const gmailToken = await obtenerTokenGmail(req.user.negocio_id);
+    res.json({ ok: true, ...salud.resumen(req.user.negocio_id, { incluirPlataforma: !!gmailToken }) });
   } catch (err) {
     res.json({ ok: true, hayFallas: false, cantidad: 0 });
   }

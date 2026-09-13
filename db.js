@@ -301,6 +301,16 @@ db.run(`
         console.log('[DB] Columna email en usuarios: OK');
       }
     });
+    // Migración: "Iniciar sesión con Google" — usuarios creados o vinculados
+    // por Google guardan aquí su ID (el "sub" del token), para reconocerlos
+    // en el siguiente login sin depender del usuario/contraseña.
+    db.run(`ALTER TABLE usuarios ADD COLUMN google_id TEXT`, (alterErr) => {
+      if (alterErr && !alterErr.message.includes('duplicate column')) {
+        console.error('[DB] Error migrando google_id en usuarios:', alterErr.message);
+      } else {
+        console.log('[DB] Columna google_id en usuarios: OK');
+      }
+    });
   }
 });
 
@@ -666,6 +676,24 @@ function obtenerAdminDeNegocio(negocio_id) {
       (err, row) => {
         if (err) reject(err);
         else resolve(row || null);
+      }
+    );
+  });
+}
+
+// Guarda el identificador de WhatsApp (número real o @lid) con el que el
+// negocio confirmó su cuenta al final del onboarding (ver
+// bot/confirmacionWhatsapp.js). Se guarda tal cual llega, sin normalizar,
+// porque es exactamente lo que el webhook va a recibir de ahí en adelante
+// para reconocer a ese negocio — normalizarlo podría romper la coincidencia.
+function asociarWhatsappNegocio(negocio_id, identificador) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `UPDATE usuarios SET whatsapp = ? WHERE negocio_id = ? AND rol = 'admin'`,
+      [identificador, negocio_id],
+      function (err) {
+        if (err) reject(err);
+        else resolve(this.changes);
       }
     );
   });
@@ -1332,6 +1360,7 @@ module.exports = {
   actualizarPagoPlataforma,
   marcarNegocioPagado,
   obtenerAdminDeNegocio,
+  asociarWhatsappNegocio,
   registrarTrialCreado,
   emailYaUsoTrial,
   whatsappYaUsoTrial,

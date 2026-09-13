@@ -8,6 +8,7 @@ import NotificacionesEnVivo from './components/NotificacionesEnVivo';
 import IndicadorActualizacion from './components/IndicadorActualizacion';
 import Button from './components/ui/Button';
 import ModalConfirmacion from './components/ModalConfirmacion';
+import ModalConfirmarWhatsapp from './components/ModalConfirmarWhatsapp';
 import EstadoVacio from './components/ui/EstadoVacio';
 import { FilaSkeleton, TarjetaSkeleton } from './components/ui/Skeleton';
 import SeccionBuscar from './secciones/SeccionBuscar';
@@ -31,6 +32,15 @@ const GraficaCargando = ({ alto = '100%' }) => (
 );
 import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
+
+// "contacto@vinsonburgers.com" -> "co•••••@vinsonburgers.com" — se ve que hay
+// una cuenta conectada sin exponer la direccion completa en pantalla.
+function enmascararEmail(email) {
+  if (!email || !email.includes('@')) return email;
+  const [usuario, dominio] = email.split('@');
+  const visible = usuario.slice(0, Math.min(2, usuario.length));
+  return `${visible}${'•'.repeat(Math.max(3, usuario.length - visible.length))}@${dominio}`;
+}
 
 const PLANES_INFO = {
   basico: { id: 'basico', nombre: 'Básico', precio: '$39.900' },
@@ -188,18 +198,29 @@ function Dashboard({ onLogout }) {
   const turnstileWidgetIdRef = useRef(null);
   const [transferenciaInfo, setTransferenciaInfo] = useState(null);
   const [cargandoTransferencia, setCargandoTransferencia] = useState(false);
+  const [confirmacionWpp, setConfirmacionWpp] = useState({ abierto: false, waLink: '', confirmado: false });
 
   // Detectar redirect de Gmail OAuth
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const gmailResult = params.get('gmail');
     if (gmailResult === 'conectado') {
-      toast.success('¡Gracias por conectar! Todo quedó correcto, ya puedes verificar pagos de tu banco.', { duration: 6000 });
-      confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
       // Limpiar URL
       const url = new URL(window.location.href);
       url.searchParams.delete('gmail');
       window.history.replaceState({}, '', url.toString());
+
+      // Gmail solo no basta: falta que el bot sepa reconocer el WhatsApp de
+      // este negocio de forma confiable (ver bot/confirmacionWhatsapp.js).
+      // Este es el último paso, obligatorio, antes de celebrar.
+      api.request('/api/whatsapp/preparar-confirmacion', { method: 'POST' })
+        .then((data) => {
+          if (data.ok) setConfirmacionWpp({ abierto: true, waLink: data.waLink, confirmado: false });
+        })
+        .catch(() => {
+          toast.success('¡Gracias por conectar! Todo quedó correcto, ya puedes verificar pagos de tu banco.', { duration: 6000 });
+          confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+        });
     } else if (gmailResult === 'error') {
       toast.error('Error conectando Gmail. Intenta de nuevo.');
       const url = new URL(window.location.href);
@@ -207,6 +228,23 @@ function Dashboard({ onLogout }) {
       window.history.replaceState({}, '', url.toString());
     }
   }, []);
+
+  // Mientras el modal de confirmación esté abierto y sin confirmar, pregunta
+  // cada 3s si ya llegó el mensaje de WhatsApp.
+  useEffect(() => {
+    if (!confirmacionWpp.abierto || confirmacionWpp.confirmado) return;
+    const intervalo = setInterval(async () => {
+      try {
+        const data = await api.request('/api/whatsapp/estado-confirmacion');
+        if (data.ok && data.confirmado) {
+          setConfirmacionWpp((prev) => ({ ...prev, confirmado: true }));
+          toast.success('¡Cuenta configurada! Ya tu bot puede recibir transferencias.', { duration: 6000 });
+          confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+        }
+      } catch (err) { /* reintenta en el próximo intervalo */ }
+    }, 3000);
+    return () => clearInterval(intervalo);
+  }, [confirmacionWpp.abierto, confirmacionWpp.confirmado]);
 
   // ─── Estado para Ventas (cierre de caja) ───────────────
   const [ventasResumen, setVentasResumen] = useState(null);
@@ -1341,16 +1379,18 @@ function Dashboard({ onLogout }) {
                       style={{
                         display: 'flex', alignItems: 'center', gap: '0.35rem',
                         padding: '0.35rem 0.75rem', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600,
-                        background: gmailEstado.conectado ? 'var(--tint-green-bg)' : 'var(--tint-orange-bg)',
-                        color: gmailEstado.conectado ? 'var(--tint-green-fg)' : 'var(--tint-orange-fg)',
-                        border: 'none', cursor: gmailCargando ? 'wait' : 'pointer',
+                        background: 'var(--dash-surface-2)', color: 'var(--dash-text-muted)',
+                        border: '1px solid var(--dash-border)', cursor: gmailCargando ? 'wait' : 'pointer',
                         transition: 'all 0.2s',
                       }}
                     >
                       {gmailCargando
                         ? <span className="fp-btn__spinner" style={{ width: 13, height: 13 }} aria-hidden="true" />
-                        : gmailEstado.conectado ? <Wifi size={13} /> : <WifiOff size={13} />}
-                      {gmailEstado.conectado ? `Gmail: ${gmailEstado.email}` : 'Conectar Gmail'}
+                        : <span style={{
+                            width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                            background: gmailEstado.conectado ? 'var(--tint-green-fg)' : 'var(--dash-text-faint)',
+                          }} />}
+                      {gmailEstado.conectado ? `Verificación: ${enmascararEmail(gmailEstado.email)}` : 'Activar verificación'}
                     </button>
                   )}
                   <IndicadorActualizacion ultima={ultimaActualizacion} hayError={errorActualizacion} />
@@ -1387,7 +1427,7 @@ function Dashboard({ onLogout }) {
                 // paso va último — además es el momento en que todo se prueba.
                 const pasos = [
                   {
-                    id: 'gmail', icon: Mail, titulo: 'Conecta tu Gmail',
+                    id: 'gmail', icon: Mail, titulo: 'Activa la verificación automática',
                     desc: 'Verifica los pagos automáticamente comparando con las notificaciones de tu banco.',
                     hecho: !!gmailEstado?.conectado, accion: conectarGmail,
                   },
@@ -1620,7 +1660,7 @@ function Dashboard({ onLogout }) {
                   </div>
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--dash-text)' }}>
-                      Conecta tu Gmail para verificar pagos
+                      Activa la verificación automática de pagos
                     </div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--dash-text-muted)', marginTop: 2 }}>
                       FlashPago necesita leer las notificaciones de tu banco para verificar comprobantes automáticamente.
@@ -1631,7 +1671,7 @@ function Dashboard({ onLogout }) {
                     loading={gmailCargando}
                     icon={<Mail size={15} />}
                   >
-                    {gmailCargando ? 'Conectando...' : 'Conectar Gmail'}
+                    {gmailCargando ? 'Conectando...' : 'Activar verificación'}
                   </Button>
                 </div>
               )}
@@ -2860,30 +2900,23 @@ function Dashboard({ onLogout }) {
               </p>
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14,
-                padding: '1.1rem 1.3rem', borderRadius: 14,
-                background: gmailEstado?.conectado ? 'var(--tint-green-bg)' : 'var(--dash-surface-2)',
-                border: `1px solid ${gmailEstado?.conectado ? 'var(--tint-green-fg)' : 'var(--dash-border)'}`,
+                padding: '0.9rem 1.1rem', borderRadius: 12,
+                background: 'var(--dash-surface-2)', border: '1px solid var(--dash-border)',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: gmailEstado?.conectado ? 'linear-gradient(135deg, #34a853, #0f9d58)' : 'var(--dash-border)',
-                    boxShadow: gmailEstado?.conectado ? '0 4px 14px -3px rgba(52,168,83,.5)' : 'none',
-                  }}>
-                    <Mail size={20} color={gmailEstado?.conectado ? '#fff' : 'var(--dash-text-faint)'} />
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                  <Mail size={17} color="var(--dash-text-faint)" style={{ flexShrink: 0 }} />
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                      {gmailEstado?.conectado && (
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--tint-green-fg)', flexShrink: 0 }} />
-                      )}
-                      <span style={{ fontWeight: 700, fontSize: '0.92rem', color: gmailEstado?.conectado ? 'var(--tint-green-fg)' : 'var(--dash-text)' }}>
-                        {gmailEstado?.conectado ? 'Gmail conectado' : 'Gmail no conectado'}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{
+                        width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                        background: gmailEstado?.conectado ? 'var(--tint-green-fg)' : 'var(--dash-text-faint)',
+                      }} />
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--dash-text)' }}>
+                        {gmailEstado?.conectado ? 'Verificación activa' : 'Verificación inactiva'}
                       </span>
                     </div>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--dash-text-muted)' }}>
-                      {gmailEstado?.conectado ? gmailEstado.email : 'Necesaria para verificar pagos automáticamente'}
+                    <div style={{ fontSize: '0.78rem', color: 'var(--dash-text-faint)' }}>
+                      {gmailEstado?.conectado ? enmascararEmail(gmailEstado.email) : 'Necesaria para verificar pagos automáticamente'}
                     </div>
                   </div>
                 </div>
@@ -2892,7 +2925,7 @@ function Dashboard({ onLogout }) {
                   onClick={gmailEstado?.conectado ? desconectarGmail : conectarGmail}
                   disabled={gmailCargando}
                 >
-                  {gmailCargando ? 'Conectando...' : gmailEstado?.conectado ? <><X size={15} /> Desconectar</> : <><Mail size={15} /> Conectar Gmail</>}
+                  {gmailCargando ? 'Conectando...' : gmailEstado?.conectado ? <><X size={15} /> Desconectar</> : <><Mail size={15} /> Activar verificación</>}
                 </button>
               </div>
 
@@ -3678,6 +3711,13 @@ function Dashboard({ onLogout }) {
         cargando={confirmando}
         onConfirmar={ejecutarConfirmacion}
         onCancelar={() => !confirmando && setConfirmacion(null)}
+      />
+
+      <ModalConfirmarWhatsapp
+        abierto={confirmacionWpp.abierto}
+        waLink={confirmacionWpp.waLink}
+        confirmado={confirmacionWpp.confirmado}
+        onCerrar={() => setConfirmacionWpp({ abierto: false, waLink: '', confirmado: false })}
       />
     </div>
   );

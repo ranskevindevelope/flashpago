@@ -99,6 +99,25 @@ async function enviarImagenOpenwa(to, rutaFoto, caption) {
   }
 }
 
+// Resuelve un @lid (id de privacidad que WhatsApp usa en vez del numero real)
+// al numero real, best-effort, usando el endpoint de contactos de OpenWA.
+// Devuelve null si WhatsApp todavia no le reveló el numero a esta cuenta (por
+// ejemplo, un @lid que nunca escribió antes).
+async function resolverLid(lid) {
+  try {
+    const res = await fetch(
+      `${OPENWA_URL}/api/sessions/${OPENWA_SESSION}/contacts/${encodeURIComponent(lid)}/phone`,
+      { headers: { 'X-API-Key': OPENWA_KEY } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => ({}));
+    return data.phone || null;
+  } catch (err) {
+    console.error('[Bot] Error resolviendo LID:', err.message);
+    return null;
+  }
+}
+
 // ─── Proveedor: API oficial de Meta (respaldo) ────────────
 // Usa el fetch global de Node (18+), no node-fetch, porque necesita
 // FormData/Blob nativos para subir imágenes sin agregar dependencias.
@@ -251,4 +270,4 @@ async function enviarPlantilla(to, clave, variables = [], opciones = {}) {
   }
 }
 
-module.exports = { enviarMensaje, enviarImagen, enviarPlantilla, descargarMediaMeta };
+module.exports = { enviarMensaje, enviarImagen, enviarPlantilla, descargarMediaMeta, resolverLid };

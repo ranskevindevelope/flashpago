@@ -9,9 +9,10 @@ const { verificarPorGmail } = require('../gmail');
 const { verificarPago } = require('../verificador');
 const {
   db, guardarPago, buscarDuplicadoReciente, contarComprobantesDelMes, obtenerNegocio, verificarTrialActivo,
-  marcarNegocioPagado, actualizarPagoPlataforma, obtenerAdminDeNegocio, planBase,
+  marcarNegocioPagado, actualizarPagoPlataforma, obtenerAdminDeNegocio, planBase, asociarWhatsappNegocio,
 } = require('../db');
-const { enviarMensaje, descargarMediaMeta } = require('../bot/openwa');
+const { enviarMensaje, descargarMediaMeta, resolverLid } = require('../bot/openwa');
+const { buscarPorCodigo, marcarConfirmado } = require('../bot/confirmacionWhatsapp');
 const eventos = require('../eventos');
 const salud = require('../salud');
 const { formatearResultado, guardarFoto } = require('../bot/utils');
@@ -97,13 +98,31 @@ const MENSAJES = {
   limitePlan: `⚠️ Este negocio alcanzó el límite de comprobantes del mes. Contacta al administrador para mejorar el plan.`,
 };
 
-// Mapeo de LID (OpenWA) a números reales
+// Mapeo de LID (OpenWA) a números reales — se mantiene como atajo para los
+// que ya se agregaron a mano, pero para clientes nuevos la resolución es
+// automática (ver resolverLidConCache más abajo): no hace falta seguir
+// agregando entradas aquí.
 const lidMap = {
   '234668473466924@lid': '573045530381@c.us',
   '61856135819279@lid': '573013411244@c.us',
   '165369796944036@lid': '573167064671@c.us',
   '241759531581483@c.us': '573044372639@c.us',
 };
+
+// Cache de LID -> número real resuelto contra OpenWA (en memoria, no
+// caduca: una vez resuelto un LID no cambia). Evita pegarle a la API de
+// OpenWA en cada comprobante del mismo cliente.
+const lidResueltoCache = {};
+
+async function resolverLidConCache(lid) {
+  if (lidResueltoCache[lid]) return lidResueltoCache[lid];
+  const telefono = await resolverLid(lid);
+  if (!telefono) return lid; // WhatsApp aún no lo reveló: se queda como @lid
+  const numero = `${telefono.replace(/\D/g, '')}@c.us`;
+  lidResueltoCache[lid] = numero;
+  console.log(`[Webhook] LID resuelto: ${lid} -> ${numero}`);
+  return numero;
+}
 
 // ─── Cache de empleados → negocio (se refresca cada 5 min) ──
 let empleadoCache = {};
@@ -237,6 +256,9 @@ router.post('/', async (req, res) => {
 
     const rawId = data.chatId || data.from || '';
     from = lidMap[rawId] || rawId;
+    if (from.endsWith('@lid')) {
+      from = await resolverLidConCache(from);
+    }
 
     body = (data.body || data.text || data.content || data.message?.conversation || '').trim().toLowerCase();
     mediaUrl = data.mediaUrl || data.media?.url || data.message?.imageMessage?.url || '';
@@ -250,6 +272,30 @@ router.post('/', async (req, res) => {
   console.log('[Webhook] from:', from, '| body:', body, '| isMedia:', isMedia);
 
   if (!from) return;
+
+  // ─── Confirmación de WhatsApp (paso final del onboarding) ─────
+  // Puede llegar de un remitente que el bot todavía no reconoce — a
+  // propósito: es justo lo que sirve para asociar por primera vez el
+  // identificador real (número o @lid) de ese negocio. Por eso se revisa
+  // antes del chequeo de autorización, no después.
+  const matchConfirmacion = body.match(/^confirmar\s+([a-f0-9]{6})$/);
+  if (matchConfirmacion) {
+    const negocioAConfirmar = buscarPorCodigo(matchConfirmacion[1]);
+    if (negocioAConfirmar) {
+      try {
+        await asociarWhatsappNegocio(negocioAConfirmar, from);
+        marcarConfirmado(negocioAConfirmar, from);
+        await cargarEmpleados(); // para que el próximo mensaje ya lo reconozca sin esperar el TTL de 5 min
+        await enviarMensaje(from, '✅ ¡Listo! Terminaste de configurar tu cuenta. Ya tu bot puede recibir tus transferencias.');
+      } catch (err) {
+        console.error('[Webhook] Error confirmando WhatsApp:', err.message);
+        await enviarMensaje(from, '⚠️ Hubo un error confirmando tu número. Intenta de nuevo desde el dashboard.');
+      }
+    } else {
+      await enviarMensaje(from, '⚠️ Ese código no es válido o ya expiró. Genera uno nuevo desde el dashboard.');
+    }
+    return;
+  }
 
   // ─── Buscar empleado y su negocio ─────────────────────
   const empleado = await getEmpleadoInfo(from);

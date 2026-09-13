@@ -42,6 +42,11 @@ function App() {
         ? (localStorage.getItem('fp_token') ? 'dashboard' : 'login')
         : 'landing'
   );
+  // Cuando alguien inicia con Google desde Login pero el correo es nuevo, el
+  // backend manda un token de registro pendiente en vez de rechazarlo. Se
+  // guarda acá para pasárselo a Registro y que arranque ya con el correo
+  // confirmado (ver POST /api/auth/google).
+  const [datosGoogle, setDatosGoogle] = useState(null);
 
   const handleLogout = () => {
     localStorage.removeItem('fp_token');
@@ -66,9 +71,9 @@ function App() {
   } else if (vista === 'privacidad') {
     pantalla = <Privacidad onVolver={() => setVista('landing')} />;
   } else if (vista === 'registro') {
-    pantalla = <Registro onBack={() => setVista('login')} />;
+    pantalla = <Registro onBack={() => { setDatosGoogle(null); setVista('login'); }} datosGoogle={datosGoogle} />;
   } else if (vista === 'login') {
-    pantalla = <Login onLogin={() => setVista('dashboard')} onRegistro={() => setVista('registro')} onRecuperar={() => setVista('recuperar')} />;
+    pantalla = <Login onLogin={() => setVista('dashboard')} onRegistro={(datos) => { setDatosGoogle(datos || null); setVista('registro'); }} onRecuperar={() => setVista('recuperar')} />;
   } else if (vista === 'recuperar') {
     pantalla = <RecuperarPassword onVolver={() => setVista('login')} />;
   } else {

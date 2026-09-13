@@ -2,14 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, ArrowRight, ArrowLeft, Check, Mail, Users, ShoppingBag, Shield, Zap, Sparkles, Gift, Package, Rocket } from 'lucide-react';
 
 import { PASSWORD_VALIDA, PASSWORD_ERROR } from './utils/password';
+import BotonGoogle from './components/BotonGoogle';
 import './components/ui/ui.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-function Registro({ onBack }) {
+function Registro({ onBack, datosGoogle }) {
   const [paso, setPaso] = useState(1);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+
+  // Si viene de "Continuar con Google" en el login (correo nuevo), o si se
+  // usa el botón de Google aquí mismo en el paso 1 — en los dos casos el
+  // correo ya quedó verificado por Google, así que el paso 3 (usuario y
+  // contraseña) y el 4 (código de correo) se saltan por completo.
+  const [googlePendiente, setGooglePendiente] = useState(datosGoogle || null);
+
+  const manejarResultadoGoogle = (data) => {
+    setError('');
+    if (data.ok && data.accion === 'login') {
+      // Ya tenía cuenta — se loguea directo, sin pasar por el formulario.
+      const params = new URLSearchParams({ token: data.token, user: JSON.stringify(data.user) });
+      window.location.href = `https://app.flashpago.co/?${params.toString()}`;
+    } else if (data.ok && data.accion === 'registro_pendiente') {
+      setGooglePendiente({ googleToken: data.googleToken, email: data.email, nombre: data.nombre });
+      setNombre(data.nombre || '');
+      setEmail(data.email || '');
+    } else {
+      setError(data.error || 'No se pudo continuar con Google');
+    }
+  };
 
   // Paso 1: Plan
   const [plan, setPlan] = useState('premium');
@@ -40,9 +62,9 @@ function Registro({ onBack }) {
   const [wppEnviando, setWppEnviando] = useState(false);
   const [wppMensaje, setWppMensaje] = useState('');
 
-  // Paso 3: Cuenta
-  const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
+  // Paso 3: Cuenta (con Google, nombre/email ya vienen confirmados)
+  const [nombre, setNombre] = useState(datosGoogle?.nombre || '');
+  const [email, setEmail] = useState(datosGoogle?.email || '');
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
@@ -273,7 +295,9 @@ function Registro({ onBack }) {
     if (paso === 1) return !!plan;
     if (paso === 2) {
       const wpp = whatsappNegocio.replace(/\D/g, '');
-      return nombreNegocio.trim().length >= 2 && (wpp.length === 10 || wpp.length === 12) && wppVerificado;
+      const datosOk = nombreNegocio.trim().length >= 2 && (wpp.length === 10 || wpp.length === 12) && wppVerificado;
+      // Con Google no hay paso 3 donde aceptar términos — se pide aquí mismo.
+      return googlePendiente ? datosOk && aceptaTerminos : datosOk;
     }
     if (paso === 3) return nombre.trim() && email.includes('@') && usuario.trim() && PASSWORD_VALIDA.test(password) && aceptaTerminos;
     return true;
@@ -281,11 +305,44 @@ function Registro({ onBack }) {
 
   const avanzar = () => {
     setError('');
+    if (paso === 2 && googlePendiente) {
+      completarRegistroGoogle();
+      return;
+    }
     if (paso === 3) {
       enviarCodigo();
       return;
     }
     setPaso(paso + 1);
+  };
+
+  // ─── Completar registro con Google (sin paso 3 ni 4) ──
+  const completarRegistroGoogle = async () => {
+    setCargando(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/registro/completar-google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          googleToken: googlePendiente.googleToken,
+          nombre_negocio: nombreNegocio.trim(),
+          plan,
+          ciudad: ciudad.trim(),
+          whatsapp_negocio: whatsappNegocio.trim(),
+          banco: bancoNegocio,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setRegistroExitoso(data);
+        setPaso(5);
+      } else {
+        setError(data.error || 'Error creando la cuenta');
+      }
+    } catch (err) {
+      setError('Error de conexión. Intenta de nuevo.');
+    }
+    setCargando(false);
   };
 
   // ─── Estilos ──────────────────────────────────────────
@@ -459,19 +516,38 @@ function Registro({ onBack }) {
             </div>
 
             {/* Ahorro de lanzamiento — informativo: la decisión mensual/anual
-                se toma despues, en el dashboard, cuando termine el trial. */}
+                real se toma despues, en el dashboard, cuando termine el
+                trial. Si eligió mensual, se le dice cuánto le tocaría pagar
+                (no solo el upsell de anual, que antes era lo único que veía
+                aquí); si ya eligió anual, se le confirma el ahorro en vez de
+                ofrecérselo como si todavía no lo tuviera. */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               opacity: plan ? 1 : 0.3, transition: 'all 0.4s ease',
             }}>
               <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Al terminar la prueba</span>
-              <span style={{
-                fontSize: 11, fontWeight: 700, color: '#F57C00', background: 'rgba(245,124,0,0.15)',
-                padding: '3px 9px', borderRadius: 50, display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}>
-                <Rocket size={10} />
-                -{planActual ? Math.round((1 - planActual.precioAnual / (planActual.precioMensual * 12)) * 100) : 0}% si pagas anual
-              </span>
+              {facturacionAnual ? (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, color: '#F57C00', background: 'rgba(245,124,0,0.15)',
+                  padding: '3px 9px', borderRadius: 50, display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}>
+                  <Rocket size={10} />
+                  Ya tienes -{planActual ? Math.round((1 - planActual.precioAnual / (planActual.precioMensual * 12)) * 100) : 0}%
+                </span>
+              ) : (
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
+                    ${planActual ? planActual.precioMensual.toLocaleString('es-CO') : 0}/mes
+                  </span>
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 700, color: '#F57C00', background: 'rgba(245,124,0,0.15)',
+                    padding: '2px 7px', borderRadius: 50, display: 'inline-flex', alignItems: 'center', gap: 3,
+                  }}>
+                    <Rocket size={9} />
+                    -{planActual ? Math.round((1 - planActual.precioAnual / (planActual.precioMensual * 12)) * 100) : 0}% si te pasas a anual
+                  </span>
+                </span>
+              )}
             </div>
 
             {/* Ciudad - aparece cuando la llena */}
@@ -741,6 +817,18 @@ function Registro({ onBack }) {
             <div style={{ fontSize: 11, color: '#999', textAlign: 'center', marginTop: 8 }}>
               Sin tarjeta de crédito. Cancela cuando quieras.
             </div>
+
+            {!googlePendiente && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0' }}>
+                  <div style={{ flex: 1, height: 1, background: '#e8e8f0' }} />
+                  <span style={{ fontSize: 11, color: '#999' }}>o continúa con</span>
+                  <div style={{ flex: 1, height: 1, background: '#e8e8f0' }} />
+                </div>
+                <BotonGoogle onResultado={manejarResultadoGoogle} />
+              </>
+            )}
+
             <div style={{ fontSize: 13, color: '#999', textAlign: 'center', marginTop: 10 }}>
               ¿Ya tienes cuenta? <button style={s.link} onClick={onBack}>Inicia sesión</button>
             </div>
@@ -861,12 +949,48 @@ function Registro({ onBack }) {
                 <Sparkles size={13} style={{ flexShrink: 0 }} /> Bancolombia es el banco más usado por nuestros clientes
               </span>
             </div>
+
+            {googlePendiente && (
+              <>
+                <div style={{
+                  background: '#E3F2FD', borderRadius: 10, padding: '10px 14px', marginTop: 14,
+                  display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#1565C0',
+                }}>
+                  <Check size={15} style={{ flexShrink: 0 }} /> Correo confirmado con Google: <strong>{googlePendiente.email}</strong>
+                </div>
+                <label style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 14,
+                  fontSize: 12, color: '#666', lineHeight: 1.5, cursor: 'pointer',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={aceptaTerminos}
+                    onChange={e => setAceptaTerminos(e.target.checked)}
+                    style={{ marginTop: 2, flexShrink: 0, width: 15, height: 15, accentColor: '#F57C00', cursor: 'pointer' }}
+                  />
+                  <span>
+                    He leído y acepto los{' '}
+                    <a href="/?vista=terminos" target="_blank" rel="noopener noreferrer" style={{ color: '#F57C00', fontWeight: 600, textDecoration: 'none' }}>
+                      Términos y Condiciones
+                    </a>{' '}
+                    y la{' '}
+                    <a href="/?vista=privacidad" target="_blank" rel="noopener noreferrer" style={{ color: '#F57C00', fontWeight: 600, textDecoration: 'none' }}>
+                      Política de Privacidad
+                    </a>{' '}
+                    de FlashPago.
+                  </span>
+                </label>
+              </>
+            )}
+
             <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
               <button style={s.btnBack} onClick={() => setPaso(1)}>
                 <ArrowLeft size={14} /> Atrás
               </button>
-              <button style={{ ...s.btn(puedeAvanzar()), flex: 1 }} onClick={avanzar} disabled={!puedeAvanzar()}>
-                Continuar <ArrowRight size={16} />
+              <button style={{ ...s.btn(puedeAvanzar() && !cargando), flex: 1 }} onClick={avanzar} disabled={!puedeAvanzar() || cargando}>
+                {googlePendiente
+                  ? (cargando ? 'Creando cuenta...' : <>Crear cuenta <ArrowRight size={16} /></>)
+                  : <>Continuar <ArrowRight size={16} /></>}
               </button>
             </div>
           </>
@@ -1016,7 +1140,7 @@ function Registro({ onBack }) {
                   <Mail size={16} color="#1565C0" />
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1A2E' }}>Conecta tu Gmail</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1A2E' }}>Activa la verificación automática</div>
                   <div style={{ fontSize: 11, color: '#999' }}>Para verificar pagos automáticamente</div>
                 </div>
               </div>

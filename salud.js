@@ -46,13 +46,26 @@ function enumerar(items) {
   return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;
 }
 
-// Resumen para el dashboard. Si `negocio_id` viene, solo cuenta lo de ese
-// negocio más las fallas generales (las que no traen negocio asignado).
-function resumen(negocio_id) {
+// Solo estos dos tipos son "de toda la plataforma": sin sesión de WhatsApp o
+// sin poder contactar al servidor de OpenWA, nadie puede enviar ni recibir
+// nada. "envio" en cambio es puntual a un mensaje/destinatario — no significa
+// que le esté fallando a negocios que no tienen nada que ver.
+const TIPOS_PLATAFORMA = ['sesion', 'conexion'];
+
+// Resumen para el dashboard. Si `negocio_id` viene, cuenta lo de ese negocio
+// más —opcionalmente— las fallas de plataforma sin negocio asignado.
+// `incluirPlataforma` se pasa en false para negocios que todavía no están
+// verificando pagos de verdad (sin Gmail conectado): no tiene sentido
+// alarmarlos por una falla de sesión que no les afecta todavía en la práctica.
+function resumen(negocio_id, { incluirPlataforma = true } = {}) {
   const desde = Date.now() - VENTANA_MS;
-  const recientes = incidentes.filter(
-    (i) => i.en >= desde && (!negocio_id || !i.negocio_id || i.negocio_id === negocio_id)
-  );
+  const recientes = incidentes.filter((i) => {
+    if (i.en < desde) return false;
+    if (!negocio_id) return true; // vista global (admin de plataforma)
+    if (i.negocio_id === negocio_id) return true;
+    if (!i.negocio_id && incluirPlataforma && TIPOS_PLATAFORMA.includes(i.tipo)) return true;
+    return false;
+  });
 
   if (recientes.length === 0) return { hayFallas: false, cantidad: 0 };
 
