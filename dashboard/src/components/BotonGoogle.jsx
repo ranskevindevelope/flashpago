@@ -60,12 +60,16 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
     // En móvil, abrir/cerrar el teclado dispara "resize" (cambia el alto de
     // la ventana, no el ancho) — sin este chequeo, el botón se borraba y
     // volvía a dibujar cada vez que tocabas cualquier campo del formulario,
-    // aunque el ancho real no hubiera cambiado.
+    // aunque el ancho real no hubiera cambiado. El margen de 20px además
+    // ignora el "resize" real pero chico que dispara la barra de scroll al
+    // aparecer/desaparecer (~15-17px) — por ejemplo justo cuando el botón
+    // recién insertado hace crecer el alto de la página.
+    const TOLERANCIA_PX = 20;
     let ultimoAncho = null;
     const renderizar = () => {
       if (cancelado || !contenedorRef.current || !window.google?.accounts?.id) return;
       const nuevoAncho = anchoEfectivo();
-      if (nuevoAncho === ultimoAncho) return;
+      if (ultimoAncho !== null && Math.abs(nuevoAncho - ultimoAncho) < TOLERANCIA_PX) return;
       ultimoAncho = nuevoAncho;
       contenedorRef.current.innerHTML = '';
       window.google.accounts.id.renderButton(contenedorRef.current, {
@@ -90,8 +94,16 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
     }
 
     // Reajusta el ancho si cambia el tamaño de pantalla (ej: rotar el celular).
-    window.addEventListener('resize', renderizar);
-    return () => { cancelado = true; window.removeEventListener('resize', renderizar); };
+    // Con ResizeObserver en vez de "resize" de window: solo avisa cuando el
+    // propio contenedor cambia de tamaño (no cualquier resize de la ventana,
+    // como el que dispara el teclado del celular al abrirse), y el navegador
+    // agrupa varios cambios seguidos en un solo aviso en vez de dispararlos
+    // sueltos — eso evitaba que, justo al abrir la página, el botón se
+    // redibujara 2-3 veces mientras el layout terminaba de acomodarse
+    // (aparece la barra de scroll, cargan las fuentes, etc.).
+    const observer = new ResizeObserver(() => renderizar());
+    if (contenedorRef.current) observer.observe(contenedorRef.current);
+    return () => { cancelado = true; observer.disconnect(); };
   }, [clientId, ancho]);
 
   // Sin Client ID configurado (todavía no se activó en el backend): no se
