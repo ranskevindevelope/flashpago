@@ -59,4 +59,49 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000).unref();
 
-module.exports = { prepararConfirmacion, estadoConfirmacion, buscarPorCodigo, marcarConfirmado };
+// ─── Mismo mecanismo, pero para confirmar el WhatsApp de un empleado
+// individual (no el admin del negocio) al agregarlo desde "Usuarios".
+// Map aparte (clave = usuario_id) para no chocar con los códigos de negocio,
+// ya que ambos IDs son enteros independientes y podrían coincidir.
+const pendientesUsuario = new Map();
+
+function prepararConfirmacionUsuario(usuario_id) {
+  const codigo = crypto.randomBytes(3).toString('hex');
+  pendientesUsuario.set(usuario_id, { codigo, expira: Date.now() + EXPIRACION_MS, confirmado: false, identificador: null });
+  return codigo;
+}
+
+function estadoConfirmacionUsuario(usuario_id) {
+  const p = pendientesUsuario.get(usuario_id);
+  return { confirmado: !!p?.confirmado };
+}
+
+function buscarPorCodigoUsuario(codigo) {
+  const codigoNorm = (codigo || '').trim().toLowerCase();
+  const ahora = Date.now();
+  for (const [usuario_id, datos] of pendientesUsuario) {
+    if (datos.codigo === codigoNorm && !datos.confirmado && ahora <= datos.expira) {
+      return usuario_id;
+    }
+  }
+  return null;
+}
+
+function marcarConfirmadoUsuario(usuario_id, identificador) {
+  const p = pendientesUsuario.get(usuario_id);
+  if (!p) return;
+  p.confirmado = true;
+  p.identificador = identificador;
+}
+
+setInterval(() => {
+  const ahora = Date.now();
+  for (const [usuario_id, datos] of pendientesUsuario) {
+    if (ahora > datos.expira) pendientesUsuario.delete(usuario_id);
+  }
+}, 5 * 60 * 1000).unref();
+
+module.exports = {
+  prepararConfirmacion, estadoConfirmacion, buscarPorCodigo, marcarConfirmado,
+  prepararConfirmacionUsuario, estadoConfirmacionUsuario, buscarPorCodigoUsuario, marcarConfirmadoUsuario,
+};

@@ -548,6 +548,13 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
   .registro-left { flex: 0 0 auto !important; padding: 1.5rem !important; }
   .registro-right { padding: 1.5rem !important; max-width: 100% !important; }
   .registro-planes-grid { grid-template-columns: 1fr !important; }
+  /* En una sola columna ya no hay una card "Premium" contra la cual
+     centrar el interruptor Mensual/Anual — forzarlo a la columna del
+     medio de una grilla de 3 (pensada para el layout de escritorio)
+     lo dejaba comprimido en ~1/3 del ancho real, cortando la palabra
+     "Anual". Aquí se vuelve una fila normal centrada a todo el ancho. */
+  .registro-toggle-grid { grid-template-columns: 1fr !important; }
+  .registro-toggle-grid > div { grid-column: 1 !important; }
 }
 
 @media (max-width: 480px) {
@@ -558,7 +565,12 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
   .dashboard-live { font-size: 0.7rem; }
   .tarjeta { padding: 0.9rem; gap: 0.65rem; }
   .tarjeta-icon-box { width: 36px; height: 36px; }
-  .tarjeta-valor { font-size: 1.05rem; }
+  /* 1.05rem alcanzaba a partir de 8 digitos ("$3.000.000"): con el
+     overflow-wrap: break-word de .tarjeta-valor, el numero se cortaba a
+     la mitad de una cifra ("$3.000.0" / "00") en vez de verse completo
+     en una linea. Mas chico cabe entero para los montos normales de un
+     negocio. */
+  .tarjeta-valor { font-size: 0.95rem; white-space: nowrap; }
   .tarjeta-label { font-size: 0.7rem; }
   .tarjeta-sub { font-size: 0.68rem; }
 }

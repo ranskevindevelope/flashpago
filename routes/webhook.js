@@ -10,9 +10,12 @@ const { verificarPago } = require('../verificador');
 const {
   db, guardarPago, buscarDuplicadoReciente, contarComprobantesDelMes, obtenerNegocio, verificarTrialActivo,
   marcarNegocioPagado, actualizarPagoPlataforma, obtenerAdminDeNegocio, planBase, asociarWhatsappNegocio,
+  asociarWhatsappUsuario,
 } = require('../db');
 const { enviarMensaje, descargarMediaMeta, resolverLid } = require('../bot/openwa');
-const { buscarPorCodigo, marcarConfirmado } = require('../bot/confirmacionWhatsapp');
+const {
+  buscarPorCodigo, marcarConfirmado, buscarPorCodigoUsuario, marcarConfirmadoUsuario,
+} = require('../bot/confirmacionWhatsapp');
 const eventos = require('../eventos');
 const salud = require('../salud');
 const { formatearResultado, guardarFoto } = require('../bot/utils');
@@ -273,18 +276,26 @@ router.post('/', async (req, res) => {
 
   if (!from) return;
 
-  // ─── Confirmación de WhatsApp (paso final del onboarding) ─────
+  // ─── Confirmación de WhatsApp (paso final del onboarding, o al agregar
+  // un empleado nuevo desde "Usuarios") ─────
   // Puede llegar de un remitente que el bot todavía no reconoce — a
   // propósito: es justo lo que sirve para asociar por primera vez el
-  // identificador real (número o @lid) de ese negocio. Por eso se revisa
-  // antes del chequeo de autorización, no después.
+  // identificador real (número o @lid) de ese negocio/empleado. Por eso se
+  // revisa antes del chequeo de autorización, no después.
   const matchConfirmacion = body.match(/^confirmar\s+([a-f0-9]{6})$/);
   if (matchConfirmacion) {
-    const negocioAConfirmar = buscarPorCodigo(matchConfirmacion[1]);
-    if (negocioAConfirmar) {
+    const codigo = matchConfirmacion[1];
+    const negocioAConfirmar = buscarPorCodigo(codigo);
+    const usuarioAConfirmar = negocioAConfirmar ? null : buscarPorCodigoUsuario(codigo);
+    if (negocioAConfirmar || usuarioAConfirmar) {
       try {
-        await asociarWhatsappNegocio(negocioAConfirmar, from);
-        marcarConfirmado(negocioAConfirmar, from);
+        if (negocioAConfirmar) {
+          await asociarWhatsappNegocio(negocioAConfirmar, from);
+          marcarConfirmado(negocioAConfirmar, from);
+        } else {
+          await asociarWhatsappUsuario(usuarioAConfirmar, from);
+          marcarConfirmadoUsuario(usuarioAConfirmar, from);
+        }
         await cargarEmpleados(); // para que el próximo mensaje ya lo reconozca sin esperar el TTL de 5 min
         await enviarMensaje(from, '✅ ¡Listo! Terminaste de configurar tu cuenta. Ya tu bot puede recibir tus transferencias.');
       } catch (err) {

@@ -286,10 +286,11 @@ router.post('/registro/enviar-codigo', limitarLogin, async (req, res) => {
     // Verificar contra el historial permanente de pruebas gratis (registros_trial):
     // a diferencia de "usuarios", esta tabla nunca se edita ni se borra, así que
     // cambiar el email/WhatsApp desde "Usuarios" después de registrarse no libera
-    // ese dato para abrir una prueba gratis nueva.
-    if (await emailYaUsoTrial(email)) {
-      return res.status(409).json({ ok: false, error: 'Ese email ya usó su prueba gratis antes.' });
-    }
+    // ese dato para abrir una prueba gratis nueva. Ya no bloquea el registro por
+    // completo: deja crear la cuenta igual, pero sin trial (ver crearNegocio),
+    // para que quien ya gastó su prueba pueda entrar directo a pagar en vez de
+    // quedar sin poder ni crear la cuenta.
+    let sinTrial = await emailYaUsoTrial(email);
 
     // El número debe haber pasado el OTP de WhatsApp (registro/verificar-whatsapp +
     // registro/confirmar-whatsapp) hace menos de 30 minutos. Sin esto, cualquiera
@@ -320,7 +321,7 @@ router.post('/registro/enviar-codigo', limitarLogin, async (req, res) => {
       return res.status(409).json({ ok: false, error: 'Ese número de WhatsApp ya tiene una cuenta registrada.' });
     }
     if (await whatsappYaUsoTrial(ultimosDiez)) {
-      return res.status(409).json({ ok: false, error: 'Ese número de WhatsApp ya usó su prueba gratis antes.' });
+      sinTrial = true;
     }
 
     whatsappVerificados.delete(numeroReg); // un solo uso
@@ -328,7 +329,7 @@ router.post('/registro/enviar-codigo', limitarLogin, async (req, res) => {
     // Generar y guardar código
     const codigo = generarCodigo();
     await guardarCodigoVerificacion(email, codigo, {
-      email, nombre_negocio, plan, ciudad, whatsapp_negocio: whatsappFormateado, banco, nombre, usuario, password,
+      email, nombre_negocio, plan, ciudad, whatsapp_negocio: whatsappFormateado, banco, nombre, usuario, password, sinTrial,
     });
 
     // Enviar correo
@@ -365,6 +366,7 @@ router.post('/registro/verificar', limitarLogin, async (req, res) => {
       limite_comprobantes: LIMITE_TRIAL,
       ciudad: datos.ciudad,
       banco: datos.banco,
+      sinTrial: !!datos.sinTrial,
     });
 
     // Crear usuario admin
@@ -385,19 +387,23 @@ router.post('/registro/verificar', limitarLogin, async (req, res) => {
 
     // Dejar constancia permanente de que este email/WhatsApp ya usaron su
     // prueba gratis (a diferencia de "usuarios", esto no se borra ni se edita).
-    try {
-      await registrarTrialCreado({
-        negocio_id: negocio.id,
-        email: datos.email,
-        whatsappDigitos: (datos.whatsapp_negocio || '').replace(/\D/g, ''),
-      });
-    } catch (e) {
-      console.error('[Registro] Error guardando registro_trial:', e.message);
+    // Si ya venía sin trial (sinTrial), no hay prueba nueva que registrar —
+    // ya existe el registro original que disparó el bloqueo.
+    if (!datos.sinTrial) {
+      try {
+        await registrarTrialCreado({
+          negocio_id: negocio.id,
+          email: datos.email,
+          whatsappDigitos: (datos.whatsapp_negocio || '').replace(/\D/g, ''),
+        });
+      } catch (e) {
+        console.error('[Registro] Error guardando registro_trial:', e.message);
+      }
     }
 
-    // Enviar email de bienvenida
+    // Enviar email de bienvenida (sin bloque de trial si no le tocó prueba)
     try {
-      await enviarBienvenida(datos.email, datos.nombre, datos.usuario, negocio.plan, negocio.trial_fin);
+      await enviarBienvenida(datos.email, datos.nombre, datos.usuario, negocio.plan, datos.sinTrial ? null : negocio.trial_fin);
     } catch (e) {
       console.error('[Registro] Error enviando bienvenida:', e.message);
     }
@@ -457,9 +463,8 @@ router.post('/registro/completar-google', limitarLogin, async (req, res) => {
     if (existeCuenta) {
       return res.status(409).json({ ok: false, error: 'Ese correo ya está registrado. Inicia sesión en vez de crear cuenta.' });
     }
-    if (await emailYaUsoTrial(email)) {
-      return res.status(409).json({ ok: false, error: 'Ese email ya usó su prueba gratis antes.' });
-    }
+    // Igual que en el registro normal: ya no bloquea, solo marca sinTrial.
+    let sinTrial = await emailYaUsoTrial(email);
 
     // Mismo chequeo de WhatsApp verificado que el registro normal.
     const wppLimpioReg = whatsapp_negocio.replace(/\D/g, '');
@@ -478,14 +483,14 @@ router.post('/registro/completar-google', limitarLogin, async (req, res) => {
       return res.status(409).json({ ok: false, error: 'Ese número de WhatsApp ya tiene una cuenta registrada.' });
     }
     if (await whatsappYaUsoTrial(ultimosDiez)) {
-      return res.status(409).json({ ok: false, error: 'Ese número de WhatsApp ya usó su prueba gratis antes.' });
+      sinTrial = true;
     }
 
     whatsappVerificados.delete(numeroReg);
 
     const LIMITE_TRIAL = 300;
     const negocio = await crearNegocio({
-      nombre: nombre_negocio, whatsapp: whatsappFormateado || null, plan, limite_comprobantes: LIMITE_TRIAL, ciudad, banco,
+      nombre: nombre_negocio, whatsapp: whatsappFormateado || null, plan, limite_comprobantes: LIMITE_TRIAL, ciudad, banco, sinTrial,
     });
 
     // Sin contraseña propia: esta cuenta siempre entra por Google. El hash
@@ -505,12 +510,14 @@ router.post('/registro/completar-google', limitarLogin, async (req, res) => {
       );
     });
 
-    try {
-      await registrarTrialCreado({ negocio_id: negocio.id, email, whatsappDigitos: (whatsapp_negocio || '').replace(/\D/g, '') });
-    } catch (e) { console.error('[RegistroGoogle] Error guardando registro_trial:', e.message); }
+    if (!sinTrial) {
+      try {
+        await registrarTrialCreado({ negocio_id: negocio.id, email, whatsappDigitos: (whatsapp_negocio || '').replace(/\D/g, '') });
+      } catch (e) { console.error('[RegistroGoogle] Error guardando registro_trial:', e.message); }
+    }
 
     try {
-      await enviarBienvenida(email, nombre, usuarioGenerado, negocio.plan, negocio.trial_fin);
+      await enviarBienvenida(email, nombre, usuarioGenerado, negocio.plan, sinTrial ? null : negocio.trial_fin);
     } catch (e) { console.error('[RegistroGoogle] Error enviando bienvenida:', e.message); }
 
     const token = jwt.sign(
@@ -938,7 +945,9 @@ router.post('/gmail/token', verificarToken, soloAdmin, async (req, res) => {
 // Ver bot/confirmacionWhatsapp.js para el porqué: capturamos el
 // identificador exacto (número o @lid) con el que el negocio le escribe al
 // bot, en vez de intentar adivinarlo después.
-const { prepararConfirmacion, estadoConfirmacion } = require('../bot/confirmacionWhatsapp');
+const {
+  prepararConfirmacion, estadoConfirmacion, prepararConfirmacionUsuario, estadoConfirmacionUsuario,
+} = require('../bot/confirmacionWhatsapp');
 
 router.post('/whatsapp/preparar-confirmacion', verificarToken, soloAdmin, (req, res) => {
   const codigo = prepararConfirmacion(req.user.negocio_id);
@@ -1448,6 +1457,32 @@ router.delete('/usuarios/:id', verificarToken, soloAdmin, (req, res) => {
     if (err) return res.status(500).json({ ok: false, error: err.message });
     if (this.changes === 0) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
     res.json({ ok: true, mensaje: 'Usuario desactivado' });
+  });
+});
+
+// ─── Confirmación de WhatsApp de un empleado puntual ─────
+// Mismo mecanismo que /whatsapp/preparar-confirmacion (negocio), pero para
+// que un empleado nuevo escriba "confirmar <codigo>" y así el bot capture
+// su identificador exacto (número real o @lid) en vez de que el admin lo
+// tenga que adivinar/escribir a mano.
+router.post('/usuarios/:id/preparar-confirmacion', verificarToken, soloAdmin, (req, res) => {
+  const nid = req.user.negocio_id;
+  db.get('SELECT id FROM usuarios WHERE id = ? AND negocio_id = ?', [req.params.id, nid], (err, row) => {
+    if (err) return res.status(500).json({ ok: false, error: err.message });
+    if (!row) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    const codigo = prepararConfirmacionUsuario(row.id);
+    const mensaje = `confirmar ${codigo}`;
+    const waLink = `https://wa.me/${config.FLASHPAGO_WHATSAPP}?text=${encodeURIComponent(mensaje)}`;
+    res.json({ ok: true, codigo, waLink, numero: config.FLASHPAGO_WHATSAPP });
+  });
+});
+
+router.get('/usuarios/:id/estado-confirmacion', verificarToken, soloAdmin, (req, res) => {
+  const nid = req.user.negocio_id;
+  db.get('SELECT id FROM usuarios WHERE id = ? AND negocio_id = ?', [req.params.id, nid], (err, row) => {
+    if (err) return res.status(500).json({ ok: false, error: err.message });
+    if (!row) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    res.json({ ok: true, ...estadoConfirmacionUsuario(row.id) });
   });
 });
 

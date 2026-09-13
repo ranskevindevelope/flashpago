@@ -713,7 +713,7 @@ function Registro({ onBack, datosGoogle }) {
                 interruptor en la columna del medio: queda pegado al centro
                 de la card "Premium" por construcción, no por un centrado
                 aparte que puede no coincidir exactamente con la grilla. */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: 14 }}>
+            <div className="registro-toggle-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: 14 }}>
               <div style={{ gridColumn: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: !facturacionAnual ? 600 : 400, color: !facturacionAnual ? '#1A1A2E' : '#999' }}>Mensual</span>
                 <button

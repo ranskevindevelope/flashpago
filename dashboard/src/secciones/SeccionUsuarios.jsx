@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Users, UserPlus, UserCheck, UserX, Shield, CreditCard, Edit, Trash2, Save, X } from 'lucide-react';
+import { Users, UserPlus, UserCheck, UserX, Shield, CreditCard, Edit, Trash2, Save, X, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { FilaSkeleton, TarjetaSkeleton } from '../components/ui/Skeleton';
 import Button from '../components/ui/Button';
 import ModalConfirmacion from '../components/ModalConfirmacion';
+import ModalConfirmarWhatsapp from '../components/ModalConfirmarWhatsapp';
 import { useUsuarios } from '../hooks/useUsuarios';
 import { PASSWORD_VALIDA, PASSWORD_ERROR } from '../utils/password';
 
@@ -20,8 +21,44 @@ export default function SeccionUsuarios({ api }) {
   const [guardando, setGuardando] = useState(false);
   const [confirmacion, setConfirmacion] = useState(null);
   const [confirmando, setConfirmando] = useState(false);
+  const [confirmacionWpp, setConfirmacionWpp] = useState({ abierto: false, waLink: '', confirmado: false, usuarioId: null });
 
   const refrescar = () => queryClient.invalidateQueries({ queryKey: ['usuarios'] });
+
+  // Le pide al empleado que escriba "confirmar <codigo>" al bot, para que
+  // quede guardado el identificador exacto (número real o @lid) con el que
+  // WhatsApp lo va a seguir presentando — igual que el onboarding del negocio
+  // (ver ModalConfirmarWhatsapp / bot/confirmacionWhatsapp.js).
+  const iniciarConfirmacionWpp = async (user) => {
+    try {
+      const data = await api.request(`/api/usuarios/${user.id}/preparar-confirmacion`, { method: 'POST' });
+      if (data.ok) {
+        setConfirmacionWpp({ abierto: true, waLink: data.waLink, confirmado: false, usuarioId: user.id });
+      } else {
+        toast.error(data.error || 'Error generando el código');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Error de conexión');
+    }
+  };
+
+  // Mientras el modal esté abierto y sin confirmar, pregunta cada 3s si ya
+  // llegó el mensaje de WhatsApp del empleado.
+  useEffect(() => {
+    if (!confirmacionWpp.abierto || confirmacionWpp.confirmado) return;
+    const intervalo = setInterval(async () => {
+      try {
+        const data = await api.request(`/api/usuarios/${confirmacionWpp.usuarioId}/estado-confirmacion`);
+        if (data.ok && data.confirmado) {
+          setConfirmacionWpp((prev) => ({ ...prev, confirmado: true }));
+          toast.success('¡WhatsApp confirmado! Ya el bot reconoce a ese usuario.');
+          refrescar();
+        }
+      } catch (err) { /* reintenta en el próximo intervalo */ }
+    }, 3000);
+    return () => clearInterval(intervalo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmacionWpp.abierto, confirmacionWpp.confirmado, confirmacionWpp.usuarioId]);
 
   const cancelarForm = () => {
     setMostrarForm(false);
@@ -266,6 +303,9 @@ export default function SeccionUsuarios({ api }) {
                         <button className="ver-foto-btn" onClick={() => iniciarEdicion(user)} title="Editar">
                           <Edit size={13} />
                         </button>
+                        <button className="ver-foto-btn" onClick={() => iniciarConfirmacionWpp(user)} title="Confirmar por WhatsApp" style={{ color: '#25D366' }}>
+                          <MessageCircle size={13} />
+                        </button>
                         {user.activo ? (
                           <button className="ver-foto-btn" onClick={() => desactivarUsuario(user.id, user.nombre)} title="Desactivar" style={{ color: '#E53935' }}>
                             <Trash2 size={13} />
@@ -294,6 +334,13 @@ export default function SeccionUsuarios({ api }) {
         cargando={confirmando}
         onConfirmar={ejecutarConfirmacion}
         onCancelar={() => !confirmando && setConfirmacion(null)}
+      />
+
+      <ModalConfirmarWhatsapp
+        abierto={confirmacionWpp.abierto}
+        waLink={confirmacionWpp.waLink}
+        confirmado={confirmacionWpp.confirmado}
+        onCerrar={() => setConfirmacionWpp({ abierto: false, waLink: '', confirmado: false, usuarioId: null })}
       />
     </>
   );

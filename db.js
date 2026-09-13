@@ -402,10 +402,16 @@ db.run(`
 //  FUNCIONES — NEGOCIOS
 // ═══════════════════════════════════════════════════════════
 
-function crearNegocio({ nombre, whatsapp, plan, limite_comprobantes, ciudad, banco }) {
+function crearNegocio({ nombre, whatsapp, plan, limite_comprobantes, ciudad, banco, sinTrial }) {
   const limite = limite_comprobantes || LIMITES_PLAN[plan] || 300;
-  // Trial de 15 días desde hoy
-  const trial = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  // Trial de 15 días desde hoy — salvo que este email/WhatsApp ya haya usado
+  // su prueba gratis antes (ver /registro/enviar-codigo): en ese caso se crea
+  // igual la cuenta, pero con el trial ya vencido, para reutilizar tal cual
+  // el paywall de "prueba terminada" (verificarTrialActivo) y que quede
+  // directo a pagar en vez de bloquear el registro por completo.
+  const trial = sinTrial
+    ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    : new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   return new Promise((resolve, reject) => {
     db.run(
       `INSERT INTO negocios (nombre, whatsapp, plan, limite_comprobantes, trial_fin, pagado, ciudad, banco) VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
@@ -691,6 +697,23 @@ function asociarWhatsappNegocio(negocio_id, identificador) {
     db.run(
       `UPDATE usuarios SET whatsapp = ? WHERE negocio_id = ? AND rol = 'admin'`,
       [identificador, negocio_id],
+      function (err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      }
+    );
+  });
+}
+
+// Igual que asociarWhatsappNegocio pero para un empleado puntual (por id),
+// no el admin del negocio. Mismo criterio: se guarda tal cual llega (número
+// real o @lid), sin normalizar, porque es lo que el webhook va a recibir de
+// ahí en adelante para reconocer a ese empleado.
+function asociarWhatsappUsuario(usuario_id, identificador) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `UPDATE usuarios SET whatsapp = ? WHERE id = ?`,
+      [identificador, usuario_id],
       function (err) {
         if (err) reject(err);
         else resolve(this.changes);
@@ -1361,6 +1384,7 @@ module.exports = {
   marcarNegocioPagado,
   obtenerAdminDeNegocio,
   asociarWhatsappNegocio,
+  asociarWhatsappUsuario,
   registrarTrialCreado,
   emailYaUsoTrial,
   whatsappYaUsoTrial,
