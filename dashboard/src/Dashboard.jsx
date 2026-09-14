@@ -1166,6 +1166,7 @@ function Dashboard({ onLogout }) {
       <main className="main-content">
         <DashboardHeader
           activeSection={seccionActiva}
+          sidebarAbierto={sidebarAbierto}
           onToggleSidebar={() => setSidebarAbierto(!sidebarAbierto)}
           notificaciones={historialNotificaciones}
           onAbrirNotificaciones={marcarNotificacionesLeidas}

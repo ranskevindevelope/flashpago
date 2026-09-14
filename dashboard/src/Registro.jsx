@@ -5,6 +5,7 @@ import { PASSWORD_VALIDA, PASSWORD_ERROR } from './utils/password';
 import BotonGoogle from './components/BotonGoogle';
 import CodigoOTP from './components/CodigoOTP';
 import IndicadorPasos from './components/IndicadorPasos';
+import CheckboxAnimado from './components/CheckboxAnimado';
 import './components/ui/ui.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -926,11 +927,10 @@ function Registro({ onBack, datosGoogle }) {
                   display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 14,
                   fontSize: 12, color: '#666', lineHeight: 1.5, cursor: 'pointer',
                 }}>
-                  <input
-                    type="checkbox"
+                  <CheckboxAnimado
                     checked={aceptaTerminos}
                     onChange={e => setAceptaTerminos(e.target.checked)}
-                    style={{ marginTop: 2, flexShrink: 0, width: 15, height: 15, accentColor: '#F57C00', cursor: 'pointer' }}
+                    style={{ marginTop: 2 }}
                   />
                   <span>
                     He leído y acepto los{' '}
@@ -992,11 +992,10 @@ function Registro({ onBack, datosGoogle }) {
               display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 14,
               fontSize: 12, color: '#666', lineHeight: 1.5, cursor: 'pointer',
             }}>
-              <input
-                type="checkbox"
+              <CheckboxAnimado
                 checked={aceptaTerminos}
                 onChange={e => setAceptaTerminos(e.target.checked)}
-                style={{ marginTop: 2, flexShrink: 0, width: 15, height: 15, accentColor: '#F57C00', cursor: 'pointer' }}
+                style={{ marginTop: 2 }}
               />
               <span>
                 He leído y acepto los{' '}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CreditCard, Download, LayoutDashboard, Menu, Search, TrendingUp, Users, Settings, Building2 } from 'lucide-react';
+import { AlertTriangle, CreditCard, Download, LayoutDashboard, Search, TrendingUp, Users, Settings, Building2 } from 'lucide-react';
 import CampanaNotificaciones from './CampanaNotificaciones';
 
 const titles = {
@@ -14,13 +14,18 @@ const titles = {
   negocios: ['Negocios', Building2],
 };
 
-function DashboardHeader({ activeSection, onToggleSidebar, notificaciones, onAbrirNotificaciones }) {
+function DashboardHeader({ activeSection, sidebarAbierto, onToggleSidebar, notificaciones, onAbrirNotificaciones }) {
   const [title, Icon] = titles[activeSection] || titles.panel;
 
   return (
     <header className="topbar">
-      <button className="menu-toggle" onClick={onToggleSidebar} aria-label="Abrir menú">
-        <Menu size={22} />
+      <button
+        className={`menu-toggle burger-anim ${sidebarAbierto ? 'burger-anim--abierto' : ''}`}
+        onClick={onToggleSidebar}
+        aria-label={sidebarAbierto ? 'Cerrar menú' : 'Abrir menú'}
+        aria-expanded={sidebarAbierto}
+      >
+        <span /><span /><span />
       </button>
       <h1 className="topbar-title"><Icon size={18} /> {title}</h1>
       <span className="topbar-fecha">

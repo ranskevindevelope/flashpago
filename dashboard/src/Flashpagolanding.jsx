@@ -379,11 +379,11 @@ function AnimatedVerificationFlow() {
 
   // Cada paso ocupa beat 0,2,4,6 y cada flecha 1,3,5
   return (
-    <div style={{ background: COLORS.grisClaro, border: "1px solid #e8e8f0", borderRadius: 16, padding: "2rem 2.5rem" }}>
+    <div className="verif-flow-card" style={{ background: COLORS.grisClaro, border: "1px solid #e8e8f0", borderRadius: 16 }}>
       <div style={{ fontSize: "0.85rem", fontWeight: 600, color: COLORS.grisTxt, marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: 6 }}>
         <Zap size={15} color={COLORS.naranja} /> Cómo funciona la verificación
       </div>
-      <div style={{ display: "flex", alignItems: "flex-start" }}>
+      <div className="verif-flow-row">
         {pasos.map((p, i) => {
           const stepBeat = i * 2;
           const arrowBeat = i * 2 + 1;
@@ -393,10 +393,10 @@ function AnimatedVerificationFlow() {
 
           return (
             <div key={p.label} style={{ display: "contents" }}>
-              <div style={{ flex: 1, textAlign: "center" }}>
-                <div style={{ position: "relative", width: 60, height: 60, margin: "0 auto 0.7rem" }}>
+              <div className="verif-flow-step">
+                <div className="verif-flow-icon-wrap">
                   <div style={{
-                    width: 60, height: 60, borderRadius: "50%", background: p.bg,
+                    width: "100%", height: "100%", borderRadius: "50%", background: p.bg,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     transform: isActive ? "scale(1)" : "scale(0)",
                     opacity: isActive ? 1 : 0,
@@ -435,14 +435,15 @@ function AnimatedVerificationFlow() {
               </div>
 
               {!isLast && (
-                <div style={{ flex: "0 0 50px", display: "flex", alignItems: "center", height: 60 }}>
-                  <div style={{ width: "100%", height: 2, background: "#e0e0e0", borderRadius: 2, position: "relative", overflow: "hidden" }}>
-                    <div style={{
-                      height: "100%", borderRadius: 2,
-                      background: `linear-gradient(90deg, ${p.color}, ${pasos[i + 1].color})`,
-                      width: arrowActive ? "100%" : "0%",
-                      transition: "width 0.5s ease",
-                    }} />
+                <div className="verif-flow-arrow">
+                  <div className="verif-flow-arrow-track">
+                    <div
+                      className="verif-flow-arrow-fill"
+                      style={{
+                        background: `linear-gradient(90deg, ${p.color}, ${pasos[i + 1].color})`,
+                        '--fill-pct': arrowActive ? '100%' : '0%',
+                      }}
+                    />
                   </div>
                 </div>
               )}
@@ -579,6 +580,88 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
         .voz-pulse-ring { position:absolute; width:100%; height:100%; border-radius:50%; border:2px solid rgba(245,124,0,0.4); animation: vozPulso 2.4s ease-out infinite; }
         @keyframes vozPulso { 0%{ transform:scale(0.6); opacity:0.8; } 100%{ transform:scale(1.4); opacity:0; } }
+
+        /* ═══ Billetes flotantes del CTA final — de Uiverse.io/CodePen ═══
+           ("Floating Cloud Background" de Shaw), con nubes cambiadas por
+           signos de peso y recoloreadas a naranja de marca. */
+        .cta-money-bg {
+          position: absolute; inset: 0; margin: auto; height: 75%;
+          overflow: hidden; pointer-events: none;
+          animation: cta-money-fadein 3.1s ease-out;
+        }
+        @keyframes cta-money-fadein { from{ opacity:0; } to{ opacity:1; } }
+        .money {
+          position: absolute; left: 0; width: 100%; display: flex; align-items: center;
+          animation-iteration-count: infinite; animation-fill-mode: forwards;
+          animation-timing-function: linear; animation-name: cta-money-float, cta-money-fade;
+        }
+        .money::before {
+          content: "$"; font-family: 'Space Grotesk',sans-serif; font-weight: 700;
+          color: ${COLORS.naranjaSuave};
+        }
+        .money--fg::before { opacity: 0.9; }
+        .money--bg::before { opacity: 0.3; }
+        @keyframes cta-money-float { from{ transform:translateX(100%); } to{ transform:translateX(-15%); } }
+        @keyframes cta-money-fade { 0%,100%{ opacity:0; } 6%,90%{ opacity:1; } }
+
+        .money--1  { top: 4%;  font-size: 26px; animation-duration: 116s, 116s; animation-delay: -18.5s, -18.5s; }
+        .money--2  { top: 12%; font-size: 14px; animation-duration: 176s, 176s; animation-delay: -37s,   -37s; }
+        .money--3  { top: 20%; font-size: 30px; animation-duration: 108s, 108s; animation-delay: -55.5s, -55.5s; }
+        .money--4  { top: 28%; font-size: 15px; animation-duration: 168s, 168s; animation-delay: -74s,   -74s; }
+        .money--5  { top: 36%; font-size: 34px; animation-duration: 100s, 100s; animation-delay: -92.5s, -92.5s; }
+        .money--6  { top: 44%; font-size: 16px; animation-duration: 160s, 160s; animation-delay: -111s,  -111s; }
+        .money--7  { top: 52%; font-size: 17px; animation-duration: 152s, 152s; animation-delay: -129.5s,-129.5s; }
+        .money--8  { top: 62%; font-size: 38px; animation-duration: 92s,  92s;  animation-delay: -148s,  -148s; }
+        .money--9  { top: 72%; font-size: 18px; animation-duration: 144s, 144s; animation-delay: -166.5s,-166.5s; }
+        .money--10 { top: 82%; font-size: 19px; animation-duration: 136s, 136s; animation-delay: -185s,  -185s; }
+        /* ═══ Glow ambiental del Hero — de CodePen, con el navy/naranja de ═══
+           marca en vez de azul/naranja genérico. */
+        .hero-glow {
+          position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+        }
+        .hero-glow-ball {
+          --delay: 0s; --size: 0.4; --speed: 20s;
+          aspect-ratio: 1; width: calc(150% * var(--size));
+          background: linear-gradient(259.53deg, ${COLORS.oscuro2} 6.53%, ${COLORS.naranja} 95.34%);
+          filter: blur(10vw); border-radius: 50%;
+          position: absolute; top: 0; left: 0;
+          animation: hero-glow-loop var(--speed) infinite linear;
+          animation-delay: var(--delay);
+          transform-origin: 50% 50%;
+          opacity: 0.55;
+        }
+        @keyframes hero-glow-loop {
+          0%   { transform: translate3d(0%, 51%, 0) rotate(0deg); }
+          5%   { transform: translate3d(8%, 31%, 0) rotate(18deg); }
+          10%  { transform: translate3d(22%, 13%, 0) rotate(36deg); }
+          15%  { transform: translate3d(40%, 2%, 0) rotate(54deg); }
+          20%  { transform: translate3d(46%, 21%, 0) rotate(72deg); }
+          25%  { transform: translate3d(50%, 47%, 0) rotate(90deg); }
+          30%  { transform: translate3d(53%, 80%, 0) rotate(108deg); }
+          35%  { transform: translate3d(59%, 98%, 0) rotate(125deg); }
+          40%  { transform: translate3d(84%, 89%, 0) rotate(144deg); }
+          45%  { transform: translate3d(92%, 68%, 0) rotate(162deg); }
+          50%  { transform: translate3d(99%, 47%, 0) rotate(180deg); }
+          55%  { transform: translate3d(97%, 21%, 0) rotate(198deg); }
+          60%  { transform: translate3d(80%, 7%, 0) rotate(216deg); }
+          65%  { transform: translate3d(68%, 25%, 0) rotate(234deg); }
+          70%  { transform: translate3d(59%, 41%, 0) rotate(251deg); }
+          75%  { transform: translate3d(50%, 63%, 0) rotate(270deg); }
+          80%  { transform: translate3d(38%, 78%, 0) rotate(288deg); }
+          85%  { transform: translate3d(21%, 92%, 0) rotate(306deg); }
+          90%  { transform: translate3d(3%, 79%, 0) rotate(324deg); }
+          100% { transform: translate3d(0%, 51%, 0) rotate(360deg); }
+        }
+        /* ═══ Flujo "Cómo funciona la verificación" — fila en desktop, ═══
+           columna en celular (ver el media query de 768px). */
+        .verif-flow-card { padding: 2rem 2.5rem; }
+        .verif-flow-row { display:flex; align-items:flex-start; }
+        .verif-flow-step { flex:1; text-align:center; }
+        .verif-flow-icon-wrap { position:relative; width:60px; height:60px; margin:0 auto 0.7rem; }
+        .verif-flow-arrow { flex:0 0 50px; display:flex; align-items:center; height:60px; }
+        .verif-flow-arrow-track { width:100%; height:2px; background:#e0e0e0; border-radius:2px; position:relative; overflow:hidden; }
+        .verif-flow-arrow-fill { height:100%; border-radius:2px; width:var(--fill-pct); transition:width 0.5s ease; }
+
         @media(max-width:1024px) {
           .hero-grid { gap:2rem !important; }
           .grid-3 { grid-template-columns:repeat(2,1fr) !important; }
@@ -604,6 +687,13 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
           .fraude-grid { grid-template-columns:1fr !important; }
           .live-grid { grid-template-columns:1fr !important; }
           .live-stats-grid { grid-template-columns:1fr 1fr !important; }
+          .verif-flow-card { padding: 1.5rem 1.25rem !important; }
+          .verif-flow-row { flex-direction:column; align-items:center; }
+          .verif-flow-step { width:100%; }
+          .verif-flow-icon-wrap { width:52px; height:52px; }
+          .verif-flow-arrow { flex:0 0 28px; }
+          .verif-flow-arrow-track { width:2px; height:100%; }
+          .verif-flow-arrow-fill { width:100%; height:var(--fill-pct); transition:height 0.5s ease; }
         }
         @media(max-width:480px) {
           .hero-h1 { font-size:1.8rem !important; }
@@ -615,7 +705,11 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
 
       {/* ─── HERO ─── */}
       <section style={{ minHeight: "100vh", background: `linear-gradient(135deg, ${COLORS.oscuro} 0%, ${COLORS.oscuro2} 100%)`, display: "flex", alignItems: "center", padding: "8rem 2rem 4rem", position: "relative", overflow: "hidden", boxSizing: "border-box" }}>
-        <div style={{ position: "absolute", top: "-50%", right: "-20%", width: "60vw", height: "60vw", background: "radial-gradient(circle, rgba(245,124,0,0.15) 0%, transparent 70%)", borderRadius: "50%" }} />
+        <div className="hero-glow" aria-hidden="true">
+          <div className="hero-glow-ball" />
+          <div className="hero-glow-ball" style={{ '--delay': '-12s', '--size': 0.35, '--speed': '25s' }} />
+          <div className="hero-glow-ball" style={{ '--delay': '-10s', '--size': 0.3, '--speed': '15s' }} />
+        </div>
         <div className="hero-grid" style={{ maxWidth: 1200, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4rem", alignItems: "center", position: "relative", zIndex: 1, width: "100%" }}>
           <div>
             <h1 className="hero-h1" style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "3.5rem", fontWeight: 700, lineHeight: 1.1, color: COLORS.blanco, marginBottom: "1.5rem", marginTop: 0 }}>
@@ -912,6 +1006,18 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
       {/* ─── CTA FINAL ─── */}
       <section id="contacto" style={{ padding: "6rem 2rem", background: `linear-gradient(135deg, ${COLORS.oscuro} 0%, ${COLORS.oscuro2} 100%)`, textAlign: "center", position: "relative", overflow: "hidden", boxSizing: "border-box" }}>
         <div style={{ position: "absolute", bottom: "-30%", left: "-10%", width: "40vw", height: "40vw", background: "radial-gradient(circle, rgba(245,124,0,0.1) 0%, transparent 70%)", borderRadius: "50%" }} />
+        <div className="cta-money-bg" aria-hidden="true">
+          <div className="money money--fg money--1" />
+          <div className="money money--bg money--2" />
+          <div className="money money--fg money--3" />
+          <div className="money money--bg money--4" />
+          <div className="money money--fg money--5" />
+          <div className="money money--bg money--6" />
+          <div className="money money--bg money--7" />
+          <div className="money money--fg money--8" />
+          <div className="money money--bg money--9" />
+          <div className="money money--bg money--10" />
+        </div>
         <div style={{ maxWidth: 1100, margin: "0 auto", position: "relative" }}>
           <h2 className="cta-h2" style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, color: COLORS.blanco, marginBottom: "1rem", marginTop: 0 }}>¿Listo para proteger tu negocio?</h2>
           <p style={{ fontSize: "1.1rem", color: "#b0b0c8", marginBottom: "2rem", maxWidth: 550, marginLeft: "auto", marginRight: "auto" }}>Escríbenos por WhatsApp y te activamos FlashPago en menos de 24 horas. Sin contratos, sin complicaciones.</p>
