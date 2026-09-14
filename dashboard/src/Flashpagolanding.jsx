@@ -273,7 +273,7 @@ function LivePaymentFeed() {
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", alignItems: "start" }}>
+    <div className="live-grid" style={{ display: "grid", gap: "2rem", alignItems: "start" }}>
       {/* Feed izquierda */}
       <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "1rem" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem", padding: "0 0.25rem" }}>
@@ -313,7 +313,7 @@ function LivePaymentFeed() {
       </div>
 
       {/* Stats derecha */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+      <div className="live-stats-grid" style={{ display: "grid", gap: "0.75rem" }}>
         {[
           { icon: CheckCircle2, iconColor: COLORS.verde, label: "Pagos verificados", value: counter.toLocaleString("es-CO"), sub: "y contando", subColor: COLORS.verde, subIcon: TrendingUp },
           { icon: Zap, iconColor: COLORS.naranja, label: "Monto protegido", value: "$24.6M", sub: "Pesos colombianos", subColor: COLORS.naranjaSuave, subIcon: TrendingUp },
@@ -662,6 +662,9 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         .verif-flow-arrow-track { width:100%; height:2px; background:#e0e0e0; border-radius:2px; position:relative; overflow:hidden; }
         .verif-flow-arrow-fill { height:100%; border-radius:2px; width:var(--fill-pct); transition:width 0.5s ease; }
 
+        .live-grid { grid-template-columns: 1fr 1fr; }
+        .live-stats-grid { grid-template-columns: 1fr 1fr; }
+
         @media(max-width:1024px) {
           .hero-grid { gap:2rem !important; }
           .grid-3 { grid-template-columns:repeat(2,1fr) !important; }
@@ -840,9 +843,7 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
           <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "0.85rem", fontWeight: 600, color: COLORS.naranja, textTransform: "uppercase", letterSpacing: 2, marginBottom: "1rem" }}>En tiempo real</div>
           <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, color: COLORS.blanco, marginBottom: "1.5rem", lineHeight: 1.2, marginTop: 0 }}>Así trabaja FlashPago por ti</h2>
           <p style={{ fontSize: "1.1rem", color: "#b0b0c8", maxWidth: 650, marginBottom: "3rem" }}>Cada comprobante pasa por inteligencia artificial, se cruza con el banco y te da la respuesta en segundos.</p>
-          <div className="live-grid">
-            <LivePaymentFeed />
-          </div>
+          <LivePaymentFeed />
         </div>
       </section>
 
