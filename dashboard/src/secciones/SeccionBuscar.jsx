@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Search } from 'lucide-react';
 import { FilaSkeleton } from '../components/ui/Skeleton';
+import BuscadorGlow from '../components/BuscadorGlow';
 import { formatearMonto } from '../utils/formato';
 import { getBancoBadge } from '../utils/bancos';
 
@@ -24,16 +24,12 @@ export default function SeccionBuscar({ api }) {
   return (
     <div className="seccion">
       <h2 className="seccion-titulo">Buscar pagos por cliente</h2>
-      <div className="buscador">
-        <input
-          type="text"
-          placeholder="Nombre del cliente..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && buscarCliente()}
-        />
-        <button onClick={buscarCliente}><Search size={16} /> Buscar</button>
-      </div>
+      <BuscadorGlow
+        value={busqueda}
+        onChange={setBusqueda}
+        onBuscar={buscarCliente}
+        placeholder="Nombre del cliente..."
+      />
 
       {buscando ? (
         <div className="resultados-busqueda">

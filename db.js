@@ -50,10 +50,8 @@ db.run(`
         console.error('[DB] Error migrando pagado:', err.message);
       }
     });
-    // Si el plan es anual, plan_vence queda ~365 días adelante en vez de ~30.
-    // Sin esta bandera, un aviso de vencimiento no puede distinguir "le quedan
-    // 3 días de un plan mensual" de "le quedan 3 días de uno anual" — y ese
-    // segundo caso necesita avisarse con más antelación (ver bot/avisos.js).
+    // Si es anual, plan_vence queda ~365 días adelante en vez de ~30 — sin
+    // esta bandera el aviso no distingue cuál caso es (ver bot/avisos.js).
     db.run(`ALTER TABLE negocios ADD COLUMN plan_anual INTEGER DEFAULT 0`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
         console.error('[DB] Error migrando plan_anual:', err.message);
@@ -66,18 +64,16 @@ db.run(`
         console.error('[DB] Error migrando plan_vence:', err.message);
       }
     });
-    // Renovación automática: solo puede estar en 1 si hay un metodo_pago
-    // activo para el negocio (se apaga sola al quitar la tarjeta — ver
-    // eliminarMetodoPago). Vive aqui y no en metodos_pago porque decidirlo no
-    // deberia requerir un JOIN en cada chequeo del scheduler.
+    // Solo puede estar en 1 si hay metodo_pago activo (se apaga sola al
+    // quitar la tarjeta, ver eliminarMetodoPago). Vive acá y no en
+    // metodos_pago para no requerir un JOIN en cada chequeo del scheduler.
     db.run(`ALTER TABLE negocios ADD COLUMN renovar_automatico INTEGER DEFAULT 0`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
         console.error('[DB] Error migrando renovar_automatico:', err.message);
       }
     });
-    // Migración: plan ilimitado (nunca vence, sin importar plan_vence). Para
-    // cuentas internas o casos especiales que el superadmin exime del cobro
-    // mensual — no depende de "pagado" ni de dejar plan_vence vacío.
+    // Plan ilimitado (nunca vence) para cuentas que el superadmin exime del
+    // cobro — no depende de "pagado" ni de plan_vence vacío.
     db.run(`ALTER TABLE negocios ADD COLUMN plan_ilimitado INTEGER DEFAULT 0`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
         console.error('[DB] Error migrando plan_ilimitado:', err.message);
@@ -101,9 +97,8 @@ db.run(`
         console.error('[DB] Error migrando dias_operacion:', err.message);
       }
     });
-    // Migración: ciudad/banco (usadas por crearNegocio pero faltaban en el
-    // CREATE TABLE original — sin esto, una instalación nueva desde cero
-    // fallaría al registrar un negocio).
+    // ciudad/banco: usadas por crearNegocio pero faltaban en el CREATE
+    // TABLE original.
     db.run(`ALTER TABLE negocios ADD COLUMN ciudad TEXT`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
         console.error('[DB] Error migrando ciudad:', err.message);
@@ -115,13 +110,9 @@ db.run(`
       }
     });
 
-    // Migración: la columna "plan" tiene un CHECK que en bases de datos ya
-    // creadas quedó grabado con la lista vieja de planes (sin "premium_plus").
-    // SQLite no permite alterar un CHECK existente con ALTER TABLE, así que
-    // hay que reconstruir la tabla completa. Se hace leyendo las columnas
-    // reales con PRAGMA (no una lista fija) para no perder ninguna columna
-    // que ya exista, y todo dentro de una transacción: si algo falla, se
-    // revierte y no se toca la tabla original.
+    // El CHECK de "plan" quedó grabado sin "premium_plus" en tablas viejas.
+    // SQLite no permite alterar un CHECK, así que se reconstruye la tabla
+    // completa leyendo columnas reales con PRAGMA, dentro de una transacción.
     db.get(`SELECT sql FROM sqlite_master WHERE type='table' AND name='negocios'`, (err, row) => {
       if (err) {
         console.error('[DB] Error leyendo definición de negocios:', err.message);
@@ -301,9 +292,8 @@ db.run(`
         console.log('[DB] Columna email en usuarios: OK');
       }
     });
-    // Migración: "Iniciar sesión con Google" — usuarios creados o vinculados
-    // por Google guardan aquí su ID (el "sub" del token), para reconocerlos
-    // en el siguiente login sin depender del usuario/contraseña.
+    // google_id: el "sub" del token, para reconocer al usuario en el
+    // siguiente login sin usuario/contraseña.
     db.run(`ALTER TABLE usuarios ADD COLUMN google_id TEXT`, (alterErr) => {
       if (alterErr && !alterErr.message.includes('duplicate column')) {
         console.error('[DB] Error migrando google_id en usuarios:', alterErr.message);
@@ -331,9 +321,8 @@ db.run(`
 });
 
 // ─── Registro histórico de pruebas gratis creadas ─────────
-// Se llena una sola vez, al crear la cuenta, y nunca se edita ni se borra.
-// Sirve para bloquear un email/WhatsApp que ya usó su prueba gratis aunque
-// después lo hayan cambiado en el perfil de usuario (que sí es editable).
+// Se llena una vez al crear la cuenta y nunca se edita, para bloquear un
+// email/WhatsApp que ya usó su prueba aunque lo cambien después en el perfil.
 db.run(`
   CREATE TABLE IF NOT EXISTS registros_trial (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -345,10 +334,8 @@ db.run(`
 `, (err) => {
   if (!err) console.log('[DB] Tabla "registros_trial" lista');
 });
-// Registro de avisos de vencimiento ya enviados. Sin esto, la revision diaria
-// le mandaria el mismo aviso al admin cada vez que corre. La clave unica
-// (negocio, tipo, vence) permite que el aviso se vuelva a mandar en el siguiente
-// ciclo de facturacion, pero solo una vez por vencimiento.
+// Avisos de vencimiento ya enviados, para no repetir el mismo cada vez que
+// corre la revisión diaria. Clave única (negocio, tipo, vence): una vez por vencimiento.
 db.run(`
   CREATE TABLE IF NOT EXISTS avisos_plan (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -361,11 +348,8 @@ db.run(`
 `, (err) => {
   if (!err) console.log('[DB] Tabla "avisos_plan" lista');
 });
-// Nunca guarda numero de tarjeta ni CVV — eso lo tokeniza el navegador
-// directo contra Wompi (nunca pasa por este servidor). Lo unico que se
-// guarda es la referencia reutilizable que devuelve Wompi
-// (wompi_payment_source_id) y datos de pantalla que Wompi ya entrega
-// enmascarados. Un solo metodo de pago activo por negocio.
+// Nunca guarda numero de tarjeta ni CVV (tokenizado en el navegador contra
+// Wompi). Solo la referencia reutilizable y datos ya enmascarados.
 db.run(`
   CREATE TABLE IF NOT EXISTS metodos_pago (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -404,11 +388,8 @@ db.run(`
 
 function crearNegocio({ nombre, whatsapp, plan, limite_comprobantes, ciudad, banco, sinTrial }) {
   const limite = limite_comprobantes || LIMITES_PLAN[plan] || 300;
-  // Trial de 15 días desde hoy — salvo que este email/WhatsApp ya haya usado
-  // su prueba gratis antes (ver /registro/enviar-codigo): en ese caso se crea
-  // igual la cuenta, pero con el trial ya vencido, para reutilizar tal cual
-  // el paywall de "prueba terminada" (verificarTrialActivo) y que quede
-  // directo a pagar en vez de bloquear el registro por completo.
+  // Trial de 15 días, salvo que ya haya usado uno antes (sinTrial): ahí se
+  // crea con el trial ya vencido, para caer directo al paywall existente.
   const trial = sinTrial
     ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     : new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -473,15 +454,13 @@ function actualizarHorarioNegocio(id, { hora_cierre, dias_operacion }) {
 const LIMITES_PLAN = { basico: 300, premium: 1000, premium_plus: 999999, empresarial: 999999 };
 const PRECIOS_CENTAVOS = {
   basico: 3990000, premium: 7990000, premium_plus: 10990000, empresarial: 17990000,
-  // Precio de lanzamiento anual: 25/30/35% de descuento sobre 12 meses sueltos
-  // (hasta 4.2 meses gratis en Premium Plus). El límite de comprobantes sigue
-  // siendo MENSUAL — un anual no da de golpe los comprobantes de un año.
+  // Precio anual: 25/30/35% off sobre 12 meses sueltos. El límite de
+  // comprobantes sigue siendo MENSUAL.
   basico_anual: 35900000, premium_anual: 66900000, premium_plus_anual: 85900000,
 };
 
-// Un plan anual se identifica por el sufijo en el id que llega desde el
-// checkout (p.ej. 'premium_anual'). LIMITES_PLAN y el resto de la app siguen
-// conociendo solo los 4 planes base — nunca hay que duplicar sus entradas.
+// Plan anual = sufijo '_anual' en el id del checkout. LIMITES_PLAN y el
+// resto de la app solo conocen los 4 planes base.
 function esAnual(plan) {
   return typeof plan === 'string' && plan.endsWith('_anual');
 }
@@ -525,19 +504,16 @@ function actualizarPagoPlataforma(referencia, { estado, wompi_transaction_id }) 
 }
 
 function marcarNegocioPagado(negocio_id, plan) {
-  // `plan` puede llegar con sufijo '_anual' (p.ej. 'premium_anual') desde el
-  // checkout — eso decide cuantos dias sumar, pero en la tabla `negocios` se
-  // guarda siempre el plan base. El resto de la app (NOMBRE_PLAN, los <option>
-  // del dashboard, LIMITES_PLAN) solo conoce los 4 planes base; duplicar esas
-  // listas por cada variante anual seria un sitio mas donde desincronizarse.
+  // `plan` puede traer sufijo '_anual' (decide cuántos días sumar), pero en
+  // `negocios` se guarda siempre el plan base — el resto de la app solo
+  // conoce esos 4.
   const anual = esAnual(plan);
   const base = planBase(plan);
   const limite = LIMITES_PLAN[base] || 300;
   const dias = anual ? 365 : 30;
   return new Promise((resolve, reject) => {
-    // Si renueva antes de que venza el plan actual, los dias se suman desde
-    // el vencimiento vigente en vez de desde hoy, para no perder los que ya
-    // había pagados.
+    // Si renueva antes de vencer, los días se suman desde el vencimiento
+    // vigente, no desde hoy.
     db.get(`SELECT plan_vence FROM negocios WHERE id = ?`, [negocio_id], (err, row) => {
       if (err) return reject(err);
       const venceActual = row?.plan_vence ? new Date(row.plan_vence).getTime() : 0;
@@ -582,9 +558,8 @@ function obtenerMetodoPago(negocio_id) {
   });
 }
 
-// Quita la tarjeta y apaga la renovación automática en la misma operación —
-// dejar `renovar_automatico` prendido sin tarjeta sería un estado imposible
-// que el scheduler tendría que andar descartando en cada revisión.
+// Quita tarjeta y apaga renovación automática juntos: prendido sin tarjeta
+// sería un estado imposible.
 function eliminarMetodoPago(negocio_id) {
   return new Promise((resolve, reject) => {
     db.serialize(() => {
@@ -687,11 +662,9 @@ function obtenerAdminDeNegocio(negocio_id) {
   });
 }
 
-// Guarda el identificador de WhatsApp (número real o @lid) con el que el
-// negocio confirmó su cuenta al final del onboarding (ver
-// bot/confirmacionWhatsapp.js). Se guarda tal cual llega, sin normalizar,
-// porque es exactamente lo que el webhook va a recibir de ahí en adelante
-// para reconocer a ese negocio — normalizarlo podría romper la coincidencia.
+// Guarda el identificador de WhatsApp (número real o @lid) tal cual llega,
+// sin normalizar — es lo que el webhook va a recibir después para
+// reconocer al negocio (ver bot/confirmacionWhatsapp.js).
 function asociarWhatsappNegocio(negocio_id, identificador) {
   return new Promise((resolve, reject) => {
     db.run(
@@ -705,10 +678,7 @@ function asociarWhatsappNegocio(negocio_id, identificador) {
   });
 }
 
-// Igual que asociarWhatsappNegocio pero para un empleado puntual (por id),
-// no el admin del negocio. Mismo criterio: se guarda tal cual llega (número
-// real o @lid), sin normalizar, porque es lo que el webhook va a recibir de
-// ahí en adelante para reconocer a ese empleado.
+// Igual que asociarWhatsappNegocio pero para un empleado puntual (por id).
 function asociarWhatsappUsuario(usuario_id, identificador) {
   return new Promise((resolve, reject) => {
     db.run(
@@ -722,10 +692,9 @@ function asociarWhatsappUsuario(usuario_id, identificador) {
   });
 }
 
-// Admin al que avisar. A diferencia de obtenerAdminDeNegocio, no exige email:
-// un admin sin correo pero con WhatsApp igual debe enterarse de que su plan
-// vence. Devuelve tambien el whatsapp del negocio como respaldo, porque el del
-// local suele ser el mostrador y el del admin es quien decide el pago.
+// A diferencia de obtenerAdminDeNegocio, no exige email (un admin solo con
+// WhatsApp igual debe enterarse). Devuelve el whatsapp del negocio como
+// respaldo.
 function obtenerAdminParaAvisos(negocio_id) {
   return new Promise((resolve, reject) => {
     db.get(
@@ -778,10 +747,8 @@ function listarNegocios() {
   });
 }
 
-// Para el paso "Recibe tu primer pago verificado" del onboarding — a
-// propósito NO se limita al mes actual (ver contarComprobantesDelMes): un
-// negocio con historial no debe ver reaparecer ese paso solo porque
-// empezó un mes nuevo sin pagos todavía.
+// Para el onboarding — a propósito NO se limita al mes actual (a diferencia
+// de contarComprobantesDelMes), para no reaparecer al empezar mes nuevo.
 function tienePagoVerificado(negocio_id) {
   return new Promise((resolve, reject) => {
     db.get(
@@ -917,13 +884,13 @@ function buscarPorReferencia(referencia, negocio_id) {
   });
 }
 
-function buscarDuplicadoReciente(referencia, negocio_id) {
+function buscarDuplicadoReciente(referencia, negocio_id, monto) {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT * FROM pagos 
-       WHERE referencia = ? AND negocio_id = ?
+      `SELECT * FROM pagos
+       WHERE referencia = ? AND negocio_id = ? AND monto = ?
        AND creado_en >= datetime('now', '-7 days', 'localtime')`,
-      [referencia, negocio_id || 1],
+      [referencia, negocio_id || 1, monto],
       (err, fila) => {
         if (err) reject(err);
         else resolve(fila);
@@ -1234,14 +1201,10 @@ function totalGastosDia(negocio_id, fecha) {
   });
 }
 
-// Efectivo que debería haber en el cajón al cerrar:
-//   ventas cobradas en efectivo − gastos pagados en efectivo
-//
-// Las ventas en efectivo las reporta el negocio desde sus pedidos, no
-// contando el cajón: si salieran del cajón, lo "esperado" y lo "contado"
-// serían el mismo dato y la diferencia nunca revelaría un faltante.
-// No se recorta a cero — un negativo (gastaste más efectivo del que
-// entró) es información, no un error que haya que esconder.
+// Efectivo esperado = ventas en efectivo − gastos en efectivo. Las ventas
+// se reportan desde pedidos, no contando el cajón (si no, "esperado" y
+// "contado" serían el mismo dato). No se recorta a cero: un negativo
+// también es información.
 function calcularEfectivoEsperado({ ventas_efectivo, gastos_efectivo }) {
   return (ventas_efectivo || 0) - (gastos_efectivo || 0);
 }

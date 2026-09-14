@@ -55,10 +55,8 @@ app.use(
   helmet.contentSecurityPolicy({
     directives: {
       defaultSrc: ["'self'"],
-      // El dashboard no tiene scripts inline; los externos son el widget de
-      // Wompi, el captcha de Cloudflare Turnstile (solo aparece tras varios
-      // intentos fallidos al guardar tarjeta, ver routes/wompi.js) y el botón
-      // de "Iniciar sesión con Google" del login/registro.
+      // Sin scripts inline; externos son Wompi, Turnstile (routes/wompi.js)
+      // y el botón de Google del login/registro.
       scriptSrc: ["'self'", 'https://checkout.wompi.co', 'https://challenges.cloudflare.com', 'https://accounts.google.com'],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:'],
@@ -394,19 +392,15 @@ setInterval(async () => {
 }, 60000);
 
 // ─── Avisos de vencimiento de plan ────────────────────────
-// Cada hora en vez de una vez al dia: si el proceso se reinicia justo a la hora
-// del chequeo, el aviso no se pierde. Repetir es inofensivo porque la tabla
-// avisos_plan garantiza que cada aviso salga una sola vez por vencimiento.
+// Cada hora, no una vez al día: si el proceso se reinicia justo al chequeo,
+// no se pierde el aviso. Repetir es inofensivo (avisos_plan es única por vencimiento).
 setInterval(() => {
   revisarVencimientos().catch((err) => console.error('[Avisos] Error en la revisión:', err.message));
 }, 60 * 60 * 1000);
 
 // ─── Renovación automática con tarjeta guardada ───────────
-// Independiente del aviso de arriba a propósito: un negocio con renovación
-// automática puede recibir igual el recordatorio de "tu plan está por
-// vencer" mientras el cobro todavía no se confirma (el webhook de Wompi es
-// asíncrono) — no es un error, es sólo que la confirmación tarda unos
-// segundos o minutos más que el aviso.
+// Independiente del aviso de arriba a propósito: puede llegar igual el
+// recordatorio mientras el cobro no se confirma (webhook de Wompi asíncrono).
 setInterval(() => {
   ejecutarCobrosAutomaticos().catch((err) => console.error('[CobroAuto] Error en la revisión:', err.message));
 }, 60 * 60 * 1000);

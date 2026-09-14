@@ -12,10 +12,8 @@ module.exports = {
   INBOUND_WEBHOOK_SECRET: process.env.INBOUND_WEBHOOK_SECRET || null,
   OPENWA_URL: process.env.OPENWA_URL || 'http://localhost:2785',
   OPENWA_SESSION: process.env.OPENWA_SESSION || 'vinson',
-  // Sin fallback a proposito: si falta OPENWA_API_KEY, mejor que el arranque
-  // truene (como JWT_SECRET) a que el bot se autentique en silencio con una
-  // clave debil y predecible — asi fue como el webhook quedo mudo una vez,
-  // con una credencial equivocada que no avisaba.
+  // Sin fallback a proposito: mejor que truene el arranque a que se
+  // autentique en silencio con una clave equivocada (ya paso).
   OPENWA_KEY: process.env.OPENWA_API_KEY || required('OPENWA_API_KEY'),
   NEGOCIO_NOMBRE: process.env.NEGOCIO_NOMBRE || 'Flash Pago',
 
@@ -38,19 +36,14 @@ module.exports = {
     return this.WOMPI_AMBIENTE === 'prod' ? 'https://production.wompi.co/v1' : 'https://sandbox.wompi.co/v1';
   },
 
-  // Cloudflare Turnstile — solo se pide después de varios intentos fallidos
-  // de guardar una tarjeta (ver routes/wompi.js). Sin fallback a required():
-  // es una capa extra de defensa, no algo de lo que dependa que la app
-  // arranque; si falta, esa capa simplemente no se activa.
+  // Cloudflare Turnstile: se pide tras varios intentos fallidos de guardar
+  // tarjeta (routes/wompi.js). Sin required(): si falta, esa capa no se activa.
   TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY || '',
   TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY || '',
 
-  // "Iniciar sesión con Google" (login/registro) — distinto del OAuth de
-  // credentials.json, que es para conectar el Gmail del negocio y leer sus
-  // notificaciones bancarias. Este es un cliente tipo "Aplicación web" nuevo,
-  // solo necesita el Client ID (no hay secreto en este flujo). Sin fallback a
-  // required(): mientras no se configure, el botón de Google simplemente no
-  // se activa en el login.
+  // "Iniciar sesión con Google" — distinto del OAuth de credentials.json
+  // (conectar el Gmail del negocio). Sin required(): si falta, el botón de
+  // Google no se activa.
   GOOGLE_WEB_CLIENT_ID: process.env.GOOGLE_WEB_CLIENT_ID || '',
 
   // Cuenta bancaria para pagos de suscripción por transferencia manual
@@ -60,13 +53,10 @@ module.exports = {
   CUENTA_TITULAR: process.env.CUENTA_TITULAR || '',
   CUENTA_NIT: process.env.CUENTA_NIT || '',
   FLASHPAGO_WHATSAPP: process.env.FLASHPAGO_WHATSAPP || '573167064671',
-  // negocio_id cuyo Gmail conectado se usa para verificar los pagos de
-  // suscripción a FlashPago (transferencia manual) contra la notificación
-  // real del banco. Por defecto el negocio 1 (Mi Negocio / vinsonburgers).
+  // negocio_id cuyo Gmail se usa para verificar pagos de suscripción por
+  // transferencia manual. Por defecto el negocio 1.
   NEGOCIO_ID_SUSCRIPCION: parseInt(process.env.NEGOCIO_ID_SUSCRIPCION || '1', 10),
-  // A quién le llega la alerta de "pago de suscripción sin confirmar por el
-  // banco" (routes/webhook.js, procesarPagoPlataforma). Separado de
-  // FLASHPAGO_WHATSAPP porque ese es el número público que ve el cliente;
-  // este es el tuyo, solo para revisión interna.
+  // A quién le llega la alerta de pago de suscripción sin confirmar (distinto
+  // de FLASHPAGO_WHATSAPP, que es el número público del cliente).
   ADMIN_SUSCRIPCION_WHATSAPP: process.env.ADMIN_SUSCRIPCION_WHATSAPP || process.env.FLASHPAGO_WHATSAPP || '573167064671',
 };

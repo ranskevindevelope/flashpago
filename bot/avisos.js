@@ -1,8 +1,6 @@
 // bot/avisos.js — Aviso al admin de que su plan vence o vencio.
-//
-// Sin esto, el negocio se entera cuando un empleado manda un comprobante en
-// plena venta y el bot le responde que el plan vencio: el empleado no puede
-// pagar (los endpoints de Wompi son soloAdmin) y el admin no se ha enterado.
+// Sin esto el admin se entera del plan vencido solo cuando un empleado
+// intenta pagar y falla (los endpoints de Wompi son soloAdmin).
 const {
   listarNegocios, verificarTrialActivo,
   obtenerAdminParaAvisos, yaSeAviso, registrarAviso,
@@ -10,9 +8,8 @@ const {
 const { enviarAvisoPlan, formatearFecha, NOMBRE_PLAN } = require('../mailer');
 const { enviarPlantilla } = require('./openwa');
 
-// Un solo recordatorio antes de vencer para planes mensuales. Uno que pagó
-// hace casi un año no se acuerda con 3 días de antelación, así que un plan
-// anual avisa con más margen.
+// Plan anual avisa con más margen que el mensual (uno que pagó hace casi un
+// año no se acuerda con solo 3 días).
 const DIAS_AVISO = [3];
 const DIAS_AVISO_ANUAL = [15];
 

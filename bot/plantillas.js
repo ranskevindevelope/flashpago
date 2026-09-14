@@ -1,19 +1,11 @@
 // bot/plantillas.js — Plantillas de mensajes proactivos de WhatsApp.
-//
-// Un aviso de vencimiento se envia sin que el cliente haya escrito antes, o sea
-// fuera de la ventana de 24 h de Meta. Ahi la API solo acepta plantillas
-// aprobadas (el error 131047 que ya maneja openwa.js). Hoy salimos por openwa,
-// que no es oficial y puede caerse; el dia que toque migrar, el cambio debe ser
-// WA_PROVIDER=meta y nada mas.
-//
-// Por eso `cuerpo` es EXACTAMENTE el texto que se registra en el panel de Meta,
-// con sus variables numeradas. No se reescribe aqui ni alla: se copia y pega.
+// Los avisos de vencimiento salen fuera de la ventana de 24h de Meta, que ahi
+// solo acepta plantillas aprobadas (error 131047, manejado en openwa.js).
+// `cuerpo` debe ser EXACTAMENTE el texto registrado en el panel de Meta.
 
 const PLANTILLAS = {
-  // Los mensajes proactivos de reportes.js llevan hoy la lista de cada pago.
-  // Una variable de plantilla no admite saltos de linea, asi que la version de
-  // Meta va en resumen: cifras, sin detalle. Con openwa se sigue mandando el
-  // texto completo (ver `textoOpenwa` en enviarPlantilla).
+  // Variable de plantilla no admite saltos de línea, así que la versión de
+  // Meta va resumida (cifras, sin detalle); openwa manda el texto completo.
   reporte_diario: {
     nombre: 'reporte_diario',
     idioma: 'es',

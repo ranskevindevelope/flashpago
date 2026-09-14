@@ -32,7 +32,12 @@ EXTRACCIÓN DE REFERENCIA:
 - AV Villas: "No. de autorización"
 - Transfiya: "Número de transacción" (empieza con APIU)
 - Nu: "Número de comprobante" o "Referencia interna"
-- Bre-B: "Comprobante No." o "Nro. de confirmación" (código alfanumérico o numérico largo)
+- Bre-B: "Comprobante No." o "Nro. de confirmación" (código alfanumérico o numérico largo).
+  IMPORTANTE: "Código de negocio" NUNCA es la referencia — es un identificador FIJO del
+  comercio (se repite igual en todos los pagos que le llegan por Bre-B), no cambia por
+  transacción. Si el comprobante Bre-B solo muestra "Código de negocio" y no hay un
+  "Nro. de confirmación" u otro número distinto por transacción, deja referencia como
+  cadena vacía "".
 
 FECHA: devuelve siempre en formato DD/MM/AAAA
 

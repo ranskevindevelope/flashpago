@@ -1,11 +1,7 @@
 // eventos.js — Canal en vivo hacia los dashboards abiertos (SSE).
-//
-// Sin esto, el dashboard se entera de un pago cuando le toca preguntar: hasta
-// 8 s con la pestaña al frente y hasta un minuto en segundo plano. Con el
-// servidor empujando el aviso, el anuncio suena apenas se verifica el pago.
-//
-// Se usa Server-Sent Events y no WebSockets porque el flujo es en un solo
-// sentido (servidor → navegador) y el navegador reconecta solo si se corta.
+// Sin esto, el dashboard se entera de un pago con hasta 8s (o 1min en
+// segundo plano) de retraso por polling. SSE y no WebSockets porque el
+// flujo es de un solo sentido (servidor → navegador).
 
 // negocio_id -> Set de respuestas HTTP abiertas
 const conexiones = new Map();

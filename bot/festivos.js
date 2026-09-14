@@ -21,10 +21,8 @@ function calcularPascua(anio) {
   return new Date(anio, mes - 1, dia);
 }
 
-// Regla de la Ley Emiliani (Ley 51 de 1983):
-// Los festivos movibles se celebran el LUNES de la misma semana cuando la
-// fecha fija cae en sábado, domingo o lunes. Si cae en martes, miércoles,
-// jueves o viernes, se celebra ese mismo día (no se traslada).
+// Ley Emiliani: festivo movible se traslada al lunes si la fecha fija cae
+// sáb/dom/lun; si cae mar-vie, se celebra ese mismo día.
 function trasladarALunes(fecha) {
   const d = new Date(fecha);
   const dia = d.getDay(); // 0=dgo, 1=lun, 6=sáb

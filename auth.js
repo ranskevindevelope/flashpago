@@ -6,15 +6,10 @@ const { JWT_SECRET } = require('./config');
 // para que sea obvio que son la misma sesión vista desde los dos lados.
 const COOKIE_SESION = 'fp_token';
 
-// El JWT viaja por header en todo lo que es fetch/XHR. La cookie existe solo
-// para los dos casos donde el navegador NO deja poner headers: <img> (modal de
-// comprobantes) y EventSource (notificaciones en vivo). Antes eso se resolvía
-// con ?token= en la URL, lo que dejaba el JWT en los logs de nginx y en el
-// historial del navegador.
-//
-// domain .flashpago.co: la landing (flashpago.co) y el panel
-// (app.flashpago.co) son orígenes distintos y deben compartir la sesión. En
-// localhost se omite el domain, si no el navegador rechaza la cookie.
+// La cookie es solo para <img> (comprobantes) y EventSource, que no permiten
+// headers; el resto usa el JWT por header. domain .flashpago.co porque la
+// landing y el panel son orígenes distintos que comparten sesión (se omite
+// en localhost o el navegador rechaza la cookie).
 function opcionesCookieSesion(req) {
   const host = req.hostname || '';
   const enFlashpago = host === 'flashpago.co' || host.endsWith('.flashpago.co');
@@ -84,11 +79,8 @@ function limitarLogin(req, res, next) {
   next();
 }
 
-// limpiar cada 5 minutos. .unref(): sin esto, cualquier script corto que
-// solo necesite importar este archivo (como un test) queda colgado para
-// siempre esperando este timer — el servidor real no lo nota porque ya se
-// mantiene vivo solo (tiene un puerto abierto), así que quitarlo no cambia
-// nada ahí.
+// .unref(): sin esto, un test que solo importe este archivo queda colgado
+// esperando este timer.
 const limpiezaLoginIntentos = setInterval(() => {
   const ahora = Date.now();
   for (const [ip, datos] of loginIntentos) {

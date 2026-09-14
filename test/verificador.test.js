@@ -18,17 +18,24 @@ describe('verificarPago', () => {
     assert.equal(resultado.estado, 'NO_ENCONTRADO');
   });
 
-  test('detecta un comprobante duplicado por referencia + negocio', async () => {
+  test('detecta un comprobante duplicado por referencia + monto + negocio', async () => {
     // Primera vez: cae a modo demo (NO_ENCONTRADO), no marca como usado porque
     // el modo demo nunca llega a REAL. Se simula el uso insertando directo.
-    comprobantesUsados.set('1:REF3', { monto: 50000, fecha: '2026-09-07', banco: 'Nequi' });
+    comprobantesUsados.set('1:REF3:50000', { monto: 50000, fecha: '2026-09-07', banco: 'Nequi' });
 
     const resultado = await verificarPago({ monto: 50000, referencia: 'REF3', banco: 'Nequi', negocio_id: 1 });
     assert.equal(resultado.estado, 'DUPLICADO');
   });
 
+  test('misma referencia pero distinto monto no cuenta como duplicado', async () => {
+    comprobantesUsados.set('1:REF3B:50000', { monto: 50000, fecha: '2026-09-07', banco: 'Nequi' });
+
+    const resultado = await verificarPago({ monto: 30000, referencia: 'REF3B', banco: 'Nequi', negocio_id: 1 });
+    assert.notEqual(resultado.estado, 'DUPLICADO');
+  });
+
   test('la misma referencia en otro negocio_id no cuenta como duplicado', async () => {
-    comprobantesUsados.set('1:REF4', { monto: 50000, fecha: '2026-09-07', banco: 'Nequi' });
+    comprobantesUsados.set('1:REF4:50000', { monto: 50000, fecha: '2026-09-07', banco: 'Nequi' });
 
     const resultado = await verificarPago({ monto: 50000, referencia: 'REF4', banco: 'Nequi', negocio_id: 2 });
     assert.notEqual(resultado.estado, 'DUPLICADO');

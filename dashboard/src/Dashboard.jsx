@@ -3741,20 +3741,20 @@ function Dashboard({ onLogout }) {
                 onTouchEnd={cancelarHoldEliminar}
                 disabled={eliminandoCuenta}
                 style={{
-                  flex: 1, padding: '0.7rem', borderRadius: 10, border: 'none',
-                  background: '#E53935', color: '#fff', fontWeight: 600, fontSize: 13.5,
+                  flex: 1, height: 44, borderRadius: 10, border: 'none',
+                  background: '#e62222', display: 'flex', alignItems: 'center',
                   cursor: eliminandoCuenta ? 'wait' : 'pointer', opacity: eliminandoCuenta ? 0.7 : 1,
-                  position: 'relative', overflow: 'hidden',
                 }}
               >
-                <span style={{
-                  position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.3)',
+                <span className="modal-btn-eliminar-hold__fill" style={{
                   width: `${holdEliminarProgreso}%`,
                   transition: holdEliminarProgreso === 0 ? 'width 0.2s ease-out' : 'none',
                 }} />
-                <span style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                  <Trash2 size={14} />
+                <span className="modal-btn-eliminar-hold__text" style={{ color: '#fff', fontWeight: 700, fontSize: 13.5 }}>
                   {eliminandoCuenta ? 'Eliminando...' : holdEliminarProgreso > 0 ? 'Mantén presionado...' : 'Mantén para eliminar'}
+                </span>
+                <span className="modal-btn-eliminar-hold__icon">
+                  <Trash2 size={15} color="#eee" />
                 </span>
               </button>
             </div>

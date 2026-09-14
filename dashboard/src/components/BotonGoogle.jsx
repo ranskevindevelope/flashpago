@@ -81,5 +81,11 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
   // El contenedor se reserva desde el primer render, con clientId o sin él
   // — así el espacio ya existe cuando resuelve /api/config-publica y carga
   // el script de Google, y no hay un salto de 0 a 44px a mitad de página.
-  return <div ref={contenedorRef} style={{ display: 'flex', justifyContent: 'center', width: '100%', minHeight: 44 }} />;
+  return (
+    <div
+      ref={contenedorRef}
+      className="boton-google-hover"
+      style={{ display: 'flex', justifyContent: 'center', width: '100%', minHeight: 44 }}
+    />
+  );
 }

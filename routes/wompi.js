@@ -27,9 +27,8 @@ router.get('/config', verificarToken, soloAdmin, (req, res) => {
   if (!config.WOMPI_PUBLIC_KEY) {
     return res.status(503).json({ ok: false, error: 'Wompi no está configurado todavía' });
   }
-  // apiUrl: para que el navegador tokenice la tarjeta hablando directo con
-  // Wompi (nunca por este servidor) sepa a qué URL pegarle, sin duplicar la
-  // lógica sandbox/producción que ya vive en config.WOMPI_API_URL.
+  // apiUrl: para que el navegador tokenice directo con Wompi sin duplicar
+  // la lógica sandbox/producción de config.WOMPI_API_URL.
   res.json({ ok: true, publicKey: config.WOMPI_PUBLIC_KEY, ambiente: config.WOMPI_AMBIENTE, apiUrl: config.WOMPI_API_URL });
 });
 
@@ -69,12 +68,9 @@ router.post('/iniciar', verificarToken, soloAdmin, async (req, res) => {
 });
 
 // ─── Transferencia bancaria manual (alternativa a Wompi) ────
-// Guarda en memoria qué ADMIN (por su WhatsApp, no todo el negocio) está
-// esperando mandar un comprobante de pago de suscripción, para que el
-// webhook de WhatsApp sepa distinguirlo de un comprobante normal de
-// cliente. Acotado a la persona (no al negocio) para que un empleado
-// mandando un comprobante real de cliente en esa misma ventana no se
-// confunda con el pago de plataforma. Expira a los 30 minutos.
+// Guarda en memoria qué ADMIN (por WhatsApp, no todo el negocio) espera
+// mandar un comprobante de suscripción, para que el webhook lo distinga
+// de un comprobante normal de cliente. Expira a los 30 minutos.
 const transferenciasEsperadas = new Map(); // whatsapp del admin -> { negocio_id, referencia, plan, montoPesos, expira }
 
 function obtenerTransferenciaEsperada(whatsappRemitente) {
@@ -160,17 +156,13 @@ router.get('/estado/:referencia', verificarToken, async (req, res) => {
 });
 
 // ─── Método de pago guardado (renovación automática) ───────
-// La tarjeta se tokeniza en el navegador, directo contra la API de Wompi
-// (POST /v1/tokens/cards) con la clave PÚBLICA — el número y el CVV nunca
-// llegan a este servidor, solo el token que Wompi devuelve. Esta ruta recibe
-// ese token (nunca la tarjeta) y con la clave PRIVADA crea la fuente de pago
-// reutilizable en Wompi. Lo único que se guarda en la BD es esa referencia.
+// Tarjeta tokenizada en el navegador con la clave PÚBLICA (número/CVV nunca
+// llegan acá); esta ruta recibe solo el token y crea la fuente de pago
+// reutilizable con la clave PRIVADA.
 
-// Capa extra sobre limitarLogin: ese limita ráfagas (5/min), pero no a alguien
-// probando una tarjeta cada 20 segundos para quedar bajo el radar. A partir
-// de UMBRAL_CAPTCHA fallos, hay que resolver un Turnstile antes de reintentar.
-// En memoria y por negocio (no por IP) — como loginIntentos, se resetea con
-// un reinicio del proceso; aceptable para una capa de defensa adicional.
+// Capa extra sobre limitarLogin (que solo limita ráfagas de 5/min): a
+// partir de UMBRAL_CAPTCHA fallos hay que resolver un Turnstile. En
+// memoria y por negocio, se resetea con un reinicio del proceso.
 const UMBRAL_CAPTCHA = 3;
 const fallosTarjeta = new Map(); // negocio_id -> { fallos }
 
@@ -225,10 +217,8 @@ router.get('/metodo-pago', verificarToken, soloAdmin, async (req, res) => {
   }
 });
 
-// Tokens que Wompi exige aceptar antes de tokenizar/guardar una tarjeta
-// (términos de uso + autorización de datos personales). El navegador los
-// pide con la clave pública; esta ruta solo evita que el frontend tenga que
-// conocer la URL base de Wompi y maneje el caso de "no configurado".
+// Tokens que Wompi exige aceptar antes de guardar una tarjeta (términos +
+// autorización de datos). Evita que el frontend conozca la URL de Wompi.
 router.get('/aceptacion', verificarToken, soloAdmin, async (req, res) => {
   try {
     if (!config.WOMPI_PUBLIC_KEY) {
@@ -251,10 +241,8 @@ router.get('/aceptacion', verificarToken, soloAdmin, async (req, res) => {
   }
 });
 
-// limitarLogin (5 intentos/min por IP) aquí también: sin esto, una sesión de
-// admin — propia o robada — podría probar muchas tarjetas ajenas contra este
-// endpoint para ver cuáles son válidas ("card testing"), a costa de nuestra
-// clave privada de Wompi.
+// limitarLogin aquí también, contra "card testing" con una sesión de
+// admin propia o robada probando muchas tarjetas ajenas.
 router.post('/metodo-pago', verificarToken, soloAdmin, limitarLogin, async (req, res) => {
   try {
     const { token, acceptanceToken, personalAuthToken, marca, ultimos4, expMes, expAnio, captchaToken } = req.body || {};
@@ -373,9 +361,8 @@ router.post('/webhook', async (req, res) => {
         try {
           const admin = await obtenerAdminDeNegocio(pago.negocio_id);
           if (admin) {
-            // pago.plan puede traer sufijo '_anual' (p.ej. 'premium_anual'); el
-            // correo busca el nombre en NOMBRE_PLAN, que solo conoce los 4 planes
-            // base, así que hay que resolverlo antes o el nombre sale en blanco.
+            // pago.plan puede traer '_anual'; NOMBRE_PLAN solo conoce los 4
+            // planes base, hay que resolverlo antes o sale en blanco.
             await enviarGraciasPago(admin.email, admin.nombre, planBase(pago.plan), pago.monto);
           }
         } catch (e) {
@@ -385,9 +372,8 @@ router.post('/webhook', async (req, res) => {
         await actualizarPagoPlataforma(reference, { estado: status === 'DECLINED' ? 'RECHAZADO' : 'ERROR', wompi_transaction_id: wompiId });
         console.log(`[Wompi] Pago ${status}: negocio ${pago.negocio_id}, ref ${reference}`);
 
-        // Solo para renovación automática (bot/cobros-automaticos.js, referencia
-        // FP-AUTO-...): un cobro manual fallido ya lo ve el cliente al instante
-        // en el widget, pero uno automático es invisible si no se lo avisamos.
+        // Solo para renovación automática (ref FP-AUTO-...): un cobro manual
+        // fallido ya lo ve el cliente en el widget; uno automático no.
         if (reference.startsWith('FP-AUTO-')) {
           try {
             const [admin, negocio] = await Promise.all([

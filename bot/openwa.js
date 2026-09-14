@@ -12,14 +12,9 @@ function normalizarNumero(to) {
   return to.replace('@lid', '').replace('@c.us', '');
 }
 
-// Revisa de verdad si el envío salió. Antes se registraba "Mensaje enviado"
-// pasara lo que pasara, así que un rechazo del proveedor (token vencido,
-// sesión caída, o la ventana de 24 h de Meta) quedaba invisible: el bot se
-// veía sano mientras nadie recibía nada.
-//
-// No lanza excepción a propósito: un aviso que no sale no debe tumbar el
-// procesamiento del pago, que es lo importante. Pero sí queda en el log
-// como error, no como éxito.
+// Revisa si el envío salió de verdad (antes se registraba "enviado" pasara
+// lo que pasara). No lanza excepción: un aviso fallido no debe tumbar el
+// procesamiento del pago, pero sí queda logueado como error.
 function revisarEnvio(etiqueta, destino, res, data) {
   const errorApi = data?.error || data?.message || data?.err;
   if (res.ok && !errorApi) {
@@ -30,9 +25,8 @@ function revisarEnvio(etiqueta, destino, res, data) {
     ? (typeof errorApi === 'string' ? errorApi : JSON.stringify(errorApi))
     : `HTTP ${res.status}`;
   console.error(`${etiqueta} FALLÓ el envío a ${destino}: ${motivo}`);
-  // Si el motivo habla de la sesión o del QR, se clasifica aparte: no es que
-  // un mensaje no haya salido, es que WhatsApp está desvinculado y no va a
-  // entrar ni salir nada hasta que alguien lo reconecte.
+  // Motivo de sesión/QR se clasifica aparte: WhatsApp desvinculado, no un
+  // simple mensaje fallido.
   salud.registrar(esProblemaDeSesion(motivo) ? 'sesion' : 'envio', motivo);
   return false;
 }
@@ -99,10 +93,8 @@ async function enviarImagenOpenwa(to, rutaFoto, caption) {
   }
 }
 
-// Resuelve un @lid (id de privacidad que WhatsApp usa en vez del numero real)
-// al numero real, best-effort, usando el endpoint de contactos de OpenWA.
-// Devuelve null si WhatsApp todavia no le reveló el numero a esta cuenta (por
-// ejemplo, un @lid que nunca escribió antes).
+// Resuelve un @lid (id de privacidad de WhatsApp) al numero real, best-effort.
+// Devuelve null si WhatsApp todavia no le reveló el numero a esta cuenta.
 async function resolverLid(lid) {
   try {
     const res = await fetch(
@@ -119,8 +111,7 @@ async function resolverLid(lid) {
 }
 
 // ─── Proveedor: API oficial de Meta (respaldo) ────────────
-// Usa el fetch global de Node (18+), no node-fetch, porque necesita
-// FormData/Blob nativos para subir imágenes sin agregar dependencias.
+// Fetch global de Node (18+), no node-fetch: necesita FormData/Blob nativos.
 function metaHeaders(extra) {
   return { Authorization: `Bearer ${config.META_ACCESS_TOKEN}`, ...extra };
 }
@@ -142,10 +133,8 @@ async function enviarMensajeMeta(to, body) {
     });
     const data = await res.json().catch(() => ({}));
     const ok = revisarEnvio('[Bot][Meta]', numero, res, data);
-    // Error 131047: fuera de la ventana de 24 h. Meta solo deja mandar texto
-    // libre a quien te escribió en las últimas 24 horas; para el resto exige
-    // una plantilla aprobada. Afecta a los mensajes proactivos (reporte
-    // diario, verificaciones nocturnas), no a las respuestas.
+    // 131047: fuera de la ventana de 24h de Meta, exige plantilla aprobada.
+    // Afecta mensajes proactivos (reporte diario, verificaciones), no respuestas.
     if (!ok && String(data?.error?.code) === '131047') {
       console.error('[Bot][Meta] Fuera de la ventana de 24 h: este mensaje necesita una plantilla aprobada por Meta.');
     }
@@ -214,9 +203,8 @@ async function descargarMediaMeta(mediaId) {
 }
 
 // ─── Plantillas (mensajes proactivos) ─────────────────────
-// Un aviso que sale sin que el cliente haya escrito antes cae fuera de la
-// ventana de 24 h de Meta, donde solo se aceptan plantillas aprobadas. openwa
-// no distingue: se le manda el texto ya sustituido.
+// Fuera de la ventana de 24h, Meta solo acepta plantillas aprobadas; openwa
+// no distingue, recibe el texto ya sustituido.
 async function enviarPlantillaMeta(to, clave, variables) {
   try {
     const numero = normalizarNumero(to);
@@ -251,13 +239,9 @@ async function enviarImagen(to, rutaFoto, caption) {
   return enviarImagenOpenwa(to, rutaFoto, caption);
 }
 
-// Migrar a Meta es cambiar WA_PROVIDER: quien llama a esto no se entera.
-//
-// `opciones.textoOpenwa` existe porque las variables de plantilla de Meta no
-// admiten saltos de linea, asi que la version de Meta va en resumen. openwa no
-// tiene esa limitacion: mientras sigamos ahi se manda el mensaje completo, con
-// su lista, tal como lo recibe hoy el admin. Sin esa opcion se manda la
-// plantilla renderizada.
+// Migrar a Meta es cambiar WA_PROVIDER, quien llama a esto no se entera.
+// `opciones.textoOpenwa`: las variables de plantilla de Meta no admiten
+// saltos de línea (va resumida); openwa manda el mensaje completo.
 async function enviarPlantilla(to, clave, variables = [], opciones = {}) {
   if (config.WA_PROVIDER === 'meta') return enviarPlantillaMeta(to, clave, variables);
   try {

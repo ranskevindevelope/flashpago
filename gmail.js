@@ -10,11 +10,9 @@ const CREDENTIALS_PATH = path.join(__dirname, 'credentials.json');
 const REMITENTES_BANCOS = ['notificacionesbancolombia.com', 'notificaciones@nequi.com.co', 'notificacionesBreB@bbva.com'];
 const QUERY_REMITENTES = `{${REMITENTES_BANCOS.map((r) => `from:${r}`).join(' ')}}`;
 
-// BBVA escribe los decimales con coma al estilo colombiano: "$1.000,00" son mil
-// pesos, no cien mil. La limpieza de los otros bancos solo reconoce decimales con
-// punto, asi que sin esto un pago de $50.000 se leeria como 5.000.000 y no
-// coincidiria nunca. Se deja aparte para no alterar el parseo de Bancolombia ni
-// el de Nequi, que llevan tiempo funcionando.
+// BBVA usa coma para decimales ("$1.000,00" = mil pesos); los otros bancos
+// solo reconocen punto. Separado para no tocar el parseo ya probado de
+// Bancolombia/Nequi.
 function montoColombianoAEntero(texto) {
   let limpio = String(texto).trim();
   if (/,\d{2}$/.test(limpio)) limpio = limpio.slice(0, -3);
@@ -22,14 +20,11 @@ function montoColombianoAEntero(texto) {
   return Number.isNaN(n) ? null : n;
 }
 
-// Extrae { monto, nombre } de un correo, según el banco remitente.
-// Cada banco redacta distinto: Bancolombia usa "$60.800" y "pago de X por",
-// Nequi usa "Recibiste 554 de X el" (sin signo $), y BBVA (Bre-B) pone el importe
-// en una tabla de detalles bajo "Valor recibido".
-//
-// `cuerpo` es opcional y solo lo usa BBVA: su correo empieza con un parrafo largo
-// y el importe queda fuera de los ~200 caracteres del snippet de Gmail. Los demas
-// bancos siguen leyendo solo el snippet, igual que siempre.
+// Extrae { monto, nombre } de un correo según el banco remitente: cada uno
+// redacta distinto (Bancolombia "$60.800 pago de X por", Nequi "Recibiste
+// 554 de X el", BBVA en tabla bajo "Valor recibido").
+// `cuerpo` es opcional, solo para BBVA: su importe cae fuera de los ~200
+// caracteres del snippet de Gmail.
 function extraerMontoYNombre(snippet, remitente, cuerpo) {
   if (/bbva\.com/i.test(remitente || '')) {
     const texto = `${snippet || ''} ${cuerpo || ''}`.replace(/\s+/g, ' ');

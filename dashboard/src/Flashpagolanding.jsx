@@ -87,8 +87,15 @@ function Nav({ onLogin }) {
         <button className="nav-login-btn" onClick={() => { window.location.href = APP_URL; }} style={{ background: "transparent", border: "2px solid rgba(255,255,255,0.2)", color: COLORS.blanco, padding: "0.45rem 1.1rem", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
           <Lock size={15} /> Iniciar sesión
         </button>
-        <a href="#contacto" style={{ background: COLORS.naranja, color: "white", padding: "0.5rem 1.1rem", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap" }}>
-          Contactar
+        <a href="#contacto" className="btn-contactar-peel">
+          <span className="btn-contactar-peel__corner btn-contactar-peel__corner--tr">
+            <span className="btn-contactar-peel__corner-fold" />
+          </span>
+          <span className="btn-contactar-peel__corner btn-contactar-peel__corner--bl">
+            <span className="btn-contactar-peel__corner-fold" />
+          </span>
+          <span className="btn-contactar-peel__wipe" />
+          <span className="btn-contactar-peel__label">Contactar</span>
         </a>
       </div>
     </nav>
@@ -536,6 +543,34 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         body { margin: 0; }
         .nav-links-list { display: flex; flex-direction: row; }
         .nav-login-mobile-item { display: none; }
+
+        /* Botón "Contactar" del nav — estilo de Uiverse.io (Itskrish01):
+           esquinas que se despegan y fondo que se desliza al pasar el mouse. */
+        .btn-contactar-peel {
+          position: relative; display: inline-flex; align-items: center;
+          padding: 0.5rem 1.1rem; overflow: hidden; border-radius: 8px;
+          background: ${COLORS.naranja}; font-weight: 600; font-size: 0.85rem;
+          white-space: nowrap; text-decoration: none;
+        }
+        .btn-contactar-peel__corner {
+          position: absolute; width: 16px; height: 16px; background: ${COLORS.naranjaFuerte};
+          border-radius: 4px; overflow: hidden; transition: margin 0.5s ease;
+        }
+        .btn-contactar-peel__corner--tr { top: 0; right: 0; }
+        .btn-contactar-peel__corner--bl { bottom: 0; left: 0; transform: rotate(180deg); }
+        .btn-contactar-peel:hover .btn-contactar-peel__corner--tr { margin: -16px -16px 0 0; }
+        .btn-contactar-peel:hover .btn-contactar-peel__corner--bl { margin: 0 0 -16px -16px; }
+        .btn-contactar-peel__corner-fold {
+          position: absolute; top: 0; right: 0; width: 20px; height: 20px;
+          background: #fff; transform: translate(50%, -50%) rotate(45deg);
+        }
+        .btn-contactar-peel__wipe {
+          position: absolute; inset: 0; border-radius: 8px;
+          background: ${COLORS.naranjaFuerte}; transform: translateX(-100%);
+          transition: transform 0.5s ease 0.2s;
+        }
+        .btn-contactar-peel:hover .btn-contactar-peel__wipe { transform: translateX(0); }
+        .btn-contactar-peel__label { position: relative; z-index: 1; color: #fff; }
         @keyframes typingDot { 0%,60%,100%{opacity:.3;transform:scale(.8)} 30%{opacity:1;transform:scale(1.1)} }
         @keyframes popIn { 0%{transform:scale(0);opacity:0} 70%{transform:scale(1.2)} 100%{transform:scale(1);opacity:1} }
         @keyframes pulseVerif { 0%{transform:scale(0.8);opacity:0.6} 100%{transform:scale(1.4);opacity:0} }

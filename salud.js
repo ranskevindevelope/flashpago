@@ -1,13 +1,8 @@
 // salud.js — Registro de fallas recientes del procesamiento de pagos.
-//
-// Antes se intentaba adivinar si el bot estaba vivo preguntándole a la API de
-// WhatsApp, y una respuesta inesperada se leía como "caído" — falsa alarma.
-// Acá se mide lo contrario: no si los componentes *parecen* estar bien, sino
-// si algo *falló de verdad* al procesar un comprobante.
-//
-// Vive en memoria a propósito: interesa el estado de ahora, no el histórico,
-// y así no toca la base ni agrega otro punto de falla. Al reiniciar arranca
-// limpio, que es justo lo que se quiere después de un despliegue.
+// Antes se adivinaba si el bot estaba vivo preguntándole a la API de
+// WhatsApp (falsos positivos); acá se mide si algo *falló de verdad*.
+// Vive en memoria a propósito: interesa el estado de ahora, arranca
+// limpio en cada despliegue.
 
 const VENTANA_MS = 15 * 60 * 1000; // se considera "reciente" lo de 15 minutos
 const MAX_GUARDADOS = 40;
@@ -46,17 +41,12 @@ function enumerar(items) {
   return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;
 }
 
-// Solo estos dos tipos son "de toda la plataforma": sin sesión de WhatsApp o
-// sin poder contactar al servidor de OpenWA, nadie puede enviar ni recibir
-// nada. "envio" en cambio es puntual a un mensaje/destinatario — no significa
-// que le esté fallando a negocios que no tienen nada que ver.
+// Solo estos dos son "de toda la plataforma" (sin sesión/conexión, nadie
+// envía ni recibe nada); "envio" es puntual a un destinatario.
 const TIPOS_PLATAFORMA = ['sesion', 'conexion'];
 
-// Resumen para el dashboard. Si `negocio_id` viene, cuenta lo de ese negocio
-// más —opcionalmente— las fallas de plataforma sin negocio asignado.
-// `incluirPlataforma` se pasa en false para negocios que todavía no están
-// verificando pagos de verdad (sin Gmail conectado): no tiene sentido
-// alarmarlos por una falla de sesión que no les afecta todavía en la práctica.
+// Resumen para el dashboard. `incluirPlataforma` va en false para negocios
+// sin Gmail conectado, a quienes no tiene sentido alarmar por eso.
 function resumen(negocio_id, { incluirPlataforma = true } = {}) {
   const desde = Date.now() - VENTANA_MS;
   const recientes = incidentes.filter((i) => {

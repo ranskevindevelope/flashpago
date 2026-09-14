@@ -10,8 +10,8 @@ const PROMETEO_KEY = process.env.PROMETEO_API_KEY;
 // ─── Anti-duplicados (key: "negocio_id:referencia") ──────
 const comprobantesUsados = new Map();
 
-function dupKey(referencia, negocio_id) {
-  return `${negocio_id || 1}:${referencia}`;
+function dupKey(referencia, negocio_id, monto) {
+  return `${negocio_id || 1}:${referencia}:${monto}`;
 }
 
 // ─── Verificar pago ───────────────────────────────────────
@@ -20,8 +20,8 @@ async function verificarPago({ monto, referencia, banco, fecha, negocio_id }) {
   const nid = negocio_id || 1;
 
   // 1. Duplicado
-  if (referencia && comprobantesUsados.has(dupKey(referencia, nid))) {
-    const anterior = comprobantesUsados.get(dupKey(referencia, nid));
+  if (referencia && comprobantesUsados.has(dupKey(referencia, nid, monto))) {
+    const anterior = comprobantesUsados.get(dupKey(referencia, nid, monto));
     return {
       estado: 'DUPLICADO',
       mensaje: `⚠️ DUPLICADO: Este comprobante ya fue usado el ${anterior.fecha} por $${anterior.monto}`,
@@ -119,7 +119,7 @@ async function verificarPago({ monto, referencia, banco, fecha, negocio_id }) {
       };
     }
 
-    comprobantesUsados.set(dupKey(referencia, nid), { monto, fecha, banco });
+    comprobantesUsados.set(dupKey(referencia, nid, monto), { monto, fecha, banco });
 
     return {
       estado: 'REAL',
@@ -140,8 +140,8 @@ function verificarDemo({ monto, referencia, banco, negocio_id }) {
   console.log('[Verificador] Modo demo activo');
   const nid = negocio_id || 1;
 
-  if (referencia && comprobantesUsados.has(dupKey(referencia, nid))) {
-    const ant = comprobantesUsados.get(dupKey(referencia, nid));
+  if (referencia && comprobantesUsados.has(dupKey(referencia, nid, monto))) {
+    const ant = comprobantesUsados.get(dupKey(referencia, nid, monto));
     return {
       estado: 'DUPLICADO',
       mensaje: `⚠️ DUPLICADO: Este comprobante ya fue usado. Monto: $${ant.monto}`,

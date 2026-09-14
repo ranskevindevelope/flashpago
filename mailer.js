@@ -12,17 +12,12 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Remitente. Con Resend el usuario SMTP es literalmente "resend", asi que el
-// from ya no puede salir de MAIL_USER como antes: hay que declararlo aparte y
-// que sea un dominio verificado en Resend. El fallback deja el comportamiento
-// viejo intacto si MAIL_FROM no esta definido.
+// Con Resend el usuario SMTP es literalmente "resend", así que el from ya
+// no sale de MAIL_USER — hay que declararlo aparte, verificado en Resend.
 const REMITENTE = process.env.MAIL_FROM || `"FlashPago" <${process.env.MAIL_USER}>`;
 
-// El logo viaja incrustado en el correo (CID) en vez de por URL. Asi no depende
-// de dashboard/build, que ya falto una vez en produccion, ni de que el cliente
-// acepte imagenes externas: Gmail muestra los adjuntos CID sin pedir permiso.
-// El mismo logo hace de marca pequeña en la cabecera y de icono grande en el
-// cuerpo — una sola imagen, dos tamaños, para no sumar otro adjunto por correo.
+// Logo incrustado (CID), no por URL: no depende de dashboard/build ni de
+// que el cliente acepte imágenes externas. Mismo archivo en dos tamaños.
 const LOGO_CID = 'logo-flashpago';
 const ADJUNTOS = [{
   filename: 'logo-flashpago.png',
@@ -30,10 +25,8 @@ const ADJUNTOS = [{
   cid: LOGO_CID,
 }];
 
-// El From es impersonal para que la bandeja se vea limpia, pero nadie lee un
-// no-reply: las respuestas van a contacto@, que es el buzon real declarado en la
-// politica de privacidad. Por eso el pie de pagina dice "correo transaccional"
-// y no "no respondas" — sí queremos que respondan si tienen dudas.
+// From impersonal, pero nadie lee un no-reply: las respuestas van a
+// contacto@, el buzón real de la política de privacidad.
 const RESPUESTA_A = process.env.MAIL_REPLY_TO || 'FlashPago <contacto@flashpago.co>';
 
 // Los pasos de la bienvenida viven aqui para que la version HTML y la de texto
@@ -54,10 +47,8 @@ const COLOR_ACCENT = '#F57C00';
 const COLOR_DARK = '#1A1A2E';
 const COLOR_BANDA = '#F6F6F9'; // gris muy claro de las bandas de cabecera/pie
 const DASHBOARD_URL = 'https://flashpago.co/panel';
-// Las fechas de la BD llegan como 'YYYY-MM-DD'. new Date('2026-09-16') las lee
-// como medianoche UTC, y al formatear en hora de Colombia (UTC-5) retrocede un
-// dia: al cliente se le decia que su prueba terminaba el 15 cuando terminaba el
-// 16. Para ese formato hay que construir la fecha en hora local.
+// new Date('2026-09-16') lee medianoche UTC, y en hora de Colombia retrocede
+// un día — hay que construir la fecha en hora local.
 function formatearFecha(valor) {
   const soloFecha = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(valor || '').trim());
   const fecha = soloFecha
@@ -82,10 +73,8 @@ function boton(texto, url) {
   `;
 }
 
-// Anatomía: banda gris clara con la marca pequeña arriba → icono grande
-// centrado → título + línea corta debajo → descripción centrada → el
-// contenido propio de cada correo (código, tabla, pasos...) → banda gris
-// clara al pie con el contacto real. Mismo logo en los dos tamaños.
+// Anatomía: banda con marca → icono grande → título/descripción →
+// contenido propio de cada correo → banda con el contacto real.
 function plantilla({ preheader = '', titulo, descripcion, contenido, ctaTexto, ctaUrl }) {
   return `
     <div style="display: none; max-height: 0; overflow: hidden; opacity: 0;">${preheader}</div>
@@ -429,10 +418,8 @@ Renovar: ${DASHBOARD_URL}${PIE_TEXTO}`,
   console.log(`[Mailer] Aviso de plan (${vencido ? 'vencido' : diasRestantes + 'd'}) enviado a ${email}`);
 }
 
-// Se manda cuando bot/cobros-automaticos.js intenta la renovación automática
-// y Wompi la rechaza (tarjeta vencida, fondos insuficientes, etc.) — sin esto
-// el negocio no se entera de que falló hasta que le llega el aviso normal de
-// "tu plan está por vencer/venció" de enviarAvisoPlan, ya sin margen.
+// Se manda cuando Wompi rechaza la renovación automática (cobros-automaticos.js)
+// — sin esto, el negocio recién se entera con el aviso normal de vencimiento, ya sin margen.
 async function enviarAvisoCobroFallido(email, nombre, plan, fechaVence) {
   const nombrePlan = NOMBRE_PLAN[plan] || plan || '';
   const fecha = formatearFecha(fechaVence);

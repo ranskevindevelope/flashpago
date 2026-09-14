@@ -25,12 +25,9 @@ const { obtenerTransferenciaEsperada, limpiarTransferenciaEsperada } = require('
 const { enviarGraciasPago } = require('../mailer');
 
 // ─── Pago de la suscripción de FlashPago por transferencia manual ──
-// Se dispara cuando el admin manda una foto y su negocio está "esperando"
-// un comprobante de pago de plataforma (ver routes/wompi.js /transferencia/iniciar).
-// Usa el mismo OCR que los comprobantes de clientes, y además cruza contra
-// el Gmail conectado en config.NEGOCIO_ID_SUSCRIPCION (la cuenta bancaria
-// real de FlashPago) — igual de confiable que la verificación de clientes,
-// no le cree ciegamente a la imagen.
+// Se dispara cuando el negocio está "esperando" un comprobante de plataforma
+// (routes/wompi.js /transferencia/iniciar). Mismo OCR que los pagos de
+// clientes, y además cruza contra el Gmail de config.NEGOCIO_ID_SUSCRIPCION.
 async function procesarPagoPlataforma(from, transferencia, mediaUrl, mediaBase64) {
   const { negocio_id } = transferencia;
   await enviarMensaje(from, '⏳ Verificando tu pago de suscripción...');
@@ -51,10 +48,8 @@ async function procesarPagoPlataforma(from, transferencia, mediaUrl, mediaBase64
       return;
     }
 
-    // El monto de la imagen coincide — ahora se confirma contra la notificación
-    // real del banco antes de activar nada. 5 intentos cada 30s ≈ 2 minutos
-    // de margen (más que los 10s/4 intentos del flujo de clientes, porque acá
-    // no hay nadie esperando en el chat con el "verificando..." a la vista).
+    // Se confirma contra la notificación real del banco antes de activar.
+    // Más margen que el flujo de clientes (nadie espera en el chat acá).
     const confirmadoPorBanco = await verificarPorGmail(montoLeido, config.NEGOCIO_ID_SUSCRIPCION, {
       intentos: 5,
       esperaMs: 30000,
@@ -101,10 +96,8 @@ const MENSAJES = {
   limitePlan: `⚠️ Este negocio alcanzó el límite de comprobantes del mes. Contacta al administrador para mejorar el plan.`,
 };
 
-// Mapeo de LID (OpenWA) a números reales — se mantiene como atajo para los
-// que ya se agregaron a mano, pero para clientes nuevos la resolución es
-// automática (ver resolverLidConCache más abajo): no hace falta seguir
-// agregando entradas aquí.
+// Mapeo manual de LID a números reales, atajo para los ya agregados a mano.
+// Clientes nuevos se resuelven solos (ver resolverLidConCache).
 const lidMap = {
   '234668473466924@lid': '573045530381@c.us',
   '61856135819279@lid': '573013411244@c.us',
@@ -112,9 +105,8 @@ const lidMap = {
   '241759531581483@c.us': '573044372639@c.us',
 };
 
-// Cache de LID -> número real resuelto contra OpenWA (en memoria, no
-// caduca: una vez resuelto un LID no cambia). Evita pegarle a la API de
-// OpenWA en cada comprobante del mismo cliente.
+// Cache en memoria de LID -> número real (no caduca, un LID no cambia).
+// Evita pegarle a la API de OpenWA en cada comprobante del mismo cliente.
 const lidResueltoCache = {};
 
 async function resolverLidConCache(lid) {
@@ -276,12 +268,10 @@ router.post('/', async (req, res) => {
 
   if (!from) return;
 
-  // ─── Confirmación de WhatsApp (paso final del onboarding, o al agregar
-  // un empleado nuevo desde "Usuarios") ─────
-  // Puede llegar de un remitente que el bot todavía no reconoce — a
-  // propósito: es justo lo que sirve para asociar por primera vez el
-  // identificador real (número o @lid) de ese negocio/empleado. Por eso se
-  // revisa antes del chequeo de autorización, no después.
+  // ─── Confirmación de WhatsApp (onboarding o alta de empleado) ───
+  // Puede llegar de un remitente que el bot no reconoce todavía — a
+  // propósito, es lo que asocia por primera vez su identificador. Por eso
+  // se revisa antes del chequeo de autorización.
   const matchConfirmacion = body.match(/^confirmar\s+([a-f0-9]{6})$/);
   if (matchConfirmacion) {
     const codigo = matchConfirmacion[1];
@@ -348,11 +338,9 @@ router.post('/', async (req, res) => {
   }
 
   // ─── ¿Es un comprobante de pago de la suscripción a FlashPago? ──
-  // Va antes del trial/límite: si el negocio está intentando pagar
-  // justo porque venció el trial, no lo bloqueamos acá. Se busca por el
-  // WhatsApp exacto del remitente (no por negocio_id), para que un
-  // empleado mandando un comprobante real de cliente en la misma ventana
-  // no se confunda con el pago de suscripción del admin.
+  // Va antes del trial/límite: si está pagando justo porque venció, no lo
+  // bloqueamos. Se busca por WhatsApp exacto (no negocio_id), para no
+  // confundirlo con el comprobante de un cliente de otro empleado.
   const transferenciaEsperada = obtenerTransferenciaEsperada(from);
   if (transferenciaEsperada) {
     await procesarPagoPlataforma(from, transferenciaEsperada, mediaUrl, mediaBase64);
@@ -421,7 +409,7 @@ router.post('/', async (req, res) => {
 
     // ─── Verificar duplicado (filtrado por negocio) ─────
     if (datos.referencia) {
-      const duplicado = await buscarDuplicadoReciente(datos.referencia, negocio_id);
+      const duplicado = await buscarDuplicadoReciente(datos.referencia, negocio_id, montoNum);
       if (duplicado) {
         await enviarMensaje(from,
           `🚫 DUPLICADO: Este comprobante (Ref: ${datos.referencia}) ya fue verificado el ${duplicado.fecha} a las ${duplicado.hora}.\n\n` +
@@ -474,9 +462,8 @@ router.post('/', async (req, res) => {
         });
         console.log('[DB] Pago guardado (negocio:', negocio_id, ')');
 
-        // Aviso inmediato a los dashboards abiertos de este negocio, para que
-        // el anuncio suene ahora y no cuando le toque preguntar. Va el id para
-        // que el ciclo de consulta no lo vuelva a anunciar.
+        // Aviso inmediato a los dashboards abiertos; el id evita que el
+        // polling lo anuncie de nuevo.
         eventos.emitir(negocio_id, 'pago', {
           id: pagoId,
           monto: montoNum,

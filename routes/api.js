@@ -8,10 +8,8 @@ const path = require('path');
 
 const { google } = require('googleapis');
 
-// Detecta correos desechables (Mailinator, 10minutemail, etc.) contra una
-// lista que mantiene la librería, no nosotros, porque aparecen dominios
-// nuevos todo el tiempo. mailchecker se eligió sobre disposable-email-domains
-// porque esta ultima lleva ~4 años sin actualizarse en npm.
+// Correos desechables contra la lista que mantiene la librería (elegida
+// sobre disposable-email-domains, que lleva ~4 años sin actualizarse).
 const MailChecker = require('mailchecker');
 function esCorreoDesechable(email) {
   return !!email && !MailChecker.isValid(email);
@@ -144,13 +142,9 @@ router.post('/login', limitarLogin, (req, res) => {
 });
 
 // ─── Iniciar sesión / registrarse con Google ───────────────
-// Distinto del OAuth de credentials.json (ese conecta el Gmail del negocio
-// para leer notificaciones bancarias) — este solo identifica quién es la
-// persona que entra, con el botón de Google del login/registro.
-// Si el correo ya tiene cuenta, inicia sesión de una. Si es nuevo, todavía
-// faltan los datos del negocio (plan, WhatsApp, etc.) que Google no sabe —
-// se manda un token propio de corta duración para completar el registro sin
-// repetir la verificación de correo que Google ya hizo.
+// Distinto del OAuth de credentials.json (ese conecta el Gmail del negocio).
+// Si el correo ya tiene cuenta, inicia sesión; si es nuevo, manda un token
+// corto para completar el registro sin repetir la verificación de correo.
 router.post('/auth/google', limitarLogin, async (req, res) => {
   try {
     const { credential } = req.body || {};
@@ -283,19 +277,13 @@ router.post('/registro/enviar-codigo', limitarLogin, async (req, res) => {
       return res.status(409).json({ ok: false, error: 'Ese email ya está registrado. Usa "Recuperar contraseña" si es tu cuenta.' });
     }
 
-    // Verificar contra el historial permanente de pruebas gratis (registros_trial):
-    // a diferencia de "usuarios", esta tabla nunca se edita ni se borra, así que
-    // cambiar el email/WhatsApp desde "Usuarios" después de registrarse no libera
-    // ese dato para abrir una prueba gratis nueva. Ya no bloquea el registro por
-    // completo: deja crear la cuenta igual, pero sin trial (ver crearNegocio),
-    // para que quien ya gastó su prueba pueda entrar directo a pagar en vez de
-    // quedar sin poder ni crear la cuenta.
+    // registros_trial nunca se edita ni se borra (a diferencia de "usuarios"),
+    // así no se libera cambiando el email/WhatsApp después. No bloquea el
+    // registro: solo crea la cuenta sin trial (ver crearNegocio).
     let sinTrial = await emailYaUsoTrial(email);
 
-    // El número debe haber pasado el OTP de WhatsApp (registro/verificar-whatsapp +
-    // registro/confirmar-whatsapp) hace menos de 30 minutos. Sin esto, cualquiera
-    // podía pegarle directo a esta API con un número inventado y saltarse la
-    // verificación real que sí exige la pantalla de registro.
+    // El número debe haber pasado el OTP de WhatsApp hace menos de 30 min,
+    // o cualquiera podía pegarle directo a esta API con un número inventado.
     const wppLimpioReg = whatsapp_negocio.replace(/\D/g, '');
     const numeroReg = wppLimpioReg.startsWith('3') && wppLimpioReg.length === 10 ? '57' + wppLimpioReg : wppLimpioReg;
     const expiraVerificado = whatsappVerificados.get(numeroReg);
@@ -303,11 +291,9 @@ router.post('/registro/enviar-codigo', limitarLogin, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Primero debes verificar tu número de WhatsApp.' });
     }
 
-    // Verificar que el WhatsApp no tenga ya una cuenta/prueba gratis creada
-    // (evita que con el mismo número se abran varias cuentas de prueba).
-    // Se compara por los últimos 10 dígitos (número nacional, sin indicativo)
-    // porque en la tabla usuarios el campo whatsapp queda guardado en formatos
-    // distintos según de dónde venga (con/sin "57" adelante, con/sin "@c.us").
+    // Evita varias cuentas de prueba con el mismo WhatsApp. Se compara por
+    // los últimos 10 dígitos porque el campo queda en formatos distintos
+    // (con/sin "57", con/sin "@c.us").
     const whatsappFormateado = formatearWhatsapp(whatsapp_negocio);
     const soloDigitos = whatsappFormateado.replace(/\D/g, '');
     const ultimosDiez = soloDigitos.slice(-10);
@@ -385,10 +371,8 @@ router.post('/registro/verificar', limitarLogin, async (req, res) => {
       );
     });
 
-    // Dejar constancia permanente de que este email/WhatsApp ya usaron su
-    // prueba gratis (a diferencia de "usuarios", esto no se borra ni se edita).
-    // Si ya venía sin trial (sinTrial), no hay prueba nueva que registrar —
-    // ya existe el registro original que disparó el bloqueo.
+    // Constancia permanente de que ya usaron su prueba gratis. Si ya venía
+    // sin trial, no hay prueba nueva que registrar.
     if (!datos.sinTrial) {
       try {
         await registrarTrialCreado({
@@ -942,9 +926,8 @@ router.post('/gmail/token', verificarToken, soloAdmin, async (req, res) => {
 });
 
 // ─── Confirmación de WhatsApp (paso final tras conectar Gmail) ──
-// Ver bot/confirmacionWhatsapp.js para el porqué: capturamos el
-// identificador exacto (número o @lid) con el que el negocio le escribe al
-// bot, en vez de intentar adivinarlo después.
+// Ver bot/confirmacionWhatsapp.js: captura el identificador exacto (número
+// o @lid) en vez de adivinarlo después.
 const {
   prepararConfirmacion, estadoConfirmacion, prepararConfirmacionUsuario, estadoConfirmacionUsuario,
 } = require('../bot/confirmacionWhatsapp');
@@ -1507,10 +1490,7 @@ router.delete('/usuarios/:id', verificarToken, soloAdmin, (req, res) => {
 });
 
 // ─── Confirmación de WhatsApp de un empleado puntual ─────
-// Mismo mecanismo que /whatsapp/preparar-confirmacion (negocio), pero para
-// que un empleado nuevo escriba "confirmar <codigo>" y así el bot capture
-// su identificador exacto (número real o @lid) en vez de que el admin lo
-// tenga que adivinar/escribir a mano.
+// Mismo mecanismo que /whatsapp/preparar-confirmacion pero para un empleado.
 router.post('/usuarios/:id/preparar-confirmacion', verificarToken, soloAdmin, (req, res) => {
   const nid = req.user.negocio_id;
   db.get('SELECT id FROM usuarios WHERE id = ? AND negocio_id = ?', [req.params.id, nid], (err, row) => {
@@ -1820,9 +1800,8 @@ router.delete('/ventas/gasto/:id', verificarToken, soloAdmin, async (req, res) =
 });
 
 // ─── Canal en vivo (SSE) ────────────────────────────────
-// El dashboard se suscribe y recibe el aviso apenas se verifica un pago, sin
-// esperar al ciclo de consulta. EventSource no permite mandar cabeceras, por
-// eso el token va en la query (verificarToken ya lo acepta así).
+// EventSource no permite cabeceras, por eso el token va en la query
+// (verificarToken ya lo acepta así).
 router.get('/eventos', verificarToken, (req, res) => {
   const nid = req.user.negocio_id;
 
@@ -1851,15 +1830,12 @@ router.get('/eventos', verificarToken, (req, res) => {
 });
 
 // ─── Salud del procesamiento de pagos ───────────────────
-// Reporta fallas que ocurrieron de verdad (OCR, Gmail, envío de mensajes,
-// errores del webhook) en los últimos minutos. No intenta adivinar si los
-// componentes están vivos: eso daba falsas alarmas.
+// Reporta fallas reales (OCR, Gmail, envío, webhook) de los últimos
+// minutos, no si los componentes "parecen" vivos (eso daba falsas alarmas).
 router.get('/bot/estado', verificarToken, async (req, res) => {
   try {
-    // Fallas generales de la plataforma (sesión/conexión) solo se muestran a
-    // negocios que ya tienen Gmail conectado — o sea, que de verdad están
-    // verificando pagos. A uno recién registrado que aún no ha terminado el
-    // onboarding no le sirve de nada, y solo lo confunde.
+    // Fallas de plataforma solo se muestran a negocios con Gmail conectado
+    // (uno sin terminar el onboarding solo se confundiría).
     const gmailToken = await obtenerTokenGmail(req.user.negocio_id);
     res.json({ ok: true, ...salud.resumen(req.user.negocio_id, { incluirPlataforma: !!gmailToken }) });
   } catch (err) {

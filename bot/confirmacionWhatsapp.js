@@ -1,16 +1,9 @@
-// Último paso del onboarding: tras conectar Gmail (obligatorio para
-// verificar pagos), el negocio confirma por WhatsApp para que el bot
-// capture el identificador EXACTO (número real o @lid) con el que WhatsApp
-// lo va a seguir presentando siempre — así no dependemos de resolver un
-// @lid después, cosa que no siempre es posible (ver bot/openwa.js
-// resolverLid: WhatsApp no siempre revela el número real).
-//
-// El código de confirmación no lleva negocio_id ni ningún dato del negocio:
-// solo sirve para que, cuando llegue el mensaje "confirmar <codigo>" desde
-// un identificador cualquiera, se pueda saber a qué negocio pertenece sin
-// tener que adivinar por número. Vive en memoria — se pierde si el proceso
-// se reinicia, pero es aceptable porque el usuario solo tiene que darle de
-// nuevo al botón "Confirmar por WhatsApp" en el dashboard.
+// Último paso del onboarding: confirma por WhatsApp para capturar el
+// identificador EXACTO (número real o @lid) que WhatsApp va a seguir usando,
+// sin depender de resolverlo después (ver bot/openwa.js resolverLid).
+// El código no lleva negocio_id: solo correlaciona el mensaje "confirmar
+// <codigo>" con su negocio. Vive en memoria — si el proceso se reinicia, el
+// usuario solo tiene que pedir el código de nuevo desde el dashboard.
 const crypto = require('crypto');
 
 const EXPIRACION_MS = 15 * 60 * 1000; // 15 minutos
@@ -29,9 +22,8 @@ function estadoConfirmacion(negocio_id) {
   return { confirmado: !!p?.confirmado };
 }
 
-// Busca, entre los códigos pendientes de cualquier negocio, cuál coincide
-// (y no ha expirado ni fue usado ya). No importa de qué identificador venga
-// el mensaje — el código es lo único que correlaciona.
+// Busca el código entre los pendientes de cualquier negocio, sin importar
+// de qué identificador venga el mensaje.
 function buscarPorCodigo(codigo) {
   const codigoNorm = (codigo || '').trim().toLowerCase();
   const ahora = Date.now();
@@ -59,10 +51,9 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000).unref();
 
-// ─── Mismo mecanismo, pero para confirmar el WhatsApp de un empleado
-// individual (no el admin del negocio) al agregarlo desde "Usuarios".
-// Map aparte (clave = usuario_id) para no chocar con los códigos de negocio,
-// ya que ambos IDs son enteros independientes y podrían coincidir.
+// ─── Mismo mecanismo para confirmar el WhatsApp de un empleado (no el
+// admin) al agregarlo en "Usuarios". Map aparte para no chocar con los
+// códigos de negocio (ambos IDs son enteros independientes).
 const pendientesUsuario = new Map();
 
 function prepararConfirmacionUsuario(usuario_id) {

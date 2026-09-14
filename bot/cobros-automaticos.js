@@ -1,12 +1,8 @@
 // bot/cobros-automaticos.js — Renovación automática de planes con tarjeta guardada.
-//
-// Corre junto a bot/avisos.js en el mismo scheduler cada hora. La diferencia:
-// avisos.js manda un recordatorio; esto cobra de verdad, usando la fuente de
-// pago que Wompi guardó (nunca un número de tarjeta, ver routes/wompi.js).
-//
-// El resultado real del cobro llega despues, por el webhook de Wompi
-// (routes/wompi.js POST /webhook), que ya sabe completar un pago PENDIENTE
-// via marcarNegocioPagado — esto solo crea ese registro y dispara el cobro.
+// A diferencia de avisos.js (que solo recuerda), esto cobra de verdad con la
+// fuente de pago que Wompi guardó. El resultado real llega despues por el
+// webhook de Wompi (routes/wompi.js), que completa el pago PENDIENTE que
+// esto crea.
 const config = require('../config');
 const {
   listarNegociosParaRenovarAutomaticamente,
@@ -16,9 +12,8 @@ const {
   PRECIOS_CENTAVOS,
 } = require('../db');
 
-// Se cobra un dia antes de vencer (no el mismo dia) para que, si algo sale
-// mal, quede un dia de margen antes de que el bot deje de verificar pagos —
-// en ese caso el aviso normal de avisos.js sigue funcionando igual.
+// Un día antes de vencer, para dejar margen si algo sale mal antes de que
+// el bot deje de verificar pagos.
 const DIAS_ANTES_DE_COBRAR = 1;
 
 function diasRestantes(planVence) {
@@ -37,9 +32,8 @@ function decidirCobro(negocio) {
   const monto = PRECIOS_CENTAVOS[planId];
   if (!monto) return null; // plan desconocido (p.ej. 'empresarial', que no se autorenueva)
 
-  // Referencia determinista por ciclo: si el scheduler corre varias veces
-  // antes de que el webhook confirme, reintentar con la MISMA referencia es
-  // seguro — Wompi la rechaza como duplicada en vez de cobrar dos veces.
+  // Referencia determinista por ciclo: si el scheduler reintenta, Wompi
+  // la rechaza como duplicada en vez de cobrar dos veces.
   const referencia = `FP-AUTO-${negocio.id}-${negocio.plan_vence}`;
   return { planId, monto, referencia };
 }
@@ -85,9 +79,8 @@ async function cobrarNegocio(negocio) {
     console.log(`[CobroAuto] Cobro disparado: negocio ${negocio.id} (${negocio.nombre}), plan ${decision.planId}, ref ${decision.referencia}, estado inicial ${body?.data?.status || '?'}`);
     return true;
   } catch (err) {
-    // La transacción quedó creada como PENDIENTE en pagos_plataforma; si Wompi
-    // nunca la recibió, se queda así — no bloquea nada, el aviso normal de
-    // avisos.js sigue avisando mientras el plan no se renueve.
+    // Queda PENDIENTE en pagos_plataforma si Wompi nunca la recibió — no
+    // bloquea nada, avisos.js sigue avisando mientras tanto.
     console.error(`[CobroAuto] Error de red cobrando al negocio ${negocio.id}:`, err.message);
     return false;
   }
