@@ -1,9 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { formatearMonto } from '../../utils/formato';
 
-// Tooltip propio en vez del generico de recharts — ese trae fondo blanco fijo,
-// que en modo oscuro se veia como una caja rota flotando sobre el panel.
-// Con tokens de color (var(--dash-*)) se adapta solo a ambos temas.
+// Tooltip propio: el genérico de recharts trae fondo blanco fijo, roto en
+// modo oscuro. Con tokens (var(--dash-*)) se adapta solo.
 function TooltipVentas({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (

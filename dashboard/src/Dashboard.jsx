@@ -88,10 +88,8 @@ function Dashboard({ onLogout }) {
   const [fotoActiva, setFotoActiva] = useState(null);
   const [seccionActiva, setSeccionActiva] = useState(getInitialSection);
   const [sidebarAbierto, setSidebarAbierto] = useState(false);
-  // Historial de notificaciones para la campana del header — antes se
-  // perdían al desaparecer el toast a los 5s. Vive en memoria (no persiste
-  // al recargar), tope de 20 para no acumular indefinidamente en una sesión
-  // larga.
+  // Historial para la campana del header (antes se perdía al desaparecer
+  // el toast a los 5s). En memoria, tope de 20.
   const [historialNotificaciones, setHistorialNotificaciones] = useState([]);
   const agregarNotificacion = (n) => {
     setHistorialNotificaciones((prev) => [
@@ -144,9 +142,8 @@ function Dashboard({ onLogout }) {
   const [holdEliminarProgreso, setHoldEliminarProgreso] = useState(0);
   const holdEliminarRef = useRef(null);
 
-  // Modal de confirmacion generico: reemplaza window.confirm() en toda la app
-  // (quitar tarjeta, desconectar Gmail, eliminar gasto). `pedirConfirmacion`
-  // guarda la accion a ejecutar; el modal la dispara si el usuario confirma.
+  // Modal genérico que reemplaza window.confirm(). `pedirConfirmacion`
+  // guarda la acción a ejecutar; el modal la dispara si confirma.
   const [confirmacion, setConfirmacion] = useState(null);
   const [confirmando, setConfirmando] = useState(false);
   const pedirConfirmacion = ({ titulo, descripcion, textoConfirmar, peligro, accion }) => {
@@ -206,9 +203,8 @@ function Dashboard({ onLogout }) {
   const [modalTarjeta, setModalTarjeta] = useState(false);
   const [guardandoTarjeta, setGuardandoTarjeta] = useState(false);
   const [formTarjeta, setFormTarjeta] = useState({ numero: '', titular: '', mes: '', anio: '', cvc: '' });
-  // Turnstile solo aparece tras varios intentos fallidos (lo decide el
-  // backend, ver requiereCaptchaTarjeta en routes/wompi.js) — para una
-  // primera tarjeta normal, nunca se monta.
+  // Turnstile solo tras varios intentos fallidos (lo decide el backend,
+  // ver requiereCaptchaTarjeta en routes/wompi.js).
   const [requiereCaptcha, setRequiereCaptcha] = useState(false);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState(null);
   const [captchaToken, setCaptchaToken] = useState(null);
@@ -228,9 +224,8 @@ function Dashboard({ onLogout }) {
       url.searchParams.delete('gmail');
       window.history.replaceState({}, '', url.toString());
 
-      // Gmail solo no basta: falta que el bot sepa reconocer el WhatsApp de
-      // este negocio de forma confiable (ver bot/confirmacionWhatsapp.js).
-      // Este es el último paso, obligatorio, antes de celebrar.
+      // Gmail solo no basta: falta el paso obligatorio de confirmar el
+      // WhatsApp (ver bot/confirmacionWhatsapp.js).
       api.request('/api/whatsapp/preparar-confirmacion', { method: 'POST' })
         .then((data) => {
           if (data.ok) setConfirmacionWpp({ abierto: true, waLink: data.waLink, confirmado: false });
@@ -305,9 +300,8 @@ function Dashboard({ onLogout }) {
     enabled: seccionActiva === 'negocios',
   });
 
-  // Los usuarios los administra SeccionUsuarios; acá solo se leen para el
-  // badge del sidebar y el paso de onboarding (misma queryKey, una sola
-  // petición compartida).
+  // SeccionUsuarios administra los usuarios; acá solo se leen para el badge
+  // del sidebar y el paso de onboarding (misma queryKey compartida).
   const { data: usuarios = [] } = useUsuarios(api, { enabled: esAdmin });
 
   const cambiarSeccion = (nuevaSeccion) => {
@@ -355,9 +349,8 @@ function Dashboard({ onLogout }) {
 
   useEffect(() => {
     cargarDatos();
-    // Con la pestaña en segundo plano nadie está mirando: seguir pidiendo
-    // cada 30 s solo gasta batería y carga el servidor. Al volver se
-    // refresca de inmediato para no mostrar datos viejos.
+    // En segundo plano no se pide cada 30s (gasta batería sin motivo);
+    // al volver refresca de inmediato.
     const intervalo = setInterval(() => {
       if (!document.hidden) cargarDatos();
     }, 30000);
@@ -516,20 +509,15 @@ function Dashboard({ onLogout }) {
         setTurnstileSiteKey(data.turnstileSiteKey || null);
       }
     } catch (err) {
-      // Silencioso: si Wompi no está configurado el endpoint da 503 y la
-      // sección simplemente no muestra tarjeta — no es un error que deba
-      // interrumpir el resto de Configuración.
+      // Silencioso: sin Wompi configurado el endpoint da 503 y la sección
+      // simplemente no muestra tarjeta.
     }
     setCargandoMetodoPago(false);
   };
 
-  // La tarjeta se tokeniza EN EL NAVEGADOR, directo contra la API de Wompi
-  // con la clave pública — el número y el CVV nunca pasan por nuestro
-  // servidor. Solo el token (y los últimos 4 dígitos que Wompi ya entrega
-  // enmascarados) se manda al backend, que crea la fuente de pago reutilizable.
-  // Reinicia Turnstile tras cualquier intento fallido: el token es de un solo
-  // uso, así que sin esto el segundo intento se rechazaría aunque el usuario
-  // ya haya resuelto el desafío una vez.
+  // Tarjeta tokenizada EN EL NAVEGADOR contra Wompi: número y CVV nunca
+  // pasan por nuestro servidor, solo el token.
+  // Reinicia Turnstile tras fallo: el token es de un solo uso.
   const reiniciarCaptcha = () => {
     setCaptchaToken(null);
     if (turnstileWidgetIdRef.current && window.turnstile) {
@@ -593,8 +581,7 @@ function Dashboard({ onLogout }) {
       if (!guardado.ok) {
         toast.error(guardado.error || 'No se pudo guardar la tarjeta');
         reiniciarCaptcha();
-        // El fallo puede haber cruzado el umbral en el backend — refresca
-        // para que el captcha aparezca en el siguiente intento si toca.
+        // Por si el fallo cruzó el umbral de captcha en el backend.
         await cargarMetodoPago();
         return false;
       }
@@ -603,14 +590,11 @@ function Dashboard({ onLogout }) {
       await cargarMetodoPago();
       return true;
     } catch (err) {
-      // api.request lanza en cualquier respuesta no-2xx: el mensaje real que
-      // manda el backend (tarjeta rechazada, captcha fallido, etc.) viaja en
-      // err.message. Sin esto, cualquier 400 se veía como "error de conexión"
-      // generico aunque el backend si supiera explicar que paso.
+      // api.request lanza en no-2xx: el mensaje real del backend viaja en
+      // err.message (si no, un 400 se veía como "error de conexión" genérico).
       toast.error(err?.message || 'Error de conexión con Wompi');
       reiniciarCaptcha();
-      // El fallo puede haber cruzado el umbral de captcha en el backend —
-      // refresca para que aparezca en el siguiente intento si toca.
+      // Por si el fallo cruzó el umbral de captcha en el backend.
       await cargarMetodoPago();
       return false;
     } finally {
@@ -661,11 +645,8 @@ function Dashboard({ onLogout }) {
     setCambiandoAuto(false);
   };
 
-  // Monta el widget de Turnstile solo cuando hace falta: el modal está
-  // abierto, el backend pidió captcha, y hay una site key configurada. Se
-  // carga el script una sola vez (window.turnstile ya cacheado si vuelve a
-  // hacer falta) y se limpia el widget al cerrar el modal para no dejar uno
-  // fantasma si se vuelve a abrir.
+  // Monta Turnstile solo si el modal está abierto, el backend pidió captcha
+  // y hay site key. Script cacheado; widget se limpia al cerrar el modal.
   useEffect(() => {
     if (!modalTarjeta || !requiereCaptcha || !turnstileSiteKey) return;
 
@@ -832,9 +813,8 @@ function Dashboard({ onLogout }) {
     }
   };
 
-  // Eliminar la cuenta pide mantener presionado ~1.8s (barra 0-100) en vez de
-  // un solo clic — para algo irreversible, un clic accidental es demasiado
-  // fácil. Se cancela si sueltas el botón o el mouse se sale antes de llenarla.
+  // Eliminar cuenta pide mantener presionado ~1.8s (barra 0-100), no un
+  // clic — se cancela si sueltas antes de llenarla.
   const DURACION_HOLD_ELIMINAR = 1800;
   const iniciarHoldEliminar = (e) => {
     if (eliminandoCuenta || holdEliminarRef.current) return;
@@ -1002,9 +982,8 @@ function Dashboard({ onLogout }) {
 
   const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-  // Suma/resta un mes, pasando de diciembre a enero del año siguiente (y
-  // viceversa) — la misma cuenta la necesitan periodoMes, gastosMes y
-  // exportarMes, cada uno con su propio par de estados independientes.
+  // Suma/resta un mes (diciembre↔enero incluido); la usan periodoMes,
+  // gastosMes y exportarMes con sus propios estados.
   const sumarMes = (mes, anio, direccion) => {
     let nuevoMes = mes + direccion;
     let nuevoAnio = anio;
@@ -1445,9 +1424,8 @@ function Dashboard({ onLogout }) {
 
               {/* ─── Primeros pasos (onboarding) ─────── */}
               {esAdmin && !onboardingOculto && (() => {
-                // El orden sigue las dependencias reales: no puedes recibir un
-                // pago verificado sin bot, sin Gmail y sin equipo. Por eso ese
-                // paso va último — además es el momento en que todo se prueba.
+                // Orden por dependencia real: no hay pago verificado sin bot,
+                // Gmail y equipo — por eso ese paso va último.
                 const pasos = [
                   {
                     id: 'gmail', icon: Mail, titulo: 'Activa la verificación automática',

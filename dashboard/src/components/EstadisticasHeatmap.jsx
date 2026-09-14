@@ -1,19 +1,14 @@
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
-// Grilla de 7 columnas (Lun a Dom) x semanas del mes — `matriz` viene tal
-// cual del backend (heatmap_semanal), un array de semanas de 7 números cada
-// una (cantidad de transacciones ese día; 0 para días fuera del mes en la
-// primera/última semana). El color es azul con opacidad proporcional al
-// máximo del mes, no un valor fijo.
+// Grilla de 7 columnas x semanas del mes. `matriz` viene del backend
+// (heatmap_semanal): semanas de 7 números (transacciones ese día, 0 fuera
+// del mes). Color azul con opacidad proporcional al máximo del mes.
 export default function EstadisticasHeatmap({ matriz }) {
   if (!matriz?.length) return null;
   const max = Math.max(1, ...matriz.flat());
 
-  // Celdas de tamaño fijo (no 1fr): sin esto, en pantallas anchas cada
-  // celda ocupa contenedor/7 de ancho y, al ser cuadrada, la grilla termina
-  // ocupando cientos de píxeles de alto. Con un tamaño máximo se queda
-  // compacta como un heatmap normal, y en móvil sigue encogiendo porque el
-  // máximo es un límite, no un tamaño fijo.
+  // Celdas de tamaño máximo (no 1fr): evita que en pantallas anchas la
+  // grilla cuadrada crezca a cientos de px de alto; en móvil igual encoge.
   return (
     <div style={{ maxWidth: 420, margin: '0 auto' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 5, marginBottom: 6 }}>

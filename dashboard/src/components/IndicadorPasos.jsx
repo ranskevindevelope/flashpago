@@ -4,14 +4,9 @@ import { Check } from 'lucide-react';
 
 const POP_SPRING = { type: 'spring', stiffness: 500, damping: 12 };
 
-// Indicador de pasos del registro — inspirado en el Step Player de RareUI
-// (rareui.com), pero adaptado: el de ellos es una barra sin etiquetas
-// pensada para un reproductor con auto-avance por tiempo (duration, play,
-// pause) y usa `flubber` para mutar el ícono de play a pausa. Acá el
-// usuario avanza llenando el formulario, no hay timer ni ícono que mutar,
-// así que se queda solo con lo que sí aplica: el paso activo "salta" con
-// un resorte en vez de cambiar de golpe, y la línea se rellena de verde a
-// medida que se completan pasos. Sin `flubber` — un dependencia menos.
+// Indicador de pasos del registro: el paso activo "salta" con un resorte
+// y la línea se rellena de verde al completar pasos. Sin timer ni `flubber`
+// (esto avanza al llenar el formulario, no por tiempo).
 export default function IndicadorPasos({ pasos, pasoActual, onIrAPaso }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '1.5rem' }}>

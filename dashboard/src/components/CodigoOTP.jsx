@@ -1,24 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 
-// Cajitas de un código de un solo uso — misma UX para el correo y el
-// WhatsApp del registro: auto-avance al escribir, retrocede con Backspace,
-// navega con las flechas, pega el código completo si lo copian (Ctrl+V), y
-// si tocan una casilla adelantada salta a la primera vacía para no dejar
-// huecos a mitad del código.
-//
-// El dígito visible no es el texto del <input> (ese queda transparente):
-// es un <span> animado encima, para poder darle la animación de "rollo" al
-// aparecer/desaparecer, más un caret propio que se desliza a la casilla
-// vacía enfocada — inspirado en el OTP Input de RareUI (rareui.com), pero
-// con los colores/tamaños de FlashPago en vez de Tailwind.
-//
-// Estado interno, no controlado desde afuera: el padre solo recibe el
-// código armado por `onChange` (se llama con cada dígito, no solo al
-// completarlo, para que el padre pueda habilitar/deshabilitar su botón).
-// Para resetear las cajitas desde el padre (código incorrecto, reenviar),
-// cambiar el prop `key` fuerza un remount limpio — es más simple que exponer
-// un método imperativo para un caso tan puntual.
+// Cajitas de código de un solo uso: auto-avance, Backspace, flechas, pega
+// el código completo (Ctrl+V), y clic en casilla adelantada salta a la
+// primera vacía. El dígito visible es un <span> animado encima del <input>
+// transparente, para la animación de "rollo" y un caret propio.
+// Estado interno: el padre solo recibe `onChange` por dígito. Para
+// resetear desde afuera, cambiar el prop `key` fuerza un remount.
 const ROLL_SPRING = { type: 'spring', stiffness: 500, damping: 34 };
 const CARET_SPRING = { type: 'spring', stiffness: 500, damping: 40 };
 const BLINK = { duration: 1.1, times: [0, 0.5, 0.5, 1], repeat: Infinity, ease: 'linear' };
@@ -89,9 +77,7 @@ export default function CodigoOTP({
     enfocar(Math.min(texto.length, longitud - 1));
   };
 
-  // Clic "inteligente": si tocan una casilla más adelante de la primera
-  // vacía, salta a esa primera vacía en vez de dejar un hueco a mitad del
-  // código.
+  // Clic "inteligente": salta a la primera casilla vacía en vez de dejar huecos.
   const manejarClic = (i, e) => {
     const primeraVacia = digitos.findIndex((d) => !d);
     const destino = primeraVacia === -1 ? i : Math.min(i, primeraVacia);

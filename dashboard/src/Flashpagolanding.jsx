@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Zap, MessageCircle, Lock, Camera, Bot, CheckCircle2, Shield, BarChart3,
   Search, RefreshCw, Clock, AlertTriangle, Building2, Database,
   FileText, Landmark, Smartphone, TrendingUp, Users, FileSpreadsheet,
-  Headphones, Star, Check, Minus, Hourglass, Volume2, Rocket
+  Headphones, Star, Check, Minus, Hourglass, Volume2, Rocket,
+  // Nuevos íconos para las secciones agregadas
+  ShieldX, ImageOff, Copy, ArrowLeftRight, Brain, ShieldCheck
 } from "lucide-react";
 
 const COLORS = {
@@ -16,17 +18,12 @@ const COLORS = {
   grisClaro: "#f0f0f5",
   blanco: "#ffffff",
   verde: "#2ecc71",
+  rojo: "#E53935",
+  morado: "#7E57C2",
 };
 
-// flashpago.co (esta landing) y app.flashpago.co (el dashboard) son dominios
-// distintos en producción — no comparten localStorage, por eso Registro.jsx
-// pasa el token de sesión por la URL al saltar entre los dos. Los botones de
-// "Iniciar sesión" de aquí no pueden usar el `onLogin` local (eso solo
-// cambiaría de pantalla dentro de este mismo dominio): tienen que navegar de
-// verdad al subdominio de la app.
 const APP_URL = "https://app.flashpago.co/";
 
-// Ícono con fondo suave estilo dashboard
 function IconBadge({ icon: Icon, bg, color, size = 22, boxSize = 44 }) {
   return (
     <div style={{
@@ -51,53 +48,50 @@ function Nav({ onLogin }) {
 
   return (
     <nav style={{
-  position: "fixed", top: 0, width: "100%", zIndex: 100,
-  background: scrolled ? "rgba(26,26,46,0.97)" : "rgba(26,26,46,0.92)",
-  backdropFilter: "blur(12px)", padding: "1rem 2rem",
-  display: "flex", justifyContent: "space-between", alignItems: "center",
-  transition: "background 0.3s", boxSizing: "border-box",
-}}>
-  {/* Izquierda: hamburguesa + logo */}
-  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-    <button className="menu-toggle-btn" onClick={() => setMenuOpen(!menuOpen)}
-      style={{ display: "none", background: "none", border: "none", cursor: "pointer", flexDirection: "column", gap: 5 }}>
-      <span style={{ width: 22, height: 2.5, background: COLORS.blanco, borderRadius: 2, display: "block" }} />
-      <span style={{ width: 22, height: 2.5, background: COLORS.blanco, borderRadius: 2, display: "block" }} />
-      <span style={{ width: 22, height: 2.5, background: COLORS.blanco, borderRadius: 2, display: "block" }} />
-    </button>
-    <a href="#" style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: "1.5rem", color: COLORS.naranja, textDecoration: "none", display: "flex", alignItems: "center", gap: 2 }}>
-      <Zap size={24} fill={COLORS.naranja} />
-      Flash<span style={{ color: COLORS.blanco }}>Pago</span>
-    </a>
-  </div>
+      position: "fixed", top: 0, width: "100%", zIndex: 100,
+      background: scrolled ? "rgba(26,26,46,0.97)" : "rgba(26,26,46,0.92)",
+      backdropFilter: "blur(12px)", padding: "1rem 2rem",
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+      transition: "background 0.3s", boxSizing: "border-box",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <button className="menu-toggle-btn" onClick={() => setMenuOpen(!menuOpen)}
+          style={{ display: "none", background: "none", border: "none", cursor: "pointer", flexDirection: "column", gap: 5 }}>
+          <span style={{ width: 22, height: 2.5, background: COLORS.blanco, borderRadius: 2, display: "block" }} />
+          <span style={{ width: 22, height: 2.5, background: COLORS.blanco, borderRadius: 2, display: "block" }} />
+          <span style={{ width: 22, height: 2.5, background: COLORS.blanco, borderRadius: 2, display: "block" }} />
+        </button>
+        <a href="#" style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: "1.5rem", color: COLORS.naranja, textDecoration: "none", display: "flex", alignItems: "center", gap: 2 }}>
+          <Zap size={24} fill={COLORS.naranja} />
+          Flash<span style={{ color: COLORS.blanco }}>Pago</span>
+        </a>
+      </div>
 
-  {/* Centro: links */}
-  <ul className="nav-links-list" style={{
-    gap: "1.5rem", listStyle: "none", alignItems: "center", margin: 0, padding: 0,
-    ...(menuOpen ? { display: "flex", flexDirection: "column", position: "absolute", top: "100%", left: 0, right: 0, background: "rgba(26,26,46,0.98)", padding: "1.5rem 2rem", zIndex: 200 } : {}),
-  }}>
-    {[["#como-funciona", "Cómo funciona"], ["#beneficios", "Beneficios"], ["#planes", "Planes"]].map(([href, label]) => (
-      <li key={href}>
-        <a href={href} onClick={() => setMenuOpen(false)} style={{ color: "#b0b0c8", textDecoration: "none", fontSize: "0.9rem", fontWeight: 500 }}>{label}</a>
-      </li>
-    ))}
-    <li className="nav-login-mobile-item">
-      <button onClick={() => { setMenuOpen(false); window.location.href = APP_URL; }} style={{ background: "none", border: "none", color: "#b0b0c8", fontSize: "0.9rem", fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: 0 }}>
-        <Lock size={15} /> Iniciar sesión
-      </button>
-    </li>
-  </ul>
+      <ul className="nav-links-list" style={{
+        gap: "1.5rem", listStyle: "none", alignItems: "center", margin: 0, padding: 0,
+        ...(menuOpen ? { display: "flex", flexDirection: "column", position: "absolute", top: "100%", left: 0, right: 0, background: "rgba(26,26,46,0.98)", padding: "1.5rem 2rem", zIndex: 200 } : {}),
+      }}>
+        {[["#como-funciona", "Cómo funciona"], ["#beneficios", "Beneficios"], ["#planes", "Planes"]].map(([href, label]) => (
+          <li key={href}>
+            <a href={href} onClick={() => setMenuOpen(false)} style={{ color: "#b0b0c8", textDecoration: "none", fontSize: "0.9rem", fontWeight: 500 }}>{label}</a>
+          </li>
+        ))}
+        <li className="nav-login-mobile-item">
+          <button onClick={() => { setMenuOpen(false); window.location.href = APP_URL; }} style={{ background: "none", border: "none", color: "#b0b0c8", fontSize: "0.9rem", fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: 0 }}>
+            <Lock size={15} /> Iniciar sesión
+          </button>
+        </li>
+      </ul>
 
-  {/* Derecha: botones */}
-  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-    <button className="nav-login-btn" onClick={() => { window.location.href = APP_URL; }} style={{ background: "transparent", border: "2px solid rgba(255,255,255,0.2)", color: COLORS.blanco, padding: "0.45rem 1.1rem", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
-  <Lock size={15} /> Iniciar sesión
-    </button>
-    <a href="#contacto" style={{ background: COLORS.naranja, color: "white", padding: "0.5rem 1.1rem", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap" }}>
-      Contactar
-    </a>
-  </div>
- </nav>
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <button className="nav-login-btn" onClick={() => { window.location.href = APP_URL; }} style={{ background: "transparent", border: "2px solid rgba(255,255,255,0.2)", color: COLORS.blanco, padding: "0.45rem 1.1rem", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+          <Lock size={15} /> Iniciar sesión
+        </button>
+        <a href="#contacto" style={{ background: COLORS.naranja, color: "white", padding: "0.5rem 1.1rem", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap" }}>
+          Contactar
+        </a>
+      </div>
+    </nav>
   );
 }
 
@@ -202,7 +196,6 @@ function HubDiagram() {
             </circle>
           </g>
         ))}
-
         {nodos.map((n, i) => (
           <g key={n.label}>
             <rect x={n.x - 28} y={n.y - 28} width="56" height="56" rx="14" fill="rgba(255,255,255,0.06)" stroke="rgba(245,124,0,0.4)" strokeWidth="1.5" />
@@ -212,7 +205,6 @@ function HubDiagram() {
             <text x={n.x} y={n.y + 45} textAnchor="middle" fill="#b0b0c8" fontSize="11" fontFamily="Inter,sans-serif">{n.label}</text>
           </g>
         ))}
-
         <circle cx="300" cy="200" r="55" fill="none" stroke="#F57C00" strokeWidth="1" opacity="0.2">
           <animate attributeName="r" values="55;65;55" dur="2s" repeatCount="indefinite" />
         </circle>
@@ -226,14 +218,241 @@ function HubDiagram() {
   );
 }
 
+// ─── NUEVO: FEED DE PAGOS EN TIEMPO REAL ──────
+function LivePaymentFeed() {
+  const feedRef = useRef(null);
+  const [cards, setCards] = useState([]);
+  const [counter, setCounter] = useState(465);
+  const idxRef = useRef(0);
+
+  const payments = [
+    { s: "ok", t: "Pago verificado", b: "Nequi", c: "María L.", a: "$45.000" },
+    { s: "ok", t: "Pago verificado", b: "Bancolombia", c: "Carlos R.", a: "$32.500" },
+    { s: "wait", t: "Verificando...", b: "BBVA", c: "Ana M.", a: "$28.000" },
+    { s: "ok", t: "Pago verificado", b: "Nequi", c: "Pedro G.", a: "$51.000" },
+    { s: "fail", t: "No encontrado", b: "Bancolombia", c: "Juan D.", a: "$15.000" },
+    { s: "ok", t: "Pago verificado", b: "BBVA", c: "Laura S.", a: "$67.200" },
+    { s: "ok", t: "Pago verificado", b: "Nequi", c: "Diego F.", a: "$42.800" },
+    { s: "wait", t: "Verificando...", b: "Bancolombia", c: "Sofía R.", a: "$19.500" },
+    { s: "ok", t: "Pago verificado", b: "Nequi", c: "Andrés M.", a: "$88.000" },
+    { s: "ok", t: "Pago verificado", b: "BBVA", c: "Camila T.", a: "$33.700" },
+  ];
+
+  const times = ["2s", "5s", "8s", "12s", "15s", "18s", "22s", "25s", "28s", "32s"];
+
+  useEffect(() => {
+    function addCard() {
+      const p = payments[idxRef.current % payments.length];
+      const time = times[idxRef.current % times.length];
+      const id = Date.now() + Math.random();
+      setCards(prev => [{ ...p, time, id }, ...prev].slice(0, 5));
+      setCounter(prev => prev + 1);
+      idxRef.current++;
+    }
+
+    addCard();
+    const t1 = setTimeout(addCard, 500);
+    const t2 = setTimeout(addCard, 1000);
+    const interval = setInterval(addCard, 2200);
+
+    return () => { clearTimeout(t1); clearTimeout(t2); clearInterval(interval); };
+  }, []);
+
+  const iconMap = { ok: CheckCircle2, wait: Clock, fail: AlertTriangle };
+  const colorMap = {
+    ok: { bg: "rgba(46,204,113,0.15)", color: "#2ecc71" },
+    wait: { bg: "rgba(255,183,77,0.15)", color: "#FFB74D" },
+    fail: { bg: "rgba(229,57,53,0.15)", color: "#E53935" },
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", alignItems: "start" }}>
+      {/* Feed izquierda */}
+      <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem", padding: "0 0.25rem" }}>
+          <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#e0e0e0", display: "flex", alignItems: "center", gap: 6 }}>
+            <Zap size={16} color={COLORS.naranja} /> Feed de pagos
+          </div>
+          <div style={{ fontSize: "0.75rem", color: COLORS.verde, display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS.verde, animation: "blink 1.5s infinite" }} /> En vivo
+          </div>
+        </div>
+        <div ref={feedRef} style={{ display: "flex", flexDirection: "column", gap: 8, height: 280, overflow: "hidden", position: "relative" }}>
+          {cards.map((card) => {
+            const StatusIcon = iconMap[card.s];
+            const colors = colorMap[card.s];
+            return (
+              <div key={card.id} style={{
+                display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)",
+                borderRadius: 12, animation: "slideInCard 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards",
+              }}>
+                <div style={{ width: 30, height: 30, borderRadius: "50%", background: colors.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <StatusIcon size={14} color={colors.color} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "#e0e0e0" }}>{card.t}</div>
+                  <div style={{ fontSize: "0.7rem", color: "#8888a8", marginTop: 1 }}>{card.b} · {card.c}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#fff" }}>{card.a}</div>
+                  <div style={{ fontSize: "0.65rem", color: "#6868a0", marginTop: 1 }}>Hace {card.time}</div>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 60, background: "linear-gradient(transparent, rgba(22,33,62,0.95))", pointerEvents: "none" }} />
+        </div>
+      </div>
+
+      {/* Stats derecha */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+        {[
+          { icon: CheckCircle2, iconColor: COLORS.verde, label: "Pagos verificados", value: counter.toLocaleString("es-CO"), sub: "y contando", subColor: COLORS.verde, subIcon: TrendingUp },
+          { icon: Zap, iconColor: COLORS.naranja, label: "Monto protegido", value: "$24.6M", sub: "Pesos colombianos", subColor: COLORS.naranjaSuave, subIcon: TrendingUp },
+          { icon: ShieldX, iconColor: COLORS.rojo, label: "Fraudes bloqueados", value: "5", valueColor: COLORS.rojo, sub: "Comprobantes falsos", subColor: COLORS.rojo, subIcon: AlertTriangle },
+          { icon: Clock, iconColor: COLORS.naranjaSuave, label: "Verificación", value: "<8s", sub: "Promedio", subColor: COLORS.naranjaSuave, subIcon: Zap },
+        ].map((stat, i) => (
+          <div key={i} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "1.25rem 1.5rem" }}>
+            <div style={{ fontSize: "0.75rem", color: "#8888a8", marginBottom: 4, display: "flex", alignItems: "center", gap: 5 }}>
+              <stat.icon size={13} color={stat.iconColor} /> {stat.label}
+            </div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "1.6rem", fontWeight: 700, color: stat.valueColor || "#fff" }}>{stat.value}</div>
+            <div style={{ fontSize: "0.72rem", marginTop: 3, display: "flex", alignItems: "center", gap: 4, color: stat.subColor }}>
+              <stat.subIcon size={11} /> {stat.sub}
+            </div>
+          </div>
+        ))}
+        {/* Bancos - fila ancha */}
+        <div style={{ gridColumn: "1 / -1", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "1.25rem 1.5rem" }}>
+          <div style={{ fontSize: "0.75rem", color: "#8888a8", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
+            <Landmark size={13} color="#b0b0c8" /> Bancos conectados
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+            {["Nequi", "Bancolombia", "BBVA"].map(b => (
+              <span key={b} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "5px 14px", fontSize: "0.8rem", color: "#e0e0e0", fontWeight: 500 }}>{b}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FLUJO VERIFICACIÓN ANIMADO ──────
+function AnimatedVerificationFlow() {
+  const [activeStep, setActiveStep] = useState(-1);
+
+  useEffect(() => {
+    let step = -1;
+    function run() {
+      step = -1;
+      setActiveStep(-1);
+      const interval = setInterval(() => {
+        step++;
+        if (step > 6) { // 4 pasos + 3 flechas = 7 beats
+          clearInterval(interval);
+          setTimeout(run, 2000); // pausa y reinicia
+          return;
+        }
+        setActiveStep(step);
+      }, 700);
+      return interval;
+    }
+    const id = run();
+    return () => clearInterval(id);
+  }, []);
+
+  const pasos = [
+    { Icon: Camera, bg: "#FFF3E0", color: "#F57C00", label: "Recibe foto", sub: "Por WhatsApp" },
+    { Icon: Brain, bg: "#E3F2FD", color: "#1E88E5", label: "IA lo lee", sub: "Extrae datos" },
+    { Icon: ShieldCheck, bg: "#FFEBEE", color: "#E53935", label: "Cruza con banco", sub: "Tiempo real" },
+    { Icon: CheckCircle2, bg: "#E8F5E9", color: "#2ecc71", label: "Verificado", sub: "En menos de 8 seg" },
+  ];
+
+  // Cada paso ocupa beat 0,2,4,6 y cada flecha 1,3,5
+  return (
+    <div style={{ background: COLORS.grisClaro, border: "1px solid #e8e8f0", borderRadius: 16, padding: "2rem 2.5rem" }}>
+      <div style={{ fontSize: "0.85rem", fontWeight: 600, color: COLORS.grisTxt, marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: 6 }}>
+        <Zap size={15} color={COLORS.naranja} /> Cómo funciona la verificación
+      </div>
+      <div style={{ display: "flex", alignItems: "flex-start" }}>
+        {pasos.map((p, i) => {
+          const stepBeat = i * 2;
+          const arrowBeat = i * 2 + 1;
+          const isActive = activeStep >= stepBeat;
+          const arrowActive = activeStep >= arrowBeat;
+          const isLast = i === pasos.length - 1;
+
+          return (
+            <div key={p.label} style={{ display: "contents" }}>
+              <div style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ position: "relative", width: 60, height: 60, margin: "0 auto 0.7rem" }}>
+                  <div style={{
+                    width: 60, height: 60, borderRadius: "50%", background: p.bg,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transform: isActive ? "scale(1)" : "scale(0)",
+                    opacity: isActive ? 1 : 0,
+                    transition: "transform 0.5s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s",
+                  }}>
+                    <p.Icon size={24} color={p.color} />
+                  </div>
+                  {isActive && (
+                    <div style={{
+                      position: "absolute", inset: -5, borderRadius: "50%",
+                      border: `2px solid ${p.color}`, opacity: 0.3,
+                      animation: "pulseVerif 1.5s ease-out forwards",
+                    }} />
+                  )}
+                  {isLast && isActive && (
+                    <div style={{
+                      position: "absolute", bottom: -2, right: -2, width: 20, height: 20,
+                      borderRadius: "50%", background: "#2ecc71",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      animation: "popIn 0.3s 0.3s cubic-bezier(0.34,1.56,0.64,1) both",
+                    }}>
+                      <CheckCircle2 size={12} color="#fff" />
+                    </div>
+                  )}
+                </div>
+                <div style={{
+                  fontSize: "0.88rem", fontWeight: 600, color: COLORS.oscuro,
+                  opacity: isActive ? 1 : 0, transform: isActive ? "translateY(0)" : "translateY(8px)",
+                  transition: "all 0.4s ease",
+                }}>{p.label}</div>
+                <div style={{
+                  fontSize: "0.75rem", color: "#8888a8", marginTop: 3,
+                  opacity: isActive ? 1 : 0, transform: isActive ? "translateY(0)" : "translateY(8px)",
+                  transition: "all 0.4s 0.1s ease",
+                }}>{p.sub}</div>
+              </div>
+
+              {!isLast && (
+                <div style={{ flex: "0 0 50px", display: "flex", alignItems: "center", height: 60 }}>
+                  <div style={{ width: "100%", height: 2, background: "#e0e0e0", borderRadius: 2, position: "relative", overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", borderRadius: 2,
+                      background: `linear-gradient(90deg, ${p.color}, ${pasos[i + 1].color})`,
+                      width: arrowActive ? "100%" : "0%",
+                      transition: "width 0.5s ease",
+                    }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN ────────────────────────────────
 export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPrivacidad }) {
   const handleLogin = () => {
     if (onLogin) onLogin();
   };
 
-  // Arranca en Anual para que el precio de lanzamiento sea lo primero que
-  // ve un visitante nuevo. El toggle lo cambia a Mensual si prefiere.
   const [facturacionAnual, setFacturacionAnual] = useState(true);
 
   const stats = [
@@ -242,11 +461,32 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
     ["24/7", "Disponible"],
   ];
 
-  // Estilo dashboard: ícono + fondo suave de color
   const problemas = [
     { Icon: Clock, bg: "#FFF3E0", color: "#F57C00", title: "Pierdes tiempo", desc: "Cada comprobante requiere abrir la app del banco, buscar el pago, comparar montos. Minutos que se acumulan cada día." },
     { Icon: AlertTriangle, bg: "#FFEBEE", color: "#E53935", title: "Comprobantes falsos", desc: "Capturas editadas, comprobantes viejos reutilizados, pagos que nunca llegaron. Sin verificación, cualquiera puede estafarte." },
     { Icon: BarChart3, bg: "#EDE7F6", color: "#7E57C2", title: "Sin control", desc: "No sabes cuánto vendiste hoy, quién pagó, ni tienes un registro ordenado. Al final del día, las cuentas no cuadran." },
+  ];
+
+  // ★ NUEVO: datos para la sección anti-fraude
+  const fraudes = [
+    {
+      Icon: ImageOff, bg: "#FFEBEE", border: "#FFCDD2", iconBg: "#FFCDD2", iconColor: "#E53935",
+      title: "Comprobante falso",
+      desc: "El cliente manda una captura editada o inventada. FlashPago la cruza con el banco y el pago no existe.",
+      badge: "No encontrado", badgeBg: "#FFCDD2", badgeColor: "#C62828", BadgeIcon: AlertTriangle,
+    },
+    {
+      Icon: Copy, bg: "#FFF3E0", border: "#FFE0B2", iconBg: "#FFE0B2", iconColor: "#F57C00",
+      title: "Comprobante reutilizado",
+      desc: "Alguien manda el mismo comprobante que ya usó antes, o que usó otro cliente. FlashPago lo reconoce.",
+      badge: "Duplicado detectado", badgeBg: "#FFE0B2", badgeColor: "#E65100", BadgeIcon: RefreshCw,
+    },
+    {
+      Icon: ArrowLeftRight, bg: "#EDE7F6", border: "#D1C4E9", iconBg: "#D1C4E9", iconColor: "#7E57C2",
+      title: "Monto alterado",
+      desc: "El comprobante dice $50.000 pero el pago real es de $30.000. FlashPago compara y detecta la diferencia.",
+      badge: "Monto no coincide", badgeBg: "#D1C4E9", badgeColor: "#4527A0", BadgeIcon: AlertTriangle,
+    },
   ];
 
   const pasos = [
@@ -270,9 +510,6 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
     { Icon: Building2, label: "BBVA" },
   ];
 
-  // Precios anuales de lanzamiento (25/30/35% off sobre 12 meses sueltos).
-  // Deben coincidir con PRECIOS_CENTAVOS en db.js y con PLANES_PRECIOS en
-  // Dashboard.jsx — si cambian en un sitio, cambian en los tres.
   const planes = [
     {
       name: "Básico", precioMensual: 39900, precioAnual: 359000,
@@ -301,35 +538,42 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         .nav-login-mobile-item { display: none; }
         @keyframes typingDot { 0%,60%,100%{opacity:.3;transform:scale(.8)} 30%{opacity:1;transform:scale(1.1)} }
         @keyframes popIn { 0%{transform:scale(0);opacity:0} 70%{transform:scale(1.2)} 100%{transform:scale(1);opacity:1} }
+        @keyframes pulseVerif { 0%{transform:scale(0.8);opacity:0.6} 100%{transform:scale(1.4);opacity:0} }
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes slideInCard { 0%{transform:scale(0.3) translateY(-10px);opacity:0} 60%{transform:scale(1.03)} 100%{transform:scale(1);opacity:1} }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
         .voz-pulse-ring { position:absolute; width:100%; height:100%; border-radius:50%; border:2px solid rgba(245,124,0,0.4); animation: vozPulso 2.4s ease-out infinite; }
         @keyframes vozPulso { 0%{ transform:scale(0.6); opacity:0.8; } 100%{ transform:scale(1.4); opacity:0; } }
         @media(max-width:1024px) {
-       .hero-grid { gap:2rem !important; }
-       .grid-3 { grid-template-columns:repeat(2,1fr) !important; }
-       .planes-grid-wrap { grid-template-columns:repeat(2,1fr) !important; }
-    }
-  @media(max-width:768px) {
-  .menu-toggle-btn { display:flex !important; }
-  .nav-links-list { display:none; }
-  .nav-login-mobile-item { display:list-item !important; }
-  .nav-login-btn { display:none !important; }
-  .hero-grid { grid-template-columns:1fr !important; text-align:center; }
-  .hero-visual-wrap { order:-1; }
-  .hero-h1 { font-size:2.2rem !important; }
-  .hero-buttons-wrap { justify-content:center; }
-  .hero-stats-wrap { justify-content:center; }
-  .grid-3 { grid-template-columns:1fr !important; }
-  .grid-2 { grid-template-columns:1fr !important; }
-  .voz-grid { grid-template-columns:1fr !important; text-align:center; }
-  .voz-lista { align-items:center; }
-  .planes-grid-wrap { grid-template-columns:1fr !important; max-width:400px; margin:1rem auto 0; }
-  .cta-h2 { font-size:1.8rem !important; }
-}
-@media(max-width:480px) {
-  .hero-h1 { font-size:1.8rem !important; }
-  .cta-h2 { font-size:1.5rem !important; }
-}
+          .hero-grid { gap:2rem !important; }
+          .grid-3 { grid-template-columns:repeat(2,1fr) !important; }
+          .planes-grid-wrap { grid-template-columns:repeat(2,1fr) !important; }
+          .live-grid { grid-template-columns:1fr !important; }
+        }
+        @media(max-width:768px) {
+          .menu-toggle-btn { display:flex !important; }
+          .nav-links-list { display:none; }
+          .nav-login-mobile-item { display:list-item !important; }
+          .nav-login-btn { display:none !important; }
+          .hero-grid { grid-template-columns:1fr !important; text-align:center; }
+          .hero-visual-wrap { order:-1; }
+          .hero-h1 { font-size:2.2rem !important; }
+          .hero-buttons-wrap { justify-content:center; }
+          .hero-stats-wrap { justify-content:center; }
+          .grid-3 { grid-template-columns:1fr !important; }
+          .grid-2 { grid-template-columns:1fr !important; }
+          .voz-grid { grid-template-columns:1fr !important; text-align:center; }
+          .voz-lista { align-items:center; }
+          .planes-grid-wrap { grid-template-columns:1fr !important; max-width:400px; margin:1rem auto 0; }
+          .cta-h2 { font-size:1.8rem !important; }
+          .fraude-grid { grid-template-columns:1fr !important; }
+          .live-grid { grid-template-columns:1fr !important; }
+          .live-stats-grid { grid-template-columns:1fr 1fr !important; }
+        }
+        @media(max-width:480px) {
+          .hero-h1 { font-size:1.8rem !important; }
+          .cta-h2 { font-size:1.5rem !important; }
+        }
       `}</style>
 
       <Nav onLogin={handleLogin} />
@@ -389,6 +633,35 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         </div>
       </section>
 
+      {/* ─── ★ NUEVO: ANTI-FRAUDE ─── */}
+      <section style={{ padding: "6rem 2rem", background: COLORS.grisClaro, boxSizing: "border-box" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "0.85rem", fontWeight: 600, color: COLORS.rojo, textTransform: "uppercase", letterSpacing: 2, marginBottom: "1rem", display: "flex", alignItems: "center", gap: 6 }}>
+            <Shield size={14} /> Protección anti-fraude
+          </div>
+          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, marginBottom: "1.5rem", lineHeight: 1.2, marginTop: 0 }}>3 fraudes que FlashPago detecta por ti</h2>
+          <p style={{ fontSize: "1.1rem", color: COLORS.grisTxt, maxWidth: 650, marginBottom: "3rem" }}>Cada comprobante se cruza con tu banco en tiempo real. Si algo no cuadra, lo bloquea al instante.</p>
+
+          <div className="fraude-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1.5rem", marginBottom: "3rem" }}>
+            {fraudes.map(f => (
+              <div key={f.title} style={{ background: f.bg, border: `1px solid ${f.border}`, borderRadius: 16, padding: "2rem" }}>
+                <div style={{ marginBottom: "1.25rem" }}>
+                  <IconBadge icon={f.Icon} bg={f.iconBg} color={f.iconColor} size={22} boxSize={48} />
+                </div>
+                <h3 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "1.15rem", fontWeight: 600, marginBottom: "0.75rem", marginTop: 0 }}>{f.title}</h3>
+                <p style={{ fontSize: "0.95rem", color: COLORS.grisTxt, margin: 0, marginBottom: "1rem" }}>{f.desc}</p>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: "0.78rem", fontWeight: 600, background: f.badgeBg, color: f.badgeColor, padding: "0.3rem 0.85rem", borderRadius: 50 }}>
+                  <f.BadgeIcon size={12} /> {f.badge}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Flujo visual */}
+          <AnimatedVerificationFlow />
+        </div>
+      </section>
+
       {/* ─── CÓMO FUNCIONA ─── */}
       <section id="como-funciona" style={{ padding: "6rem 2rem", background: COLORS.oscuro, color: COLORS.blanco, boxSizing: "border-box" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -431,7 +704,20 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         </div>
       </section>
 
-      {/* ─── VOZ (NUEVO) ─── */}
+      {/* ─── ★ NUEVO: EN TIEMPO REAL ─── */}
+      <section style={{ padding: "6rem 2rem", background: `linear-gradient(135deg, ${COLORS.oscuro} 0%, ${COLORS.oscuro2} 100%)`, boxSizing: "border-box", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: "-30%", right: "-10%", width: "50vw", height: "50vw", background: "radial-gradient(circle, rgba(245,124,0,0.1) 0%, transparent 70%)", borderRadius: "50%" }} />
+        <div style={{ maxWidth: 1100, margin: "0 auto", position: "relative", zIndex: 1 }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "0.85rem", fontWeight: 600, color: COLORS.naranja, textTransform: "uppercase", letterSpacing: 2, marginBottom: "1rem" }}>En tiempo real</div>
+          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, color: COLORS.blanco, marginBottom: "1.5rem", lineHeight: 1.2, marginTop: 0 }}>Así trabaja FlashPago por ti</h2>
+          <p style={{ fontSize: "1.1rem", color: "#b0b0c8", maxWidth: 650, marginBottom: "3rem" }}>Cada comprobante pasa por inteligencia artificial, se cruza con el banco y te da la respuesta en segundos.</p>
+          <div className="live-grid">
+            <LivePaymentFeed />
+          </div>
+        </div>
+      </section>
+
+      {/* ─── VOZ ─── */}
       <section style={{ padding: "6rem 2rem", background: `linear-gradient(135deg, ${COLORS.oscuro} 0%, ${COLORS.oscuro2} 100%)`, boxSizing: "border-box", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: "-30%", left: "-10%", width: "50vw", height: "50vw", background: "radial-gradient(circle, rgba(245,124,0,0.12) 0%, transparent 70%)", borderRadius: "50%" }} />
         <div className="voz-grid" style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "auto 1fr", gap: "3.5rem", alignItems: "center", position: "relative", zIndex: 1 }}>
@@ -489,7 +775,6 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
           <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, marginBottom: "1.5rem", lineHeight: 1.2, marginTop: 0 }}>Elige el plan para tu negocio</h2>
           <p style={{ fontSize: "1.1rem", color: COLORS.grisTxt, maxWidth: 650, marginBottom: "2rem" }}>Sin contratos largos. Cancela cuando quieras.</p>
 
-          {/* Mensual / Anual — precio de lanzamiento */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "2.5rem", flexWrap: "wrap", justifyContent: "center" }}>
             <span style={{ fontSize: "0.9rem", fontWeight: !facturacionAnual ? 600 : 400, color: !facturacionAnual ? COLORS.oscuro : COLORS.grisTxt }}>Mensual</span>
             <button
@@ -509,84 +794,70 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
               const descuentoPct = Math.round((1 - plan.precioAnual / (plan.precioMensual * 12)) * 100);
               const mesesGratis = Math.round((1 - plan.precioAnual / (plan.precioMensual * 12)) * 12 * 10) / 10;
               return (
-              <div key={plan.name} style={{ border: `2px solid ${plan.popular ? COLORS.naranja : "#e8e8f0"}`, borderRadius: 20, padding: "2.5rem 2rem", position: "relative", ...(plan.popular ? { background: "linear-gradient(180deg, rgba(245,124,0,0.03) 0%, transparent 100%)" } : {}) }}>
-                {plan.popular && (
-                  <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: COLORS.naranja, color: "white", padding: "0.3rem 1.2rem", borderRadius: 50, fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
-                    <Star size={12} fill="white" /> Más popular
+                <div key={plan.name} style={{ border: `2px solid ${plan.popular ? COLORS.naranja : "#e8e8f0"}`, borderRadius: 20, padding: "2.5rem 2rem", position: "relative", ...(plan.popular ? { background: "linear-gradient(180deg, rgba(245,124,0,0.03) 0%, transparent 100%)" } : {}) }}>
+                  {plan.popular && (
+                    <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: COLORS.naranja, color: "white", padding: "0.3rem 1.2rem", borderRadius: 50, fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
+                      <Star size={12} fill="white" /> Más popular
+                    </div>
+                  )}
+                  {facturacionAnual && !plan.popular && (
+                    <div style={{
+                      position: "absolute", top: 16, left: 16,
+                      background: "#FFF3E0", color: COLORS.naranja, fontSize: "0.68rem", fontWeight: 700,
+                      padding: "0.22rem 0.6rem", borderRadius: 999, letterSpacing: 0.2,
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                    }}>
+                      <Rocket size={10} /> Lanzamiento
+                    </div>
+                  )}
+                  <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "1.3rem", fontWeight: 700, marginBottom: "0.5rem" }}>{plan.name}</div>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 8, marginBottom: "0.25rem" }}>
+                    <div style={{
+                      fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, transition: "color .2s",
+                      ...(facturacionAnual
+                        ? { backgroundImage: "linear-gradient(135deg, #F57C00, #E65100)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }
+                        : { color: COLORS.naranja }),
+                    }}>
+                      ${precioMostrado.toLocaleString('es-CO')}
+                    </div>
+                    <span style={{
+                      fontSize: "0.75rem", fontWeight: 700, color: "white", background: COLORS.verde,
+                      padding: "0.2rem 0.55rem", borderRadius: 999, whiteSpace: "nowrap",
+                      visibility: facturacionAnual ? "visible" : "hidden",
+                    }}>
+                      -{descuentoPct}%
+                    </span>
                   </div>
-                )}
-                {/* Cinta de lanzamiento en la esquina opuesta a "Más popular", solo
-                    en las cards que hoy no tienen nada arriba (Premium ya tiene la
-                    suya). Es absolute: no empuja nada, se monta y desmonta sin el
-                    problema de layout que tuvo la del interruptor. */}
-                {facturacionAnual && !plan.popular && (
+                  <div style={{ fontSize: "0.9rem", color: COLORS.grisTxt, marginBottom: "0.35rem" }}>
+                    COP / {facturacionAnual ? "año" : "mes"}
+                  </div>
                   <div style={{
-                    position: "absolute", top: 16, left: 16,
-                    background: "#FFF3E0", color: COLORS.naranja, fontSize: "0.68rem", fontWeight: 700,
-                    padding: "0.22rem 0.6rem", borderRadius: 999, letterSpacing: 0.2,
-                    display: "inline-flex", alignItems: "center", gap: 4,
-                  }}>
-                    <Rocket size={10} /> Lanzamiento
-                  </div>
-                )}
-                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "1.3rem", fontWeight: 700, marginBottom: "0.5rem" }}>{plan.name}</div>
-                {/* El -X% va junto al precio, no suelto en la esquina: en el plan
-                    Básico (sin borde naranja ni fondo degradado) quedaba flotando
-                    sin nada que lo acompañe. Se mantiene montado con visibility
-                    (mismo motivo que el resto de esta seccion: no correr el layout). */}
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 8, marginBottom: "0.25rem" }}>
-                  {/* En mensual, naranja plano de siempre; en anual pasa a un
-                      degradado mas intenso — el color "se pone mas fuerte" justo
-                      cuando aparece el precio con descuento. */}
-                  <div style={{
-                    fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, transition: "color .2s",
-                    ...(facturacionAnual
-                      ? { backgroundImage: "linear-gradient(135deg, #F57C00, #E65100)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }
-                      : { color: COLORS.naranja }),
-                  }}>
-                    ${precioMostrado.toLocaleString('es-CO')}
-                  </div>
-                  <span style={{
-                    fontSize: "0.75rem", fontWeight: 700, color: "white", background: COLORS.verde,
-                    padding: "0.2rem 0.55rem", borderRadius: 999, whiteSpace: "nowrap",
+                    fontSize: "0.85rem", fontWeight: 600, color: COLORS.verde, marginBottom: "2rem",
                     visibility: facturacionAnual ? "visible" : "hidden",
                   }}>
-                    -{descuentoPct}%
-                  </span>
+                    Equivale a {mesesGratis} meses gratis
+                  </div>
+                  <ul style={{ listStyle: "none", padding: 0, marginBottom: "2rem", margin: "0 0 2rem 0" }}>
+                    {plan.features.map(f => (
+                      <li key={f} style={{ padding: "0.5rem 0", fontSize: "0.9rem", color: COLORS.grisTxt, display: "flex", alignItems: "flex-start", gap: 8 }}>
+                        <Check size={16} color={COLORS.naranja} strokeWidth={3} style={{ flexShrink: 0, marginTop: 3 }} /> {f}
+                      </li>
+                    ))}
+                    {plan.disabled?.map(f => (
+                      <li key={f} style={{ padding: "0.5rem 0", fontSize: "0.9rem", color: COLORS.grisTxt, opacity: 0.4, display: "flex", alignItems: "flex-start", gap: 8 }}>
+                        <Minus size={16} color="#ccc" style={{ flexShrink: 0, marginTop: 3 }} /> {f}
+                      </li>
+                    ))}
+                    {plan.pronto?.map(f => (
+                      <li key={f} style={{ padding: "0.5rem 0", fontSize: "0.9rem", color: COLORS.grisTxt, display: "flex", alignItems: "flex-start", gap: 8 }}>
+                        <Hourglass size={16} color={COLORS.naranjaSuave} style={{ flexShrink: 0, marginTop: 3 }} /> {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <button onClick={onRegistro} style={{ display: "block", width: "100%", padding: "0.9rem", borderRadius: 12, fontWeight: 600, fontSize: "1rem", textAlign: "center", textDecoration: "none", cursor: "pointer", boxSizing: "border-box", fontFamily: "'Inter',sans-serif", border: "none", ...(plan.popular ? { background: COLORS.naranja, color: "white" } : { background: "transparent", color: COLORS.naranja, border: `2px solid ${COLORS.naranja}` }) }}>
+                    Empezar
+                  </button>
                 </div>
-                <div style={{ fontSize: "0.9rem", color: COLORS.grisTxt, marginBottom: "0.35rem" }}>
-                  COP / {facturacionAnual ? "año" : "mes"}
-                </div>
-                {/* Se mantiene montada (solo cambia visibility) con el mismo
-                    marginBottom en los dos modos, para que el boton "Empezar" no
-                    salte de posicion al cambiar entre mensual y anual. */}
-                <div style={{
-                  fontSize: "0.85rem", fontWeight: 600, color: COLORS.verde, marginBottom: "2rem",
-                  visibility: facturacionAnual ? "visible" : "hidden",
-                }}>
-                  Equivale a {mesesGratis} meses gratis
-                </div>
-                <ul style={{ listStyle: "none", padding: 0, marginBottom: "2rem", margin: "0 0 2rem 0" }}>
-                  {plan.features.map(f => (
-                    <li key={f} style={{ padding: "0.5rem 0", fontSize: "0.9rem", color: COLORS.grisTxt, display: "flex", alignItems: "flex-start", gap: 8 }}>
-                      <Check size={16} color={COLORS.naranja} strokeWidth={3} style={{ flexShrink: 0, marginTop: 3 }} /> {f}
-                    </li>
-                  ))}
-                  {plan.disabled?.map(f => (
-                    <li key={f} style={{ padding: "0.5rem 0", fontSize: "0.9rem", color: COLORS.grisTxt, opacity: 0.4, display: "flex", alignItems: "flex-start", gap: 8 }}>
-                      <Minus size={16} color="#ccc" style={{ flexShrink: 0, marginTop: 3 }} /> {f}
-                    </li>
-                  ))}
-                  {plan.pronto?.map(f => (
-                    <li key={f} style={{ padding: "0.5rem 0", fontSize: "0.9rem", color: COLORS.grisTxt, display: "flex", alignItems: "flex-start", gap: 8 }}>
-                      <Hourglass size={16} color={COLORS.naranjaSuave} style={{ flexShrink: 0, marginTop: 3 }} /> {f}
-                    </li>
-                  ))}
-                </ul>
-                <button onClick={onRegistro} style={{ display: "block", width: "100%", padding: "0.9rem", borderRadius: 12, fontWeight: 600, fontSize: "1rem", textAlign: "center", textDecoration: "none", cursor: "pointer", boxSizing: "border-box", fontFamily: "'Inter',sans-serif", border: "none", ...(plan.popular ? { background: COLORS.naranja, color: "white" } : { background: "transparent", color: COLORS.naranja, border: `2px solid ${COLORS.naranja}` }) }}>
-                  Empezar
-                </button>
-              </div>
               );
             })}
           </div>
@@ -628,14 +899,14 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         </div>
         <p style={{ color: "#6868a0", fontSize: "0.85rem", margin: "0 0 0.75rem 0" }}>Verificación de pagos con inteligencia artificial — Hecho en Colombia 🇨🇴</p>
         <p style={{ color: "#6868a0", fontSize: "0.75rem", marginTop: "0.75rem" }}>
-         © 2026 FlashPago. Todos los derechos reservados. | {' '}
-         <a href="#" onClick={(e) => { e.preventDefault(); onTerminos(); }} style={{ color: "#8888a8", textDecoration: "underline", cursor: "pointer" }}>
-         Términos y Condiciones
-         </a>
-         {' '}|{' '}
-         <a href="#" onClick={(e) => { e.preventDefault(); onPrivacidad(); }} style={{ color: "#8888a8", textDecoration: "underline", cursor: "pointer" }}>
-         Política de Privacidad
-         </a>
+          © 2026 FlashPago. Todos los derechos reservados. | {' '}
+          <a href="#" onClick={(e) => { e.preventDefault(); onTerminos(); }} style={{ color: "#8888a8", textDecoration: "underline", cursor: "pointer" }}>
+            Términos y Condiciones
+          </a>
+          {' '}|{' '}
+          <a href="#" onClick={(e) => { e.preventDefault(); onPrivacidad(); }} style={{ color: "#8888a8", textDecoration: "underline", cursor: "pointer" }}>
+            Política de Privacidad
+          </a>
         </p>
       </footer>
     </div>

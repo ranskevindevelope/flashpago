@@ -56,15 +56,9 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
     }
   }, []);
 
-  // Con la pestaña oculta el toast no se ve, así que ahí se avisa por
-  // notificación del sistema. Un pago verificado además debe sonar aunque
-  // esté minimizada o en otra ventana/programa — es plata entrando, no
-  // debería depender de que alguien esté mirando el dashboard en ese
-  // momento (el navegador no bloquea el audio por estar oculta, solo exige
-  // que haya habido alguna interacción previa del usuario con la página).
-  // La voz se deja solo con la pestaña al frente: son 2-3 segundos de
-  // audio por pago, y encimados con otras cosas sonando en el fondo es
-  // más molesto que útil.
+  // Con la pestaña oculta se avisa por notificación del sistema, y el audio/voz
+  // igual suena (el navegador no lo bloquea por estar oculta, solo exige una
+  // interacción previa del usuario con la página).
   const mostrarNotificacion = useCallback(({ tipo, titulo, detalle, monto, nombreCliente }) => {
     // Se guarda en el historial de la campana pase lo que pase con el toast
     // (pestaña oculta o no) — antes esto solo vivía 5s y desaparecía.
@@ -72,7 +66,10 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
 
     if (document.hidden) {
       notificarSistema({ titulo, cuerpo: detalle, tag: `flashpago-${tipo}` });
-      if (tipo === 'real') reproducirSonido();
+      if (tipo === 'real') {
+        reproducirSonido();
+        if (monto) anunciarPagoEnVoz(monto, nombreCliente);
+      }
       return;
     }
 
@@ -88,9 +85,8 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
     }, 5000);
   }, [reproducirSonido, anunciarPagoEnVoz, onNotificacion]);
 
-  // Detección de novedades.
-  // `modoResumen` se usa al volver a la pestaña: en vez de un aviso por cada
-  // pago que entró mientras nadie miraba, se muestra uno solo con el total.
+  // `modoResumen` (al volver a la pestaña) junta todo en un solo toast con
+  // el total, en vez de un aviso por cada pago perdido.
   const revisarNovedades = useCallback(async (modoResumen = false) => {
     try {
       // 1. Pagos REAL recientes (detectar nuevos por id)
@@ -189,15 +185,12 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
     };
     inicial();
 
-    // Este ciclo NO se pausa con la pestaña oculta: es justamente ahí donde
-    // hace falta, para poder mandar la notificación del sistema. El navegador
-    // igual lo frena a ~1 vez por minuto en segundo plano, que para avisar de
-    // un pago está bien.
+    // No se pausa con la pestaña oculta, que es justo donde hace falta
+    // (el navegador ya lo frena a ~1/min en segundo plano).
     const intervalo = setInterval(revisarNovedades, 8000);
 
-    // Al volver se avisa lo que haya quedado sin ver (por ejemplo si el
-    // permiso de notificaciones está denegado), resumido en un solo toast:
-    // 30 anuncios de voz encimados no le sirven a nadie.
+    // Al volver, resume en un solo toast lo que quedó sin ver — 30 avisos
+    // de voz encimados no sirven de nada.
     const alVolver = () => {
       if (document.hidden) return;
       revisarNovedades(true);
@@ -210,10 +203,8 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
     };
   }, [api, revisarNovedades]);
 
-  // Canal en vivo: el servidor avisa apenas verifica un pago, así el anuncio
-  // suena en el momento y no cuando toque el ciclo de consulta. El polling de
-  // arriba se mantiene como respaldo por si la conexión se cae o un proxy la
-  // bloquea; `ultimoPagoId` evita que el mismo pago se anuncie dos veces.
+  // Canal en vivo: el servidor avisa apenas verifica un pago. El polling de
+  // arriba queda como respaldo; `ultimoPagoId` evita anunciar el mismo pago dos veces.
   useEffect(() => {
     const token = localStorage.getItem('fp_token');
     if (!token || typeof EventSource === 'undefined') return undefined;

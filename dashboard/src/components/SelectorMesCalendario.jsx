@@ -3,9 +3,8 @@ import { ChevronDown } from 'lucide-react';
 
 const DIAS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
 
-// Días del mes acomodados en filas de 7 (Lun a Dom), como un calendario real
-// — con huecos antes del día 1 y después del último día. Solo para mostrar;
-// acá no se elige un día individual, se elige el mes completo (ver Aplicar).
+// Días del mes en filas de 7 (Lun-Dom), con huecos antes/después. Solo
+// para mostrar — se elige el mes completo, no un día (ver Aplicar).
 function diasDelMesEnGrilla(mes, anio) {
   const primerDiaSemana = (new Date(anio, mes - 1, 1).getDay() + 6) % 7; // 0=Lun
   const ultimoDia = new Date(anio, mes, 0).getDate();
@@ -16,11 +15,8 @@ function diasDelMesEnGrilla(mes, anio) {
   return filas;
 }
 
-// Reemplaza los botones ‹ › sueltos por un selector tipo calendario: se abre
-// un popover con navegación mes a mes y un botón "Aplicar" que confirma el
-// mes mostrado. No permite elegir días individuales ni rangos — Estadísticas
-// sigue trabajando por mes calendario completo, esto es solo la UI de cómo
-// se elige ese mes.
+// Selector tipo calendario: popover con navegación mes a mes y "Aplicar".
+// No elige días ni rangos, solo el mes completo.
 export default function SelectorMesCalendario({ mes, anio, onCambiar, sumarMes, esMesActualGenerico, mesesNombres }) {
   const [abierto, setAbierto] = useState(false);
   const [vistaMes, setVistaMes] = useState(mes);

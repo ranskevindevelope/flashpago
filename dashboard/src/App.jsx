@@ -9,10 +9,8 @@ import Terminos from './Terminos';
 import Privacidad from './Privacidad';
 import './App.css';
 
-// Registro es el único que usa `motion` (animaciones de CodigoOTP) — cargarlo
-// perezoso evita que ese ~40KB extra le toque a todo el mundo en cada visita
-// al dashboard, cuando en realidad casi nadie vuelve a pasar por esta pantalla
-// después de crear su cuenta una vez.
+// Lazy: Registro es el único que usa `motion` (~40KB), y casi nadie vuelve
+// a esta pantalla tras crear su cuenta.
 const Registro = lazy(() => import('./Registro'));
 
 const queryClient = new QueryClient();
@@ -20,10 +18,8 @@ const queryClient = new QueryClient();
 function App() {
   const paramsUrl = new URLSearchParams(window.location.search);
 
-  // El registro se puede completar en flashpago.co (landing), pero el
-  // dashboard vive en app.flashpago.co — es otro origen y no comparte
-  // localStorage, así que el token de auto-login llega por la URL en ese
-  // salto entre dominios. Se guarda acá y se limpia la URL de inmediato.
+  // flashpago.co y app.flashpago.co son orígenes distintos sin localStorage
+  // compartido, así que el token de auto-login llega por la URL.
   const tokenDeUrl = paramsUrl.get('token');
   const userDeUrl = paramsUrl.get('user');
   if (tokenDeUrl && userDeUrl) {
@@ -35,9 +31,7 @@ function App() {
     window.history.replaceState({}, '', url.toString());
   }
 
-  // app.flashpago.co siempre es el dashboard; flashpago.co es la landing.
-  // Se deja el chequeo de /panel como respaldo (bookmarks viejos, o si algún
-  // día vuelven a compartir dominio).
+  // /panel queda como respaldo (bookmarks viejos, o si comparten dominio de nuevo).
   const esPanel = window.location.hostname.startsWith('app.') || window.location.pathname.startsWith('/panel');
   const vistaSolicitada = paramsUrl.get('vista');
   const [vista, setVista] = useState(
@@ -47,10 +41,8 @@ function App() {
         ? (localStorage.getItem('fp_token') ? 'dashboard' : 'login')
         : 'landing'
   );
-  // Cuando alguien inicia con Google desde Login pero el correo es nuevo, el
-  // backend manda un token de registro pendiente en vez de rechazarlo. Se
-  // guarda acá para pasárselo a Registro y que arranque ya con el correo
-  // confirmado (ver POST /api/auth/google).
+  // Si Google Login trae un correo nuevo, el backend manda un token de
+  // registro pendiente para que Registro arranque con el correo ya confirmado.
   const [datosGoogle, setDatosGoogle] = useState(null);
 
   const handleLogout = () => {

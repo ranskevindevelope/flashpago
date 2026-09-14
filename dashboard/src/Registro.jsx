@@ -14,10 +14,8 @@ function Registro({ onBack, datosGoogle }) {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
 
-  // Si viene de "Continuar con Google" en el login (correo nuevo), o si se
-  // usa el botón de Google aquí mismo en el paso 1 — en los dos casos el
-  // correo ya quedó verificado por Google, así que el paso 3 (usuario y
-  // contraseña) y el 4 (código de correo) se saltan por completo.
+  // Si el correo ya quedó verificado por Google (login o botón acá en el
+  // paso 1), se saltan el paso 3 (contraseña) y el 4 (código de correo).
   const [googlePendiente, setGooglePendiente] = useState(datosGoogle || null);
 
   const manejarResultadoGoogle = (data) => {
@@ -37,9 +35,8 @@ function Registro({ onBack, datosGoogle }) {
 
   // Paso 1: Plan
   const [plan, setPlan] = useState('premium');
-  // Solo cambia lo que se muestra (precio/ahorro por plan); el trial es
-  // gratis con cualquier plan, asi que esto no afecta lo que se envia al
-  // crear la cuenta. Arranca en Anual, igual que dashboard y landing.
+  // Solo cambia el precio mostrado (el trial es gratis en cualquier plan).
+  // Arranca en Anual, igual que dashboard y landing.
   const [facturacionAnual, setFacturacionAnual] = useState(true);
 
   // Paso 2: Datos del negocio
@@ -87,11 +84,9 @@ function Registro({ onBack, datosGoogle }) {
   // Paso 5: Resultado
   const [registroExitoso, setRegistroExitoso] = useState(null);
 
-  // precioAnual solo se usa para mostrar el ahorro de lanzamiento (ver abajo);
-  // la prueba de 15 días es gratis sin importar el plan, así que aquí no se
-  // elige mensual/anual todavía — eso se decide en el dashboard al terminar
-  // la prueba. Los montos deben coincidir con PRECIOS_CENTAVOS en db.js,
-  // PLANES_PRECIOS en Dashboard.jsx y `planes` en Flashpagolanding.jsx.
+  // precioAnual es solo para mostrar el ahorro; mensual/anual se decide
+  // luego en el dashboard. Debe coincidir con PRECIOS_CENTAVOS (db.js),
+  // PLANES_PRECIOS (Dashboard.jsx) y `planes` (Flashpagolanding.jsx).
   const planes = [
     { id: 'basico', nombre: 'Básico', precio: '$39.900', precioMensual: 39900, precioAnual: 359000, comprobantes: '300 comprobantes/mes', corto: '300/mes', popular: false, Icono: Package },
     { id: 'premium', nombre: 'Premium', precio: '$79.900', precioMensual: 79900, precioAnual: 669000, comprobantes: '1,000 comprobantes/mes', corto: '1,000/mes', popular: true, Icono: Rocket },
@@ -269,9 +264,8 @@ function Registro({ onBack, datosGoogle }) {
   // ─── Ir al dashboard ──────────────────────────────────
   const irAlDashboard = () => {
     if (registroExitoso) {
-      // El registro puede completarse en flashpago.co (landing), pero el
-      // dashboard vive en app.flashpago.co — es otro origen y no comparte
-      // localStorage, así que el token se pasa por la URL para el salto.
+      // flashpago.co y app.flashpago.co no comparten localStorage, por
+      // eso el token se pasa por la URL para el salto.
       const params = new URLSearchParams({
         token: registroExitoso.token,
         user: JSON.stringify(registroExitoso.user),

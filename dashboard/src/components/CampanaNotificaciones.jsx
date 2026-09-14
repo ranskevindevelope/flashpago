@@ -18,13 +18,9 @@ function tiempoRelativo(fecha) {
   return `hace ${Math.floor(horas / 24)} d`;
 }
 
-// Campana de notificaciones del header — historial de los últimos avisos
-// (pagos verificados, pendientes, duplicados) que antes se perdían al
-// desaparecer el toast de NotificacionesEnVivo.jsx a los 5s. Inspirada en el
-// Notification Bell de RareUI (rareui.com), pero con CSS puro en vez de
-// `motion`: este componente vive en el header del Dashboard, que carga
-// siempre, así que no vale la pena meterle esa librería solo por acá (ver
-// components/CodigoOTP.jsx, que sí la usa porque Registro.jsx carga aparte).
+// Campana del header: historial de avisos que antes se perdían al
+// desaparecer el toast de NotificacionesEnVivo.jsx a los 5s. CSS puro en
+// vez de `motion` (reservado para Registro.jsx, que carga aparte).
 export default function CampanaNotificaciones({ notificaciones = [], onAbrir }) {
   const [abierto, setAbierto] = useState(false);
   const [sonando, setSonando] = useState(false);

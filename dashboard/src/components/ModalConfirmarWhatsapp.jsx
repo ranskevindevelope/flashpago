@@ -1,11 +1,8 @@
 import { MessageCircle, CheckCircle2 } from 'lucide-react';
 
-// Último paso del onboarding, obligatorio: sin esto el bot no puede
-// reconocer los mensajes de este negocio de forma confiable (WhatsApp a
-// veces esconde el número real detrás de un identificador de privacidad —
-// ver bot/confirmacionWhatsapp.js en el backend). El botón abre WhatsApp con
-// el mensaje ya escrito; la confirmación llega sola cuando el negocio le da
-// enviar, sin que tenga que escribir nada a mano.
+// Último paso del onboarding, obligatorio (ver bot/confirmacionWhatsapp.js):
+// WhatsApp a veces esconde el número real tras un id de privacidad. Abre
+// WhatsApp con el mensaje ya escrito; confirma solo con darle enviar.
 export default function ModalConfirmarWhatsapp({ abierto, waLink, confirmado, onCerrar }) {
   if (!abierto) return null;
 

@@ -1,20 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Botón de "Iniciar sesión con Google" (Google Identity Services) — se usa
-// igual en Login y Registro. El backend decide si es un inicio de sesión o
-// el arranque de un registro nuevo según si el correo ya existe (ver
-// POST /api/auth/google); este componente solo consigue el token de Google
-// y le pasa la respuesta del servidor a quien lo use.
+// Botón de Google (usado en Login y Registro). El backend decide login vs.
+// registro nuevo según si el correo ya existe (POST /api/auth/google); este
+// componente solo consigue el token y pasa la respuesta.
 export default function BotonGoogle({ onResultado, ancho = 360 }) {
   const contenedorRef = useRef(null);
   const [clientId, setClientId] = useState(null);
   const [noDisponible, setNoDisponible] = useState(false);
 
-  // `onResultado` llega como función nueva en cada render del padre (Login/
-  // Registro no la envuelven en useCallback) — si quedara en las deps del
-  // efecto de abajo, éste se reconstruía por completo en cada tecla que se
-  // escribiera en cualquier campo del formulario. Guardarla en un ref deja
-  // el efecto sin depender de su identidad.
+  // Ref para no depender de la identidad de `onResultado` (llega nueva en
+  // cada render y reconstruiría el efecto de abajo en cada tecla escrita).
   const onResultadoRef = useRef(onResultado);
   useEffect(() => { onResultadoRef.current = onResultado; }, [onResultado]);
 
@@ -46,24 +41,16 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
       }
     };
 
-    // Google no acepta un ancho en porcentaje, solo un número fijo de px.
-    // Si se usa `ancho` tal cual en pantallas angostas, el botón se sale del
-    // contenedor y desborda el layout en móvil. Por eso se mide el espacio
-    // real disponible una sola vez y se limita entre el mínimo (200) y
-    // máximo (400) que soporta el botón de Google.
+    // Google solo acepta ancho fijo en px (no %); se mide el espacio real
+    // para no desbordar en móvil, limitado al rango que soporta su botón.
     const anchoEfectivo = () => {
       const disponible = contenedorRef.current?.getBoundingClientRect().width || ancho;
       return Math.max(200, Math.min(ancho, Math.floor(disponible)));
     };
 
-    // Google mismo desaconseja llamar initialize()/renderButton() más de una
-    // vez sobre el mismo elemento — volver a redibujarlo (como se hacía
-    // antes, reaccionando a cada resize) es justo lo que causaba que el
-    // botón parpadeara/temblara. Por eso ahora se dibuja UNA sola vez, y ya:
-    // ni el teclado del celular, ni la barra de scroll, ni nada más lo
-    // vuelve a tocar. requestAnimationFrame espera un frame a que el layout
-    // esté asentado antes de medir, para no quedarse con un ancho de 0 o
-    // incorrecto tomado a mitad de un reflow.
+    // Se dibuja UNA sola vez (Google desaconseja re-render, causaba parpadeo
+    // en cada resize). requestAnimationFrame espera a que el layout se
+    // asiente antes de medir el ancho.
     const dibujar = () => {
       if (cancelado || !contenedorRef.current || !window.google?.accounts?.id) return;
       window.google.accounts.id.initialize({ client_id: clientId, callback: manejarCredencial });
@@ -87,13 +74,12 @@ export default function BotonGoogle({ onResultado, ancho = 360 }) {
     return () => { cancelado = true; };
   }, [clientId, ancho]);
 
-  // Sin Client ID configurado (todavía no se activó en el backend): no se
-  // muestra nada, en vez de un botón roto que no hace nada al hacerle clic.
-  if (noDisponible || !clientId) return null;
+  // Sin Client ID configurado (no se activó en el backend): no se muestra
+  // nada, en vez de un botón roto que no hace nada al hacerle clic.
+  if (noDisponible) return null;
 
-  // minHeight fijo (alto real del botón "large" de Google): reserva el
-  // espacio desde antes de que el iframe termine de cargar su propio ícono
-  // y su fuente, para que ese ajuste interno no empuje el resto de la
-  // página.
+  // El contenedor se reserva desde el primer render, con clientId o sin él
+  // — así el espacio ya existe cuando resuelve /api/config-publica y carga
+  // el script de Google, y no hay un salto de 0 a 44px a mitad de página.
   return <div ref={contenedorRef} style={{ display: 'flex', justifyContent: 'center', width: '100%', minHeight: 44 }} />;
 }

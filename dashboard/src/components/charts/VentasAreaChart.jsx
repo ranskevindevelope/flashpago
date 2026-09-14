@@ -25,9 +25,8 @@ function PuntoVentas({ cx, cy }) {
   return <circle cx={cx} cy={cy} r={3.5} fill="#1565C0" stroke="var(--dash-surface)" strokeWidth={1.5} />;
 }
 
-// `data` llega con { fecha, totalK } (mismo formato que VentasPorDiaChart —
-// el total en miles para que el eje Y se lea "$60k"). `promedioK` es el
-// promedio diario del periodo, tambien en miles, para la linea de referencia.
+// `data`: { fecha, totalK } en miles (eje Y "$60k"). `promedioK` es el
+// promedio diario para la línea de referencia.
 export default function VentasAreaChart({ data, promedioK, height = 300 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>

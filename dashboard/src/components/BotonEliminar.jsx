@@ -3,13 +3,9 @@ import { Trash2, Check, X } from 'lucide-react';
 
 const ESPERA = { confirmado: 1400, cancelado: 600 };
 
-// Botón de eliminar con confirmación inline, sin abrir un modal aparte: al
-// tocarlo se ensancha y aparece un panelcito con confirmar/cancelar; al
-// confirmar el ícono se convierte en un chulo por un momento. Inspirado en
-// el Delete Button de RareUI (rareui.com), pero con transiciones CSS puras
-// en vez de `motion` — este botón vive en listas del Dashboard, que carga
-// siempre, y no vale la pena meterle una librería de animación solo por
-// esto (`motion` ya está reservado para Registro.jsx, que carga aparte).
+// Confirmación inline (sin modal aparte): se ensancha y muestra confirmar/
+// cancelar. CSS puro en vez de `motion` (reservado para Registro.jsx, que
+// carga aparte) porque este botón vive en listas que cargan siempre.
 export default function BotonEliminar({ onConfirmar, deshabilitado = false, etiqueta = 'Eliminar' }) {
   const [abierto, setAbierto] = useState(false);
   const [estado, setEstado] = useState('idle'); // idle | confirmado | cancelado

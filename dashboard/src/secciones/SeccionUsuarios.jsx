@@ -23,10 +23,9 @@ export default function SeccionUsuarios({ api }) {
 
   const refrescar = () => queryClient.invalidateQueries({ queryKey: ['usuarios'] });
 
-  // Le pide al empleado que escriba "confirmar <codigo>" al bot, para que
-  // quede guardado el identificador exacto (número real o @lid) con el que
-  // WhatsApp lo va a seguir presentando — igual que el onboarding del negocio
-  // (ver ModalConfirmarWhatsapp / bot/confirmacionWhatsapp.js).
+  // Pide al empleado escribir "confirmar <codigo>" al bot para guardar su
+  // identificador exacto (número real o @lid), igual que el onboarding
+  // del negocio (ver bot/confirmacionWhatsapp.js).
   const iniciarConfirmacionWpp = async (user) => {
     try {
       const data = await api.request(`/api/usuarios/${user.id}/preparar-confirmacion`, { method: 'POST' });
