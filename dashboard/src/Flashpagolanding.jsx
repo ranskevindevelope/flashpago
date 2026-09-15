@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import {
   Zap, MessageCircle, Lock, Camera, Bot, CheckCircle2, Shield, BarChart3,
   Search, RefreshCw, Clock, AlertTriangle, Building2, Database,
@@ -346,6 +346,199 @@ function LivePaymentFeed() {
   );
 }
 
+// ─── CAMPO DE PARTÍCULAS (fondo de la sección Voz) ──
+// Adaptado de un CodePen de Ava Thiery (avathiery.com) — mismo campo de flujo
+// con senoides combinadas, pero más liviano: 700 partículas en vez de 1800,
+// pausado por completo cuando la sección sale de pantalla (IntersectionObserver),
+// y sin el remolino del cursor en pantallas táctiles (no aporta nada ahí y
+// evita el cálculo extra en el celular).
+function FlowFieldCanvas() {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+
+    let W = 0, H = 0, dpr = 1;
+    const PARTICLE_COUNT = 700;
+    const FIELD_RES = 24;
+    let cols = 0, rows = 0;
+    let field = null;
+    const particles = [];
+    let raf = null;
+    let visible = false;
+    let last = performance.now();
+
+    const esTactil = window.matchMedia('(pointer: coarse)').matches;
+    let targetX = -9999, targetY = -9999;
+    let mouseX = -9999, mouseY = -9999;
+
+    // Ondas de choque disparadas desde afuera (botón de voz) — cada una empuja
+    // las partículas cercanas y se apaga sola con el tiempo.
+    const ONDA_DURACION = 1100;
+    let ondas = [];
+    const onOnda = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      ondas.push({ x: e.detail.x - rect.left, y: e.detail.y - rect.top, t0: performance.now() });
+    };
+    window.addEventListener('voz-onda', onOnda);
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = canvas.clientWidth;
+      H = canvas.clientHeight;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cols = Math.ceil(W / FIELD_RES) + 1;
+      rows = Math.ceil(H / FIELD_RES) + 1;
+      field = new Float32Array(cols * rows);
+      ctx.fillStyle = COLORS.oscuro;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    function reiniciarParticula(p) {
+      p.x = Math.random() * W;
+      p.y = Math.random() * H;
+      p.prevX = p.x;
+      p.prevY = p.y;
+      p.life = 0;
+      p.maxLife = 80 + Math.random() * 240;
+      p.hue = 25 + Math.random() * 20; // dorado/naranja, en línea con la marca
+      p.lightness = 65 + Math.random() * 25;
+    }
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const p = {};
+      reiniciarParticula(p);
+      particles.push(p);
+    }
+
+    function updateField(time) {
+      const t = time * 0.00005;
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const nx = x * 0.06;
+          const ny = y * 0.06;
+          const a =
+            Math.sin(nx + ny * 1.3 + t) * 1.2 +
+            Math.sin(nx * 1.7 - ny * 0.5 + t * 1.4) * 0.8 +
+            Math.sin(ny * 2.1 + Math.cos(nx) + t * 0.6) * 0.6;
+          field[y * cols + x] = a * Math.PI;
+        }
+      }
+    }
+
+    function tick(now) {
+      raf = requestAnimationFrame(tick);
+      if (!visible) return;
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+
+      if (targetX > -9000) {
+        const lerp = 1 - Math.pow(0.005, dt);
+        mouseX += (targetX - mouseX) * lerp;
+        mouseY += (targetY - mouseY) * lerp;
+      } else {
+        mouseX = -9999; mouseY = -9999;
+      }
+
+      ctx.fillStyle = 'rgba(26,26,46,0.08)';
+      ctx.fillRect(0, 0, W, H);
+      updateField(now);
+
+      ctx.lineWidth = 0.7;
+      ctx.lineCap = 'round';
+
+      if (ondas.length) ondas = ondas.filter(o => now - o.t0 < ONDA_DURACION);
+
+      for (const p of particles) {
+        const cx = Math.floor(p.x / FIELD_RES);
+        const cy = Math.floor(p.y / FIELD_RES);
+        if (cx < 0 || cx >= cols || cy < 0 || cy >= rows) { reiniciarParticula(p); continue; }
+        const angle = field[cy * cols + cx];
+        let vx = Math.cos(angle) * 1.4;
+        let vy = Math.sin(angle) * 1.4;
+
+        if (!esTactil && mouseX > -9000) {
+          const dx = p.x - mouseX;
+          const dy = p.y - mouseY;
+          const d = Math.sqrt(dx * dx + dy * dy) + 0.001;
+          const R = 200;
+          if (d < R) {
+            const f = (1 - d / R) * 4.5;
+            vx += (dx / d) * f;
+            vy += (dy / d) * f;
+          }
+        }
+
+        for (const o of ondas) {
+          const edad = now - o.t0;
+          const dx = p.x - o.x;
+          const dy = p.y - o.y;
+          const d = Math.sqrt(dx * dx + dy * dy) + 0.001;
+          // El radio de la onda crece con el tiempo (efecto de expansión real,
+          // no solo un punto fijo empujando) y la fuerza se apaga al final.
+          const radioOnda = (edad / ONDA_DURACION) * 420;
+          const grosorFrente = 90;
+          const distAlFrente = Math.abs(d - radioOnda);
+          if (distAlFrente < grosorFrente) {
+            const fuerza = (1 - distAlFrente / grosorFrente) * (1 - edad / ONDA_DURACION) * 7;
+            vx += (dx / d) * fuerza;
+            vy += (dy / d) * fuerza;
+          }
+        }
+
+        p.prevX = p.x; p.prevY = p.y;
+        p.x += vx; p.y += vy;
+        p.life++;
+
+        if (p.life > p.maxLife || p.x < -10 || p.x > W + 10 || p.y < -10 || p.y > H + 10) {
+          reiniciarParticula(p);
+          continue;
+        }
+
+        const fadeIn = Math.min(1, p.life / 15);
+        const fadeOut = Math.min(1, (p.maxLife - p.life) / 40);
+        const a = fadeIn * fadeOut * 0.5;
+
+        ctx.strokeStyle = `hsla(${p.hue}, 70%, ${p.lightness}%, ${a})`;
+        ctx.beginPath();
+        ctx.moveTo(p.prevX, p.prevY);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+    }
+
+    const onMove = (e) => { targetX = e.clientX; targetY = e.clientY; };
+    const onLeave = () => { targetX = -9999; targetY = -9999; };
+    if (!esTactil) {
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerleave', onLeave);
+    }
+    window.addEventListener('resize', resize);
+
+    const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; }, { threshold: 0.1 });
+    observer.observe(canvas);
+
+    resize();
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', resize);
+      if (!esTactil) {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerleave', onLeave);
+      }
+      window.removeEventListener('voz-onda', onOnda);
+      observer.disconnect();
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} />;
+}
+
 // ─── FLUJO VERIFICACIÓN ANIMADO ──────
 function AnimatedVerificationFlow() {
   const [activeStep, setActiveStep] = useState(-1);
@@ -462,6 +655,11 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
   };
 
   const [facturacionAnual, setFacturacionAnual] = useState(true);
+
+  // Cuántas veces se apretó el ícono de voz — cambia el `key` de los anillos
+  // para reiniciar su animación (0 = todavía no se ha tocado, no dispara la
+  // onda extra del clic).
+  const [pulsoVoz, setPulsoVoz] = useState(0);
 
   const stats = [
     ["<8s", "Verificación"],
@@ -580,6 +778,10 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
         .voz-pulse-ring { position:absolute; width:100%; height:100%; border-radius:50%; border:2px solid rgba(245,124,0,0.4); animation: vozPulso 2.4s ease-out infinite; }
         @keyframes vozPulso { 0%{ transform:scale(0.6); opacity:0.8; } 100%{ transform:scale(1.4); opacity:0; } }
+        .voz-pulse-ring--burst { border-width:3px; border-color:rgba(255,183,77,0.9); animation: vozPulsoBurst 0.9s ease-out forwards; }
+        @keyframes vozPulsoBurst { 0%{ transform:scale(0.6); opacity:1; } 100%{ transform:scale(1.7); opacity:0; } }
+        .voz-icon-circle { transition: transform 0.15s ease; }
+        .voz-icon-btn:active .voz-icon-circle { transform: scale(0.9); }
 
         /* ═══ Billetes flotantes del CTA final — de Uiverse.io/CodePen ═══
            ("Floating Cloud Background" de Shaw), con nubes cambiadas por
@@ -849,17 +1051,33 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
 
       {/* ─── VOZ ─── */}
       <section style={{ padding: "6rem 2rem", background: `linear-gradient(135deg, ${COLORS.oscuro} 0%, ${COLORS.oscuro2} 100%)`, boxSizing: "border-box", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: "-30%", left: "-10%", width: "50vw", height: "50vw", background: "radial-gradient(circle, rgba(245,124,0,0.12) 0%, transparent 70%)", borderRadius: "50%" }} />
+        <FlowFieldCanvas />
         <div className="voz-grid" style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "auto 1fr", gap: "3.5rem", alignItems: "center", position: "relative", zIndex: 1 }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
-            <div style={{ position: "relative", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span className="voz-pulse-ring" style={{ animationDelay: "0s" }} />
-              <span className="voz-pulse-ring" style={{ animationDelay: "0.8s" }} />
-              <span className="voz-pulse-ring" style={{ animationDelay: "1.6s" }} />
-              <div style={{ width: 84, height: 84, borderRadius: "50%", background: `linear-gradient(135deg, ${COLORS.naranja}, ${COLORS.naranjaFuerte})`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 2, boxShadow: "0 8px 30px rgba(245,124,0,0.4)" }}>
+            <button
+              type="button"
+              className="voz-icon-btn"
+              onClick={(e) => {
+                setPulsoVoz(n => n + 1);
+                const usarCentro = e.clientX === 0 && e.clientY === 0; // clic por teclado
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = usarCentro ? rect.left + rect.width / 2 : e.clientX;
+                const y = usarCentro ? rect.top + rect.height / 2 : e.clientY;
+                window.dispatchEvent(new CustomEvent('voz-onda', { detail: { x, y } }));
+              }}
+              aria-label="Escuchar el efecto de anuncio de voz"
+              style={{ position: "relative", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+            >
+              <Fragment key={pulsoVoz}>
+                <span className="voz-pulse-ring" style={{ animationDelay: "0s" }} />
+                <span className="voz-pulse-ring" style={{ animationDelay: "0.8s" }} />
+                <span className="voz-pulse-ring" style={{ animationDelay: "1.6s" }} />
+                {pulsoVoz > 0 && <span className="voz-pulse-ring voz-pulse-ring--burst" />}
+              </Fragment>
+              <div className="voz-icon-circle" style={{ width: 84, height: 84, borderRadius: "50%", background: `linear-gradient(135deg, ${COLORS.naranja}, ${COLORS.naranjaFuerte})`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", zIndex: 2, boxShadow: "0 8px 30px rgba(245,124,0,0.4)" }}>
                 <Volume2 size={36} color="#fff" strokeWidth={2} />
               </div>
-            </div>
+            </button>
           </div>
           <div>
             <span style={{ display: "inline-block", background: "rgba(245,124,0,0.15)", color: COLORS.naranjaSuave, fontFamily: "'Space Grotesk',sans-serif", fontSize: "0.75rem", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", padding: "0.4rem 0.9rem", borderRadius: 50, marginBottom: "1rem" }}>Nuevo</span>
