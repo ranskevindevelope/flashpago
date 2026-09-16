@@ -286,6 +286,18 @@ function paginaError(codigo, titulo, mensaje, opts = {}) {
   );
 }
 
+// ─── Landing pre-renderizada (flashpago.co, no app.flashpago.co) ──
+// Bots que no ejecutan JS (WhatsApp, Twitter, buscadores con IA) reciben el
+// HTML ya resuelto por dashboard/scripts/prerender.mjs en vez del
+// <div id="root"></div> vacío. Si el archivo no existe (build viejo, o el
+// dominio es app.flashpago.co), sigue al comportamiento normal de siempre.
+app.get('/', (req, res, next) => {
+  if (req.hostname.startsWith('app.')) return next();
+  res.sendFile(path.join(__dirname, 'dashboard/build', 'landing.html'), (err) => {
+    if (err) next();
+  });
+});
+
 // ─── Dashboard estático ───────────────────────────────────
 app.use(express.static(path.join(__dirname, 'dashboard/build')));
 app.get('/panel', (req, res) => {
