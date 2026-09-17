@@ -22,3 +22,7 @@ dashboard/build/
 
 # auditoria de seguridad
 strix_runs/
+
+
+# pruebas de rendimiento
+loadtest/

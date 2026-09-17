@@ -4,7 +4,7 @@ Guía rápida para trabajar en este repo con Claude Code. La documentación comp
 
 ## Qué es
 
-**FlashPago**: plataforma de verificación automática de pagos, no un bot — usa WhatsApp (vía OpenWA) como canal de entrada de comprobantes. Esta instancia está desplegada para Vinson Burgers: recibe comprobantes de pago, los procesa con Claude (OCR), los verifica contra Gmail/Prometeo y los registra en SQLite (`vinsonbot.db`). Incluye un dashboard React servido por el mismo backend Express.
+**FlashPago**: plataforma de verificación automática de pagos, no un bot — usa WhatsApp (vía OpenWA) como canal de entrada de comprobantes. Esta instancia está desplegada para Vinson Burgers: recibe comprobantes de pago, los procesa con Claude (OCR), los verifica contra Gmail y los registra en SQLite (`vinsonbot.db`). Incluye un dashboard React servido por el mismo backend Express.
 
 ## Dónde vive el código
 
@@ -26,7 +26,7 @@ No hay suite de pruebas automatizada configurada.
 ## Cosas a tener en cuenta
 
 - **Sin migraciones formales**: el esquema de `pagos` y `usuarios` se crea directamente en `db.js`. Cambios de esquema van ahí.
-- **Verificación de pagos**: Gmail exige monto exacto; Prometeo (`verificador.js`) permite coincidencia por referencia o diferencia de hasta 100 pesos — revisar ese archivo antes de tocar la lógica de matching.
+- **Verificación de pagos**: Gmail exige monto exacto; si no confirma, `verificador.js` devuelve directamente "no encontrado" (Prometeo ya no se usa).
 - **Festivos/fines de semana**: `bot/festivos.js` aplica la Ley Emiliani colombiana; `index.js` decide si corren verificaciones nocturnas (21:00/22:00) y el reporte diario según las variables `HABILITAR_*` del `.env`.
 - **Endpoint legado**: `/pago-recibido` está retirado (responde 410); no reintroducir lógica de MacroDroid/SMS/Android.
 - **Lista de autorizados**: el webhook solo procesa remitentes definidos en `bot/comandos.js`.

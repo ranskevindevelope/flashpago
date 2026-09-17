@@ -19,19 +19,16 @@ logica vive en las carpetas `routes/` y `bot/`.
 3. El servidor valida el secreto del webhook y que el remitente este autorizado.
 4. Claude extrae banco, monto, referencia y fecha del comprobante.
 5. Gmail busca una notificacion reciente de Bancolombia con el mismo monto.
-6. Si Gmail no confirma el pago, se usa el verificador bancario configurado.
+6. Si Gmail no confirma el pago, se responde que no se encontro la transaccion.
 7. El resultado se guarda en la tabla `pagos` y se responde por WhatsApp.
 
-La comprobacion de Gmail usa el monto exacto. El verificador bancario de
-Prometeo puede usar coincidencia por referencia o una diferencia maxima de
-100 pesos, segun la configuracion actual de `verificador.js`.
+La comprobacion de Gmail usa el monto exacto.
 
 ## Funcionalidades
 
 - Bot de WhatsApp integrado con OpenWA.
 - Lectura de comprobantes con Claude API o modo local de demostracion.
 - Verificacion de pagos por Gmail API.
-- Verificacion opcional con Prometeo en sandbox o produccion.
 - Deteccion de comprobantes duplicados durante los ultimos siete dias.
 - Registro de pagos y comprobantes en SQLite.
 - Login del dashboard con JWT.
@@ -54,7 +51,7 @@ flashpago-backend/
 ├── db.js                 # Conexion SQLite, esquema y consultas
 ├── ocr.js                # Extraccion de datos con Claude o patrones locales
 ├── gmail.js              # Busqueda y confirmacion por Gmail API
-├── verificador.js        # Verificacion Prometeo y modo demo
+├── verificador.js        # Respaldo cuando Gmail no confirma el pago
 ├── generar-token.js      # Autorizacion inicial de Gmail
 ├── routes/
 │   ├── api.js            # Endpoints del dashboard (login, usuarios, reportes...)
@@ -80,7 +77,6 @@ flashpago-backend/
 - Una instancia de OpenWA accesible desde el backend.
 - Una cuenta de Gmail con las notificaciones bancarias, si se usa Gmail.
 - Una clave de Claude, si se desea OCR con IA.
-- Credenciales de Prometeo, si se desea verificacion bancaria real.
 
 ## Instalacion
 
@@ -127,8 +123,6 @@ INBOUND_WEBHOOK_SECRET=otro_secreto_largo_y_aleatorio
 
 # Integraciones opcionales
 CLAUDE_API_KEY=tu_clave_de_claude
-PROMETEO_ENV=sandbox
-PROMETEO_API_KEY=tu_clave_de_prometeo
 MY_WHATSAPP=573000000000@c.us
 
 # Wompi (pasarela de pagos de la suscripción de FlashPago)
@@ -177,7 +171,7 @@ excluidos por `.gitignore`.
 
 ## Configurar Wompi
 
-Se usa para cobrar automáticamente la suscripción de cada negocio a FlashPago (no los pagos de los clientes de cada negocio, eso sigue siendo por Gmail/Prometeo).
+Se usa para cobrar automáticamente la suscripción de cada negocio a FlashPago (no los pagos de los clientes de cada negocio, eso sigue siendo por Gmail).
 
 1. Crea una cuenta de comercio en [Wompi](https://wompi.co) (persona natural o jurídica, con RUT).
 2. En el panel de Wompi (Desarrolladores), copia la llave pública, la llave privada, el secreto de integridad y el secreto de eventos, y ponlos en tu `.env`.
@@ -354,7 +348,6 @@ Implementado:
 - Bot OpenWA.
 - OCR de comprobantes.
 - Verificacion Gmail.
-- Verificacion opcional Prometeo.
 - Persistencia SQLite.
 - Login JWT y roles.
 - Dashboard React.

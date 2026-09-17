@@ -330,7 +330,10 @@ function sumarMinutos(horaStr, minutosASumar) {
 function parseDiasOperacion(json) {
   try {
     const dias = JSON.parse(json);
-    if (Array.isArray(dias) && dias.length) return dias;
+    // Un arreglo vacío es válido a propósito: significa que el negocio
+    // todavía no configuró su horario, y no debe operar ningún día hasta
+    // que lo haga (ver crearNegocio en db.js).
+    if (Array.isArray(dias)) return dias;
   } catch {
     // valor viejo/corrupto: opera todos los días por defecto
   }

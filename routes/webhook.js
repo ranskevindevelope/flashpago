@@ -440,7 +440,7 @@ router.post('/', async (req, res) => {
     console.log('[DEBUG] Resultado de Gmail:', pagoGmail);
 
     // ─── Determinar resultado final ─────────────────────
-    const verificacion = pagoGmail
+    let verificacion = pagoGmail
       ? { estado: 'REAL', mensaje: `✅ PAGO CONFIRMADO: $${pagoGmail.monto.toLocaleString('es-CO')}  este pago es confirmado en ${negocio?.banco || 'tu banco'}` }
       : await verificarPago(datos);
 
@@ -471,7 +471,36 @@ router.post('/', async (req, res) => {
           nombre_cliente: pagoGmail?.nombre || null,
         });
       } catch (err) {
-        console.error('[DB] Error guardando pago:', err.message);
+        if (err.message && err.message.includes('UNIQUE constraint failed')) {
+          // Dos peticiones casi simultáneas (reenvío, reintento de OpenWA)
+          // pasaron el chequeo de duplicado antes de que esta terminara de
+          // guardar; la base de datos rechazó el segundo REAL. Se corrige el
+          // mensaje antes de responderle al empleado, y se deja constancia.
+          console.warn('[DB] Pago REAL duplicado detectado por la restricción única (negocio:', negocio_id, ')');
+          verificacion = {
+            estado: 'DUPLICADO',
+            mensaje: '🚫 DUPLICADO: Este comprobante ya fue verificado (posible reenvío). No lo uses de nuevo.',
+          };
+          try {
+            await guardarPago({
+              monto: montoNum,
+              referencia: datos.referencia || null,
+              banco: datos.banco || null,
+              fecha: new Date().toLocaleDateString('es-CO'),
+              hora: new Date().toLocaleTimeString('es-CO'),
+              estado: 'DUPLICADO',
+              fuente: 'duplicado',
+              nombre_cliente: null,
+              verificado_por: from,
+              negocio_id,
+              foto: nombreFoto,
+            });
+          } catch (err2) {
+            console.error('[DB] Error guardando registro de duplicado:', err2.message);
+          }
+        } else {
+          console.error('[DB] Error guardando pago:', err.message);
+        }
       }
     } else if (verificacion.estado === 'NO_ENCONTRADO') {
       try {

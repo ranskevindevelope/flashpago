@@ -5,7 +5,7 @@ import {
   FileText, Landmark, Smartphone, TrendingUp, Users, FileSpreadsheet,
   Headphones, Star, Check, Minus, Hourglass, Volume2, Rocket,
   // Nuevos íconos para las secciones agregadas
-  ShieldX, ImageOff, Copy, ArrowLeftRight, Brain, ShieldCheck
+  ShieldX, ImageOff, Copy, Brain, ShieldCheck
 } from "lucide-react";
 
 const COLORS = {
@@ -687,12 +687,6 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
       desc: "Alguien manda el mismo comprobante que ya usó antes, o que usó otro cliente. FlashPago lo reconoce.",
       badge: "Duplicado detectado", badgeBg: "#FFE0B2", badgeColor: "#E65100", BadgeIcon: RefreshCw,
     },
-    {
-      Icon: ArrowLeftRight, bg: "#EDE7F6", border: "#D1C4E9", iconBg: "#D1C4E9", iconColor: "#7E57C2",
-      title: "Monto alterado",
-      desc: "El comprobante dice $50.000 pero el pago real es de $30.000. FlashPago compara y detecta la diferencia.",
-      badge: "Monto no coincide", badgeBg: "#D1C4E9", badgeColor: "#4527A0", BadgeIcon: AlertTriangle,
-    },
   ];
 
   const pasos = [
@@ -973,10 +967,10 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
           <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "0.85rem", fontWeight: 600, color: COLORS.rojo, textTransform: "uppercase", letterSpacing: 2, marginBottom: "1rem", display: "flex", alignItems: "center", gap: 6 }}>
             <Shield size={14} /> Protección anti-fraude
           </div>
-          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, marginBottom: "1.5rem", lineHeight: 1.2, marginTop: 0 }}>3 fraudes que FlashPago detecta por ti</h2>
+          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, marginBottom: "1.5rem", lineHeight: 1.2, marginTop: 0 }}>2 fraudes que FlashPago detecta por ti</h2>
           <p style={{ fontSize: "1.1rem", color: COLORS.grisTxt, maxWidth: 650, marginBottom: "3rem" }}>Cada comprobante se cruza con tu banco en tiempo real. Si algo no cuadra, lo bloquea al instante.</p>
 
-          <div className="fraude-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1.5rem", marginBottom: "3rem" }}>
+          <div className="fraude-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "1.5rem", marginBottom: "3rem" }}>
             {fraudes.map(f => (
               <div key={f.title} style={{ background: f.bg, border: `1px solid ${f.border}`, borderRadius: 16, padding: "2rem" }}>
                 <div style={{ marginBottom: "1.25rem" }}>

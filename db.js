@@ -252,6 +252,14 @@ db.run(`
     db.run('CREATE INDEX IF NOT EXISTS idx_pagos_negocio ON pagos (negocio_id)');
     db.run('CREATE INDEX IF NOT EXISTS idx_pagos_referencia ON pagos (referencia)');
     db.run('CREATE INDEX IF NOT EXISTS idx_pagos_estado ON pagos (estado, creado_en)');
+    // Evita contar el mismo pago como REAL dos veces si dos peticiones del
+    // webhook llegan casi al mismo tiempo (reenvío del cliente, reintento de
+    // OpenWA) y ambas pasan el chequeo de duplicado antes de que la primera
+    // termine de guardar. Los registros de auditoría con estado DUPLICADO no
+    // se ven afectados.
+    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pagos_unico_real
+            ON pagos (negocio_id, referencia, monto)
+            WHERE estado = 'REAL' AND referencia IS NOT NULL`);
   }
 });
 
@@ -395,7 +403,10 @@ function crearNegocio({ nombre, whatsapp, plan, limite_comprobantes, ciudad, ban
     : new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   return new Promise((resolve, reject) => {
     db.run(
-      `INSERT INTO negocios (nombre, whatsapp, plan, limite_comprobantes, trial_fin, pagado, ciudad, banco) VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+      // dias_operacion arranca vacío a propósito: sin horario configurado no
+      // debe correr la revisión nocturna ni el reporte diario con un default
+      // que quizás no corresponde al negocio (ver onboarding en el dashboard).
+      `INSERT INTO negocios (nombre, whatsapp, plan, limite_comprobantes, trial_fin, pagado, ciudad, banco, dias_operacion) VALUES (?, ?, ?, ?, ?, 0, ?, ?, '[]')`,
       [nombre, whatsapp || null, plan || 'basico', limite, trial, ciudad || null, banco || null],
       function (err) {
         if (err) reject(err);

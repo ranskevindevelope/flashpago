@@ -302,13 +302,11 @@ async function handleTextEvent(from, text, negocio_id = 1) {
     if (!admin) return true;
     const uptime = Math.floor(process.uptime() / 60);
     const memUsage = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
-    const { comprobantesUsados } = require('../verificador');
 
     await enviarMensaje(from,
       `🔧 *DEBUG ${negocioNombre}*\n\n` +
       `⏱️ Uptime: ${uptime}m\n` +
       `💾 Memoria: ${memUsage}MB\n` +
-      `🔐 Comprobantes únicos: ${comprobantesUsados.size}\n` +
       `📊 Total verificados hoy: ${historialPagos.filter(p => p.negocio_id === negocio_id).length}\n\n` +
       `Sistema operativo ✅`
     );

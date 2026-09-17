@@ -107,8 +107,6 @@ export default function Privacidad({ onVolver }) {
               comprobantes con las notificaciones que tu banco te envía por correo. Esto requiere que el negocio
               autorice el acceso una sola vez a través de Google; FlashPago solo revisa esas notificaciones
               bancarias, nunca correos personales ni contactos, y esa autorización se puede revocar cuando quieras.<br />
-              <strong>Verificación bancaria complementaria (Prometeo):</strong> un método adicional de confirmación
-              directa con el banco, cuando el negocio lo tiene activado.<br />
               <strong>Cobro de tu suscripción (Wompi):</strong> el pago de tu plan de FlashPago se procesa a través
               de Wompi, una pasarela de pagos certificada. FlashPago nunca ve ni almacena el número de tu tarjeta —
               eso lo maneja Wompi directamente.<br />
