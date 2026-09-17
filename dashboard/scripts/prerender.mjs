@@ -42,7 +42,7 @@ function servirEstatico(root) {
   });
 }
 
-const TITULO = 'FlashPago — Verifica pagos por transferencia en segundos';
+const TITULO = 'FlashPago';
 const DESCRIPCION = 'Bot de WhatsApp con inteligencia artificial que lee comprobantes, verifica pagos reales y protege tu negocio contra fraudes.';
 
 async function main() {
