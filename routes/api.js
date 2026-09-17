@@ -1434,16 +1434,17 @@ const ROLES_ASIGNABLES = ['admin', 'empleado'];
 router.post('/usuarios', verificarToken, soloAdmin, (req, res) => {
   const { usuario, password, nombre, rol, whatsapp, email } = req.body;
   const nid = req.user.negocio_id;
-  if (!usuario || !password || !nombre) return res.status(400).json({ ok: false, error: 'Faltan campos' });
+  if (!usuario || !password || !nombre || !whatsapp) return res.status(400).json({ ok: false, error: 'Faltan campos' });
   if (!PASSWORD_VALIDA.test(password)) return res.status(400).json({ ok: false, error: PASSWORD_ERROR });
   if (rol && !ROLES_ASIGNABLES.includes(rol)) return res.status(400).json({ ok: false, error: 'Rol no válido' });
 
   const salt = crypto.randomBytes(32).toString('hex');
   const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+  const whatsappNormalizado = whatsapp.includes('@') ? whatsapp : `${whatsapp}@c.us`;
 
   db.run(
     'INSERT INTO usuarios (usuario, password_hash, salt, nombre, rol, whatsapp, negocio_id, email) VALUES (?,?,?,?,?,?,?,?)',
-    [usuario.trim().toLowerCase(), hash, salt, nombre.trim(), rol || 'empleado', whatsapp || null, nid, email ? email.trim().toLowerCase() : null],
+    [usuario.trim().toLowerCase(), hash, salt, nombre.trim(), rol || 'empleado', whatsappNormalizado, nid, email ? email.trim().toLowerCase() : null],
     function (err) {
       if (err) {
         if (err.message.includes('UNIQUE')) return res.status(409).json({ ok: false, error: 'Ese usuario ya existe' });
@@ -1461,7 +1462,10 @@ router.put('/usuarios/:id', verificarToken, soloAdmin, (req, res) => {
   const sets = []; const vals = [];
   if (nombre) { sets.push('nombre=?'); vals.push(nombre); }
   if (rol) { sets.push('rol=?'); vals.push(rol); }
-  if (whatsapp !== undefined) { sets.push('whatsapp=?'); vals.push(whatsapp); }
+  if (whatsapp !== undefined) {
+    if (!whatsapp) return res.status(400).json({ ok: false, error: 'El WhatsApp es obligatorio' });
+    sets.push('whatsapp=?'); vals.push(whatsapp.includes('@') ? whatsapp : `${whatsapp}@c.us`);
+  }
   if (email !== undefined) { sets.push('email=?'); vals.push(email ? email.trim().toLowerCase() : null); }
   if (activo !== undefined) { sets.push('activo=?'); vals.push(activo); }
   if (password) {

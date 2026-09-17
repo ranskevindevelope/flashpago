@@ -64,8 +64,8 @@ export default function SeccionUsuarios({ api }) {
   };
 
   const crearUsuario = async () => {
-    if (!form.usuario || !form.password || !form.nombre) {
-      toast.error('Usuario, contraseña y nombre son requeridos');
+    if (!form.usuario || !form.password || !form.nombre || !form.whatsapp) {
+      toast.error('Usuario, contraseña, nombre y WhatsApp son requeridos');
       return;
     }
     if (!PASSWORD_VALIDA.test(form.password)) {
@@ -75,11 +75,13 @@ export default function SeccionUsuarios({ api }) {
 
     setGuardando(true);
     try {
-      const data = await api.request('/api/usuarios', { method: 'POST', body: JSON.stringify(form) });
+      const whatsapp = form.whatsapp.includes('@') ? form.whatsapp : `${form.whatsapp}@c.us`;
+      const data = await api.request('/api/usuarios', { method: 'POST', body: JSON.stringify({ ...form, whatsapp }) });
       if (data.ok) {
         toast.success(`Usuario "${form.usuario}" creado exitosamente`);
         cancelarForm();
         refrescar();
+        iniciarConfirmacionWpp({ id: data.id });
       } else {
         toast.error(data.error || 'Error creando usuario');
       }
@@ -90,13 +92,18 @@ export default function SeccionUsuarios({ api }) {
   };
 
   const actualizarUsuario = async () => {
+    if (!form.whatsapp) {
+      toast.error('El WhatsApp es obligatorio');
+      return;
+    }
     if (form.password && !PASSWORD_VALIDA.test(form.password)) {
       toast.error(PASSWORD_ERROR);
       return;
     }
     setGuardando(true);
     try {
-      const body = { nombre: form.nombre, rol: form.rol, whatsapp: form.whatsapp, email: form.email };
+      const whatsapp = form.whatsapp.includes('@') ? form.whatsapp : `${form.whatsapp}@c.us`;
+      const body = { nombre: form.nombre, rol: form.rol, whatsapp, email: form.email };
       if (form.password) body.password = form.password;
 
       const data = await api.request(`/api/usuarios/${editando}`, { method: 'PUT', body: JSON.stringify(body) });
@@ -231,8 +238,8 @@ export default function SeccionUsuarios({ api }) {
                 </select>
               </div>
               <div className="usuario-form-campo">
-                <label>WhatsApp (opcional)</label>
-                <input type="text" placeholder="Ej: 573001234567@c.us" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
+                <label>WhatsApp</label>
+                <input type="text" placeholder="Ej: 573001234567" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} required />
               </div>
               <div className="usuario-form-campo">
                 <label>Email (para recuperar contraseña)</label>
