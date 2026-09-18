@@ -121,6 +121,7 @@ router.post('/transferencia/iniciar', verificarToken, soloAdmin, async (req, res
       plan,
       montoPesos,
       expira: Date.now() + 30 * 60 * 1000, // 30 minutos para mandar el comprobante
+      intentos: 0, // máximo 3 fotos por transferencia (ver procesarPagoPlataforma en webhook.js)
     });
 
     res.json({

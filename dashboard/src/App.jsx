@@ -7,6 +7,7 @@ import RecuperarPassword from './RecuperarPassword';
 import Dashboard from './Dashboard';
 import Terminos from './Terminos';
 import Privacidad from './Privacidad';
+import DocumentoInterno from './DocumentoInterno';
 import './App.css';
 
 // Lazy: Registro es el único que usa `motion` (~40KB), y casi nadie vuelve
@@ -35,7 +36,7 @@ function App() {
   const esPanel = window.location.hostname.startsWith('app.') || window.location.pathname.startsWith('/panel');
   const vistaSolicitada = paramsUrl.get('vista');
   const [vista, setVista] = useState(
-    ['terminos', 'privacidad'].includes(vistaSolicitada)
+    ['terminos', 'privacidad', 'interno'].includes(vistaSolicitada)
       ? vistaSolicitada
       : esPanel
         ? (localStorage.getItem('fp_token') ? 'dashboard' : 'login')
@@ -67,6 +68,8 @@ function App() {
     pantalla = <Terminos onVolver={() => setVista('landing')} />;
   } else if (vista === 'privacidad') {
     pantalla = <Privacidad onVolver={() => setVista('landing')} />;
+  } else if (vista === 'interno') {
+    pantalla = <DocumentoInterno onVolver={() => setVista('landing')} />;
   } else if (vista === 'registro') {
     pantalla = <Registro onBack={() => { setDatosGoogle(null); setVista('login'); }} datosGoogle={datosGoogle} />;
   } else if (vista === 'login') {

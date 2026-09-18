@@ -781,6 +781,7 @@ router.get('/negocios/uso/plan', verificarToken, async (req, res) => {
     const tienePago = await tienePagoVerificado(nid);
     res.json({
       ok: true,
+      id: nid,
       nombre: negocio.nombre,
       plan: negocio.plan,
       limite: negocio.limite_comprobantes,

@@ -30,6 +30,16 @@ const { enviarGraciasPago } = require('../mailer');
 // clientes, y además cruza contra el Gmail de config.NEGOCIO_ID_SUSCRIPCION.
 async function procesarPagoPlataforma(from, transferencia, mediaUrl, mediaBase64) {
   const { negocio_id } = transferencia;
+
+  // Máximo 3 fotos por transferencia: cada una cuesta una llamada real a
+  // Claude (OCR) y hasta 5 intentos de Gmail — sin límite, cualquiera con
+  // acceso a ese WhatsApp podría generar gasto repitiendo fotos sin parar.
+  transferencia.intentos = (transferencia.intentos || 0) + 1;
+  if (transferencia.intentos > 3) {
+    await enviarMensaje(from, '⚠️ Ya intentamos verificar tu pago 3 veces. Contacta a soporte para activar tu plan manualmente.');
+    return;
+  }
+
   await enviarMensaje(from, '⏳ Verificando tu pago de suscripción...');
   try {
     const datos = await leerComprobante(mediaUrl, mediaBase64);
@@ -94,7 +104,32 @@ const MENSAJES = {
   sinFoto: `Por favor envía la *foto del comprobante*, no texto.`,
   errorLectura: `No pude leer bien ese comprobante. Asegúrate de que la imagen sea clara y completa.`,
   limitePlan: `⚠️ Este negocio alcanzó el límite de comprobantes del mes. Contacta al administrador para mejorar el plan.`,
+  limiteRafaga: `⚠️ Estás enviando comprobantes muy rápido. Espera un minuto e intenta de nuevo.`,
 };
+
+// Límite de ráfaga por remitente: el límite mensual del plan no frena un
+// envío masivo dentro del mismo mes (o un plan con límite alto/ilimitado) —
+// cada foto le cuesta una llamada real a Claude, así que esto corta el gasto
+// si alguien (empleado comprometido, error de script) manda muchas seguidas.
+const RAFAGA_LIMITE = 10;
+const RAFAGA_VENTANA_MS = 60000;
+const comprobanteIntentos = new Map(); // from -> { intentos, inicio }
+function superoLimiteRafaga(from) {
+  const ahora = Date.now();
+  const datos = comprobanteIntentos.get(from);
+  if (!datos || ahora - datos.inicio > RAFAGA_VENTANA_MS) {
+    comprobanteIntentos.set(from, { intentos: 1, inicio: ahora });
+    return false;
+  }
+  datos.intentos++;
+  return datos.intentos > RAFAGA_LIMITE;
+}
+setInterval(() => {
+  const ahora = Date.now();
+  for (const [from, datos] of comprobanteIntentos) {
+    if (ahora - datos.inicio > RAFAGA_VENTANA_MS) comprobanteIntentos.delete(from);
+  }
+}, 5 * 60 * 1000).unref();
 
 // Mapeo manual de LID a números reales, atajo para los ya agregados a mano.
 // Clientes nuevos se resuelven solos (ver resolverLidConCache).
@@ -337,6 +372,11 @@ router.post('/', async (req, res) => {
     return;
   }
 
+  if (superoLimiteRafaga(from)) {
+    await enviarMensaje(from, MENSAJES.limiteRafaga);
+    return;
+  }
+
   // ─── ¿Es un comprobante de pago de la suscripción a FlashPago? ──
   // Va antes del trial/límite: si está pagando justo porque venció, no lo
   // bloqueamos. Se busca por WhatsApp exacto (no negocio_id), para no
@@ -445,6 +485,7 @@ router.post('/', async (req, res) => {
       : await verificarPago(datos);
 
     // ─── Guardar el pago en la base de datos ────────────
+    let pagoPendienteId = null; // id exacto si queda NO_ENCONTRADO (ver pagosPendientes.push abajo)
     if (verificacion.estado === 'REAL') {
       try {
         const pagoId = await guardarPago({
@@ -504,7 +545,7 @@ router.post('/', async (req, res) => {
       }
     } else if (verificacion.estado === 'NO_ENCONTRADO') {
       try {
-        await guardarPago({
+        pagoPendienteId = await guardarPago({
           monto: montoNum,
           referencia: datos.referencia || null,
           banco: datos.banco || null,
@@ -544,6 +585,7 @@ router.post('/', async (req, res) => {
 
       if (verificacion.estado === 'NO_ENCONTRADO') {
         pagosPendientes.push({
+          id: pagoPendienteId,
           monto: montoNum,
           referencia: datos.referencia || null,
           banco: datos.banco || null,

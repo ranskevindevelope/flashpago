@@ -898,8 +898,11 @@ function buscarPorReferencia(referencia, negocio_id) {
 function buscarDuplicadoReciente(referencia, negocio_id, monto) {
   return new Promise((resolve, reject) => {
     db.get(
+      // NO_ENCONTRADO no cuenta como "ya usado": es un comprobante que nunca
+      // se confirmó, y el empleado debe poder reenviarlo para que se
+      // reintente la verificación (ver también la revisión nocturna).
       `SELECT * FROM pagos
-       WHERE referencia = ? AND negocio_id = ? AND monto = ?
+       WHERE referencia = ? AND negocio_id = ? AND monto = ? AND estado != 'NO_ENCONTRADO'
        AND creado_en >= datetime('now', '-7 days', 'localtime')`,
       [referencia, negocio_id || 1, monto],
       (err, fila) => {

@@ -35,12 +35,20 @@ export default function IndicadorActualizacion({ ultima, hayError }) {
   const desactualizado = hayError && transcurrido > LIMITE_DESACTUALIZADO;
 
   return (
-    <div
-      className={`dashboard-live ${desactualizado ? 'dashboard-live--alerta' : ''}`}
-      title={`Última actualización: ${new Date(ultima).toLocaleTimeString('es-CO')}`}
-    >
-      {desactualizado ? <AlertTriangle size={15} /> : <Activity size={15} />}
-      {desactualizado ? `Sin actualizar ${textoRelativo(transcurrido)}` : `Actualizado ${textoRelativo(transcurrido)}`}
+    <div className="indicador-actualizacion-wrap">
+      <div className={`dashboard-live ${desactualizado ? 'dashboard-live--alerta' : ''}`}>
+        {desactualizado ? <AlertTriangle size={15} /> : <Activity size={15} />}
+        {desactualizado ? `Sin actualizar ${textoRelativo(transcurrido)}` : `Actualizado ${textoRelativo(transcurrido)}`}
+      </div>
+      <div className="indicador-actualizacion-card" role="tooltip">
+        <div className="indicador-actualizacion-card-titulo">Última actualización</div>
+        <div className="indicador-actualizacion-card-hora">{new Date(ultima).toLocaleTimeString('es-CO')}</div>
+        <div className="indicador-actualizacion-card-detalle">
+          {desactualizado
+            ? 'Hubo un problema sincronizando. Reintentando automáticamente.'
+            : 'Los datos se sincronizan solos cada 30 segundos.'}
+        </div>
+      </div>
     </div>
   );
 }

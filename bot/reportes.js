@@ -100,9 +100,16 @@ async function verificacionNocturna(revision, negocio_id) {
       const resultado = await verificarPorGmail(pago.monto, pagoNegocioId, { intentos: 1, esperaMs: 0 });
 
       if (resultado) {
+        // Por id cuando se tiene (evita marcar como REAL otra fila con la
+        // misma referencia — ej. un reenvío tras un NO_ENCONTRADO anterior,
+        // que ya no se bloquea como duplicado). Fallback por referencia solo
+        // para entradas viejas en memoria que no traigan id.
+        const [condicion, valores] = pago.id
+          ? [`id = ?`, [pago.id]]
+          : [`referencia = ? AND negocio_id = ? AND estado = 'NO_ENCONTRADO'`, [pago.referencia, pagoNegocioId]];
         db.run(
-          `UPDATE pagos SET estado = 'REAL', fuente = 'gmail_asincronica', nombre_cliente = ? WHERE referencia = ? AND negocio_id = ? AND estado = 'NO_ENCONTRADO'`,
-          [resultado.nombre || null, pago.referencia, pagoNegocioId],
+          `UPDATE pagos SET estado = 'REAL', fuente = 'gmail_asincronica', nombre_cliente = ? WHERE ${condicion}`,
+          [resultado.nombre || null, ...valores],
           function (err) {
             if (err) console.error('[Asincronica] Error actualizando:', err.message);
             else console.log(`[Asincronica] ✅ Pago actualizado a REAL: ${pago.referencia} (negocio ${pagoNegocioId})`);

@@ -100,15 +100,16 @@ function Dashboard({ onLogout }) {
   const marcarNotificacionesLeidas = () => {
     setHistorialNotificaciones((prev) => prev.map((n) => ({ ...n, leida: true })));
   };
-  const [onboardingOculto, setOnboardingOculto] = useState(() => {
-    try { return localStorage.getItem('fp_onboarding_oculto') === '1'; } catch { return false; }
-  });
+  // Ligado al negocio (no al navegador): sin esto, ocultar el checklist en
+  // una cuenta lo dejaba oculto para siempre en ese navegador, sin importar
+  // a qué otro negocio entraras después.
+  const [onboardingOculto, setOnboardingOculto] = useState(false);
   const [configVisitada, setConfigVisitada] = useState(() => {
     try { return localStorage.getItem('fp_config_visitada') === '1'; } catch { return false; }
   });
   const ocultarOnboarding = () => {
     setOnboardingOculto(true);
-    try { localStorage.setItem('fp_onboarding_oculto', '1'); } catch { /* no disponible */ }
+    try { if (planInfo?.id) localStorage.setItem(`fp_onboarding_oculto_${planInfo.id}`, '1'); } catch { /* no disponible */ }
   };
   const [tema, setTema] = useState(() => {
     try { return localStorage.getItem('fp_tema') || 'light'; } catch { return 'light'; }
@@ -232,7 +233,9 @@ function Dashboard({ onLogout }) {
         })
         .catch(() => {
           toast.success('¡Gracias por conectar! Todo quedó correcto, ya puedes verificar pagos de tu banco.', { duration: 6000 });
-          confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+          // zIndex por encima del modal (1000, ver ModalConfirmarWhatsapp.jsx):
+          // el default de canvas-confetti es 100, quedaría tapado detrás.
+          confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 }, zIndex: 1100 });
         });
     } else if (gmailResult === 'error') {
       toast.error('Error conectando Gmail. Intenta de nuevo.');
@@ -252,7 +255,7 @@ function Dashboard({ onLogout }) {
         if (data.ok && data.confirmado) {
           setConfirmacionWpp((prev) => ({ ...prev, confirmado: true }));
           toast.success('¡Cuenta configurada! Ya tu bot puede recibir transferencias.', { duration: 6000 });
-          confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+          confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 }, zIndex: 1100 });
         }
       } catch (err) { /* reintenta en el próximo intervalo */ }
     }, 3000);
@@ -397,7 +400,10 @@ function Dashboard({ onLogout }) {
       setStats(Array.isArray(resStats) ? resStats : []);
       setPendientes(resPendientes || { cantidad: 0, total: 0 });
       setDuplicadosPendientes(Array.isArray(resDuplicados) ? resDuplicados : []);
-      if (resPlan?.ok) setPlanInfo(resPlan);
+      if (resPlan?.ok) {
+        setPlanInfo(resPlan);
+        try { setOnboardingOculto(localStorage.getItem(`fp_onboarding_oculto_${resPlan.id}`) === '1'); } catch { /* no disponible */ }
+      }
       if (resGmail?.ok) setGmailEstado(resGmail);
       if (resBot?.ok) setBotEstado(resBot);
       if (resVentasHora?.ok) setVentasPorHora(resVentasHora.datos);
