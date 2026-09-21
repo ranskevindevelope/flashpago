@@ -16,19 +16,23 @@ export default function Privacidad({ onVolver }) {
         <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2rem", color: "#fff", marginBottom: "0.5rem" }}>
           Política de Tratamiento de Datos Personales
         </h1>
-        <p style={{ color: "#8888a8", marginBottom: "2.5rem" }}>Última actualización: Agosto 2026</p>
+        <p style={{ color: "#8888a8", marginBottom: "2.5rem" }}>Última actualización: Septiembre 2026 · Versión 2</p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "2rem", lineHeight: 1.8, fontSize: "0.95rem" }}>
 
           <section>
             <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>1. Responsable del tratamiento</h2>
             <p>
-              <strong>Kevin Ramírez Torres</strong>, identificado con cédula de ciudadanía No. <strong>70118928-1</strong>,
-              actuando bajo el nombre comercial <strong>Vinson Burgers</strong> (registrado ante la Cámara de Comercio),
-              con domicilio en Antioquia, Colombia, correo de contacto <strong>contacto@flashpago.co</strong> y WhatsApp{' '}
-              <strong>+57 316 7064671</strong>, en calidad de responsable del tratamiento de datos personales
-              recolectados a través de la plataforma <strong>FlashPago</strong> (sitio web, panel de administración
-              y bot de WhatsApp), en adelante "FlashPago" o "el Servicio".
+              <strong>Rodolfo de Jesús Ramírez Gómez</strong>, persona natural, identificado con cédula de
+              ciudadanía No. <strong>70118928</strong> (NIT <strong>70118928-2</strong>), propietario del
+              establecimiento de comercio <strong>Vinson Burgers</strong> (matrícula mercantil No. 290874, Cámara
+              de Comercio Aburrá Sur — Vinson Burgers no es una persona jurídica distinta, es el nombre comercial
+              bajo el cual opera Rodolfo de Jesús Ramírez Gómez), con dirección comercial en{' '}
+              <strong>CR 62 #77 Sur 56, La Estrella, Antioquia, Colombia</strong>, correo de contacto{' '}
+              <strong>contacto@flashpago.co</strong> y WhatsApp <strong>+57 316 7064671</strong>, en calidad de
+              responsable del tratamiento de los datos personales de los negocios registrados en la plataforma{' '}
+              <strong>FlashPago</strong> (sitio web, panel de administración y bot de WhatsApp), en adelante
+              "FlashPago" o "el Servicio".
             </p>
           </section>
 
@@ -44,17 +48,36 @@ export default function Privacidad({ onVolver }) {
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>3. Datos personales que recopilamos</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>3. Responsable vs. encargado: dos roles distintos</h2>
+            <p>
+              FlashPago presta el Servicio a distintos negocios. Frente a los datos de la <strong>cuenta del
+              negocio</strong> (nombre, WhatsApp, correo, credenciales de acceso), FlashPago actúa como{' '}
+              <strong>responsable del tratamiento</strong>: decide para qué se usan esos datos.
+            </p>
+            <p style={{ marginTop: "0.75rem" }}>
+              Frente a los datos de <strong>los clientes de cada negocio</strong> (por ejemplo, el nombre de la
+              persona que hizo una transferencia y aparece en un comprobante), es <strong>el negocio registrado</strong>{' '}
+              quien decide recolectar y verificar esa información para su propia operación comercial — el negocio
+              actúa como responsable de esos datos, y FlashPago actúa como <strong>encargado del tratamiento</strong>:
+              los procesa únicamente por instrucción del negocio y para la finalidad de verificar ese pago, sin
+              decidir sobre ellos de forma independiente.
+            </p>
+          </section>
+
+          <section>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>4. Datos personales que recopilamos</h2>
             <p>Según cómo se use el Servicio, recopilamos:</p>
             <p style={{ marginTop: "0.75rem" }}>
               <strong>De los negocios registrados y sus empleados:</strong> nombre, número de WhatsApp, correo
-              electrónico, ciudad, banco principal, usuario y contraseña (esta última nunca se almacena en texto
-              plano, ver sección 9).
+              electrónico, ciudad, banco principal, y un <strong>usuario y contraseña propios de FlashPago</strong>{' '}
+              para iniciar sesión en el panel (nunca credenciales bancarias — FlashPago nunca solicita ni almacena
+              claves de acceso a cuentas bancarias; la conexión con el banco se hace por lectura de notificaciones
+              vía Gmail, ver sección 7). La contraseña de FlashPago nunca se almacena en texto plano (ver sección 11).
             </p>
             <p style={{ marginTop: "0.75rem" }}>
-              <strong>De las transacciones verificadas:</strong> monto, referencia bancaria, banco, fecha y hora,
-              nombre del cliente que realizó el pago (cuando aparece en el comprobante o en la notificación
-              bancaria), y la imagen del comprobante enviado por WhatsApp.
+              <strong>De las transacciones verificadas (datos de clientes del negocio):</strong> monto, referencia
+              bancaria, banco, fecha y hora, nombre del cliente que realizó el pago (cuando aparece en el
+              comprobante o en la notificación bancaria), y la imagen del comprobante enviado por WhatsApp.
             </p>
             <p style={{ marginTop: "0.75rem" }}>
               <strong>Datos técnicos:</strong> dirección IP, fecha y hora de acceso, y registros (logs) de uso del
@@ -63,7 +86,7 @@ export default function Privacidad({ onVolver }) {
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>4. Finalidades del tratamiento</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>5. Finalidades del tratamiento</h2>
             <p>Los datos recolectados se usan exclusivamente para:</p>
             <p style={{ marginTop: "0.75rem" }}>
               a) Verificar la autenticidad de comprobantes de pago mediante inteligencia artificial y cruce con
@@ -82,86 +105,85 @@ export default function Privacidad({ onVolver }) {
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>5. Cómo se obtiene su autorización</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>6. Cómo se obtiene su autorización</h2>
             <p>
               La autorización para el tratamiento de datos se obtiene de forma previa, expresa e informada al momento
-              del registro en la plataforma, mediante la aceptación explícita de esta Política y de los{' '}
-              <strong>Términos y Condiciones</strong>. En el caso de la conexión con Gmail, la autorización adicional
-              se otorga directamente a través del flujo de consentimiento (OAuth) de Google, y puede revocarse en
-              cualquier momento desde la cuenta de Google del negocio.
+              del registro en la plataforma, mediante la aceptación explícita (casilla no premarcada) de esta
+              Política y de los <strong>Términos y Condiciones</strong>. En el caso de la conexión con Gmail, la
+              autorización adicional se otorga directamente a través del flujo de consentimiento (OAuth) de Google,
+              y puede revocarse en cualquier momento desde la cuenta de Google del negocio.
             </p>
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>6. Encargados del tratamiento y proveedores</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>7. Encargados del tratamiento y proveedores</h2>
             <p>
               Para operar el Servicio, algunos datos se comparten con proveedores tecnológicos que actúan como{' '}
-              <strong>encargados del tratamiento</strong> (procesan los datos por cuenta nuestra, no como
-              responsables independientes):
+              <strong>encargados del tratamiento</strong> (procesan los datos por instrucción nuestra, para las
+              mismas finalidades descritas en la sección 5, no como responsables independientes):
             </p>
             <p style={{ marginTop: "0.75rem" }}>
-              <strong>Lectura automática del comprobante:</strong> para leer el monto, el banco, la referencia y la
-              fecha de la foto que envías por WhatsApp, usamos un servicio de inteligencia artificial (Anthropic).
-              Solo procesa la imagen del comprobante — nunca contraseñas ni otros datos financieros.<br />
-              <strong>Confirmación con tu banco:</strong> para confirmar tus pagos automáticamente, comparamos los
-              comprobantes con las notificaciones que tu banco te envía por correo. Esto requiere que el negocio
-              autorice el acceso una sola vez a través de Google; FlashPago solo revisa esas notificaciones
-              bancarias, nunca correos personales ni contactos, y esa autorización se puede revocar cuando quieras.<br />
-              <strong>Cobro de tu suscripción (Wompi):</strong> el pago de tu plan de FlashPago se procesa a través
-              de Wompi, una pasarela de pagos certificada. FlashPago nunca ve ni almacena el número de tu tarjeta —
-              eso lo maneja Wompi directamente.<br />
-              <strong>Envío de mensajes (OpenWA):</strong> intermediario técnico para enviar y recibir los mensajes
-              del bot de WhatsApp.<br />
-              <strong>Hosting:</strong> el proveedor donde vive el servidor almacena la base de datos y las imágenes
-              de comprobantes de forma segura.
+              <strong>Anthropic (lectura del comprobante):</strong> recibe únicamente la imagen del comprobante para
+              extraer monto, banco, referencia y fecha. Procesa en servidores fuera de Colombia (Estados Unidos),
+              bajo sus propios términos de servicio para clientes empresariales, que incluyen obligaciones de
+              confidencialidad y no usar los datos para entrenar sus modelos de IA. No conserva la imagen más allá
+              de lo necesario para procesar cada solicitud.<br />
+              <strong>Google (Gmail API):</strong> el negocio autoriza el acceso de lectura a su bandeja de correo
+              para que FlashPago compare comprobantes con notificaciones bancarias. Procesa en servidores fuera de
+              Colombia, bajo la Google API Services User Data Policy (ver detalle en sección 9).<br />
+              <strong>Wompi (cobro de la suscripción):</strong> pasarela de pagos vigilada en Colombia; procesa el
+              pago de tu plan. FlashPago nunca ve ni almacena el número de tu tarjeta — eso lo maneja Wompi
+              directamente, bajo sus propias políticas de seguridad (PCI-DSS).<br />
+              <strong>OpenWA (envío y recepción de mensajes):</strong> intermediario técnico autoalojado por
+              FlashPago para enviar y recibir los mensajes del bot de WhatsApp; los datos permanecen en la
+              infraestructura de FlashPago.<br />
+              <strong>Proveedor de hosting:</strong> almacena la base de datos y las imágenes de comprobantes de
+              forma segura en el servidor donde opera FlashPago.
             </p>
             <p style={{ marginTop: "0.75rem" }}>
-              Todos los encargados están obligados contractualmente o por sus propios términos de servicio a
-              proteger la información y a no usarla para fines distintos a los aquí descritos.
-            </p>
-            <p style={{ marginTop: "0.75rem" }}>
-              <strong>Uso de datos de Google (Gmail):</strong> el acceso a Gmail que el negocio autoriza mediante
-              Google OAuth se usa exclusivamente para comparar automáticamente el monto de un comprobante de pago
-              con las notificaciones bancarias que el negocio recibe por correo, con el fin de confirmar
-              transacciones de forma automática. No se usa para ningún otro propósito — no se usa para publicidad,
-              no se usa para entrenar modelos de inteligencia artificial ni sistemas de aprendizaje automático, y
-              no se transfiere a terceros salvo lo estrictamente necesario para prestar esta funcionalidad de
-              verificación. El uso y la transferencia por parte de FlashPago de la información recibida de las
-              APIs de Google cumplen con la{' '}
-              <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer" style={{ color: "#F57C00" }}>
-                Google API Services User Data Policy
-              </a>, incluyendo los requisitos de Uso Limitado ("Limited Use").
+              Con cada encargado que procesa datos por fuera de la infraestructura propia de FlashPago (Anthropic,
+              Google, Wompi), el tratamiento se sujeta a los términos contractuales de servicio para clientes
+              empresariales de dicho proveedor, que incluyen compromisos de confidencialidad y seguridad de la
+              información. FlashPago revisa estos términos antes de integrar un proveedor nuevo.
             </p>
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>7. Transferencia y transmisión internacional de datos</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>8. Transmisión y transferencia internacional de datos</h2>
             <p>
-              Algunos de los proveedores mencionados en la sección 6 (Anthropic, Google) procesan información en
-              servidores ubicados fuera de Colombia. Al aceptar esta Política, el titular autoriza dicha
-              transmisión internacional, la cual se realiza únicamente para las finalidades descritas y bajo los
-              estándares de protección exigidos por la legislación colombiana, conforme al artículo 26 de la Ley
-              1581 de 2012.
+              Anthropic y Google procesan información en servidores ubicados fuera de Colombia, actuando en ambos
+              casos como <strong>encargados del tratamiento</strong> por instrucción de FlashPago y para las
+              finalidades descritas en esta Política — esto constituye una <strong>transmisión internacional</strong>{' '}
+              (no una transferencia a un responsable distinto), que conforme al artículo 26 de la Ley 1581 de 2012
+              no requiere autorización separada del titular cuando existe un contrato de transmisión que garantice
+              el cumplimiento de la ley colombiana, como es el caso.
+            </p>
+            <p style={{ marginTop: "0.75rem" }}>
+              Al aceptar esta Política, el titular es informado de esta transmisión y de que se realiza únicamente
+              para las finalidades aquí descritas y bajo los estándares de protección exigidos por la legislación
+              colombiana.
             </p>
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>8. Tiempo de conservación</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>9. Tiempo de conservación por categoría</h2>
             <p>
-              Los datos se conservan mientras la cuenta del negocio esté activa y durante el tiempo adicional
-              necesario para cumplir obligaciones legales, contables o fiscales, o para atender eventuales
-              reclamaciones. Al solicitar la eliminación de una cuenta, los datos personales se eliminan o
-              anonimizan, salvo aquellos que debamos conservar por mandato legal.
+              Los datos se conservan por categoría de la siguiente forma, y siempre mientras la cuenta del negocio
+              esté activa como mínimo:
             </p>
-          </section>
-
-          <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>9. Medidas de seguridad</h2>
-            <p>
-              Aplicamos medidas técnicas y administrativas razonables para proteger los datos personales, entre
-              ellas: contraseñas almacenadas mediante funciones de cifrado unidireccional con sal aleatoria (nunca
-              en texto plano), control de acceso basado en roles y por negocio, límite de intentos de inicio de
-              sesión, y comunicación cifrada (HTTPS) para el acceso al panel de administración.
+            <p style={{ marginTop: "0.75rem" }}>
+              a) <strong>Comprobantes de pago e imágenes:</strong> mientras la cuenta esté activa, y hasta 5 años
+              después de su registro por posibles requerimientos contables o fiscales.<br />
+              b) <strong>Registros técnicos (logs):</strong> hasta 12 meses, con fines de seguridad.<br />
+              c) <strong>Datos de facturación:</strong> según los términos exigidos por la normativa tributaria
+              colombiana vigente.<br />
+              d) <strong>Autorización (token) de acceso a Gmail:</strong> mientras el negocio no revoque el acceso;
+              se elimina inmediatamente al revocarse o al eliminar la cuenta.<br />
+              e) <strong>Reclamos y PQR:</strong> hasta 2 años después de resueltos, como constancia de atención.
+            </p>
+            <p style={{ marginTop: "0.75rem" }}>
+              Al solicitar la eliminación de una cuenta, los datos personales se eliminan o anonimizan, salvo
+              aquellos que debamos conservar por mandato legal según lo indicado arriba.
             </p>
           </section>
 
@@ -180,28 +202,62 @@ export default function Privacidad({ onVolver }) {
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>11. Cómo ejercer sus derechos</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>11. Medidas de seguridad y respuesta a incidentes</h2>
+            <p>
+              Aplicamos medidas técnicas y administrativas razonables para proteger los datos personales, entre
+              ellas: contraseñas almacenadas mediante funciones de cifrado unidireccional con sal aleatoria (nunca
+              en texto plano), control de acceso basado en roles y por negocio, límite de intentos de inicio de
+              sesión, comunicación cifrada (HTTPS) para el acceso al panel de administración, y copias de seguridad
+              periódicas de la base de datos.
+            </p>
+            <p style={{ marginTop: "0.75rem" }}>
+              El acceso administrativo a los datos de los negocios está restringido al personal estrictamente
+              necesario para operar y dar soporte al Servicio. En caso de una violación de la seguridad que
+              comprometa la confidencialidad, integridad o disponibilidad de los datos personales, FlashPago la
+              reportará a la Superintendencia de Industria y Comercio y, cuando exista riesgo para los titulares, se
+              lo informará a los negocios afectados, conforme a los plazos y condiciones exigidos por la ley.
+            </p>
+          </section>
+
+          <section>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>12. Cómo ejercer sus derechos y procedimiento de reclamos</h2>
             <p>
               Las solicitudes relacionadas con sus datos personales (consultas, reclamos, actualización,
               rectificación o supresión) pueden enviarse al correo <strong>contacto@flashpago.co</strong> o al
-              WhatsApp <strong>+57 316 7064671</strong>, indicando su nombre, el negocio asociado y el motivo
-              de la solicitud. Las consultas se atenderán en un plazo máximo de <strong>10 días hábiles</strong>{' '}
-              (prorrogable 5 días hábiles más, informando el motivo) y los reclamos en un plazo máximo de{' '}
-              <strong>15 días hábiles</strong>, conforme al artículo 14 de la Ley 1581 de 2012.
+              WhatsApp <strong>+57 316 7064671</strong>, indicando como mínimo: nombre completo, identificación,
+              el negocio asociado, una descripción clara de los hechos y, si aplica, los documentos que quiera
+              hacer valer.
+            </p>
+            <p style={{ marginTop: "0.75rem" }}>
+              Si el reclamo está incompleto, se le requerirá dentro de los cinco (5) días siguientes al recibo para
+              que subsane las fallas; si no lo hace dentro de los dos (2) meses siguientes, se entenderá desistido.
+              Recibido el reclamo completo, se incluirá en la base de datos una leyenda de <strong>"reclamo en
+              trámite"</strong> y el motivo, hasta que se decida sobre él. Si FlashPago no es competente para
+              resolverlo, lo trasladará al responsable competente en un plazo máximo de dos (2) días hábiles e
+              informará de la situación al titular.
+            </p>
+            <p style={{ marginTop: "0.75rem" }}>
+              Las consultas se atenderán en un plazo máximo de <strong>10 días hábiles</strong> (prorrogable 5 días
+              hábiles más, informando el motivo) y los reclamos en un plazo máximo de <strong>15 días
+              hábiles</strong> desde su recibo, conforme al artículo 14 de la Ley 1581 de 2012.
             </p>
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>12. Menores de edad</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>13. Menores de edad</h2>
             <p>
-              FlashPago está dirigido a negocios y personas mayores de edad. No recolectamos intencionalmente
-              datos de menores de edad. Si detectamos que se registró una cuenta a nombre de un menor, procederemos
-              a eliminar la información correspondiente.
+              FlashPago está dirigido a negocios y personas mayores de edad, y no recolectamos intencionalmente
+              datos de menores de edad. Si un comprobante de pago llegara a contener accidentalmente datos de un
+              menor (por ejemplo, el nombre de quien hizo la transferencia), esos datos se tratan con la protección
+              reforzada que exige la Ley 1581 de 2012 para niños, niñas y adolescentes: se usan únicamente para la
+              finalidad de verificar esa transacción puntual, y el titular (o su representante legal) puede
+              solicitar en cualquier momento su rectificación o supresión por los canales de la sección 12, los
+              cuales se atenderán de forma prioritaria.
             </p>
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>13. Sesión y datos guardados en tu navegador</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>14. Sesión y datos guardados en tu navegador</h2>
             <p>
               Para que no tengas que escribir tu contraseña en cada página, guardamos en tu navegador la
               información mínima que te mantiene con la sesión iniciada, incluida una cookie. Esa información
@@ -213,7 +269,7 @@ export default function Privacidad({ onVolver }) {
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>14. Autoridad de control</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>15. Autoridad de control</h2>
             <p>
               La autoridad competente en Colombia para vigilar el cumplimiento de la normativa de protección de
               datos personales es la <strong>Superintendencia de Industria y Comercio (SIC)</strong>, Delegatura
@@ -222,16 +278,17 @@ export default function Privacidad({ onVolver }) {
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>15. Cambios a esta política</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>16. Cambios a esta política</h2>
             <p>
               Esta Política puede actualizarse para reflejar cambios en el Servicio o en la normativa aplicable.
               Los cambios sustanciales se notificarán a los usuarios registrados por correo electrónico o WhatsApp
-              antes de su entrada en vigencia.
+              antes de su entrada en vigencia, y requerirán una nueva aceptación expresa cuando afecten las
+              finalidades, los proveedores encargados del tratamiento, o los derechos del titular aquí descritos.
             </p>
           </section>
 
           <section>
-            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>16. Contacto</h2>
+            <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>17. Contacto</h2>
             <p>
               Para preguntas sobre esta Política o el tratamiento de sus datos personales, contáctenos en{' '}
               <strong>contacto@flashpago.co</strong> o por WhatsApp al <strong>+57 316 7064671</strong>.
