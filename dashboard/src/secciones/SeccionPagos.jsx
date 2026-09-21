@@ -173,7 +173,7 @@ export default function SeccionPagos({
         <div className="seccion-header">
           <h2 className="seccion-titulo"><BarChart3 size={18} /> Pagos por día — {periodoDia ? `${periodoDia} de ${mesesNombres[periodoMes - 1]}` : mesesNombres[periodoMes - 1]}</h2>
         </div>
-        <div className="grafica-container">
+        <div className="grafica-container" style={{ height: 160 }}>
           <Suspense fallback={<GraficaCargando alto={160} />}>
             <VentasPorDiaChart
               height={160}

@@ -292,7 +292,9 @@ function paginaError(codigo, titulo, mensaje, opts = {}) {
 // <div id="root"></div> vacío. Si el archivo no existe (build viejo, o el
 // dominio es app.flashpago.co), sigue al comportamiento normal de siempre.
 app.get('/', (req, res, next) => {
-  if (req.hostname.startsWith('app.')) return next();
+  // req.hostname puede venir undefined con peticiones sin Host valido
+  // (bots/escaners) — sin el default, tumbaba esta ruta con 500.
+  if ((req.hostname || '').startsWith('app.')) return next();
   res.sendFile(path.join(__dirname, 'dashboard/build', 'landing.html'), (err) => {
     if (err) next();
   });
