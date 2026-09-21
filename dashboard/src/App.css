@@ -525,6 +525,13 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .tabla-pagos td { padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--dash-border); color: var(--dash-text); }
 .tabla-pagos tr:last-child td { border-bottom: none; }
 .tabla-pagos tr:hover { background: var(--dash-surface-2); }
+.tabla-pagos th.th-ordenable { cursor: pointer; user-select: none; }
+.tabla-pagos th.th-ordenable:hover { color: var(--dash-text); }
+.tabla-pagos th.th-checkbox, .tabla-pagos td.td-checkbox { width: 34px; padding-left: 1rem; }
+.paginacion-pagos { display: flex; align-items: center; justify-content: center; gap: 0.9rem; padding: 1rem 0 0.25rem; }
+.paginacion-pagos button { width: 34px; height: 34px; border-radius: 9px; border: 1.5px solid var(--dash-border); background: var(--dash-surface); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--dash-text); }
+.paginacion-pagos button:disabled { opacity: 0.4; cursor: default; }
+.paginacion-pagos span { font-size: 0.82rem; color: var(--dash-text-muted); font-weight: 500; }
 .td-cliente { font-weight: 500; }
 .td-monto { font-weight: 600; color: var(--naranja) !important; }
 
@@ -535,12 +542,35 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .badge-daviplata { background: var(--tint-green-bg); color: var(--tint-green-fg); }
 .badge-avvillas { background: var(--tint-red-bg); color: var(--tint-red-fg); }
 .badge-transfiya { background: var(--tint-blue-bg); color: var(--tint-blue-fg); }
+.badge-breb { background: var(--tint-blue-bg); color: var(--tint-blue-fg); }
+.badge-nu { background: var(--tint-purple-bg); color: var(--tint-purple-fg); }
 .badge-otro { background: var(--tint-grey-bg); color: var(--tint-grey-fg); }
+.badge-duplicado { display: inline-flex; align-items: center; gap: 3px; padding: 0.1rem 0.5rem; border-radius: 50px; font-size: 0.68rem; font-weight: 600; background: var(--tint-red-bg); color: var(--tint-red-fg); margin-left: 0.4rem; white-space: nowrap; }
 .fuente-badge { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 50px; white-space: nowrap; }
 .fuente-gmail { background: var(--tint-grey-bg); color: var(--tint-grey-fg); }
 .fuente-nocturna { background: var(--tint-blue-bg); color: var(--tint-blue-fg); }
 
 /* ─── BOTONES ────────────────────────────────── */
+/* ── Borde giratorio siempre activo ──
+   Mismo truco de BuscadorGlow.jsx (gradiente cónico + rotación) pero sin
+   pausar en reposo — para una tarjeta puntual que debe llamar la atención
+   todo el tiempo, no solo en hover/focus. Keyframe propio (no reusa
+   @bglow-spin) para no depender de que BuscadorGlow esté montado en la
+   misma vista. */
+.glow-activo-wrap { position: relative; border-radius: 13px; padding: 2px; overflow: hidden; isolation: isolate; }
+.glow-activo-ring {
+  position: absolute; inset: -60%; z-index: 0;
+  background: conic-gradient(from 0deg,
+    transparent 0%, var(--naranja) 12%, transparent 28%,
+    transparent 72%, var(--naranja-suave) 88%, transparent 100%);
+  animation: glowActivoSpin 3.5s linear infinite;
+}
+@keyframes glowActivoSpin { to { transform: rotate(360deg); } }
+.glow-activo-body { position: relative; z-index: 1; border-radius: 11px; }
+@media (prefers-reduced-motion: reduce) {
+  .glow-activo-ring { animation: none; }
+}
+
 .exportar-btn { background: none; border: 1.5px solid var(--naranja); color: var(--naranja); padding: 0.4rem 1rem; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.3s; }
 .exportar-btn:hover { background: var(--naranja); color: white; }
 .ver-foto-btn { background: none; border: 1px solid var(--dash-border); color: var(--dash-text-muted); padding: 0.2rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; transition: all 0.3s; }

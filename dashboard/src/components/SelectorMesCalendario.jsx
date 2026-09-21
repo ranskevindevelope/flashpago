@@ -3,8 +3,7 @@ import { ChevronDown } from 'lucide-react';
 
 const DIAS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
 
-// Días del mes en filas de 7 (Lun-Dom), con huecos antes/después. Solo
-// para mostrar — se elige el mes completo, no un día (ver Aplicar).
+// Días del mes en filas de 7 (Lun-Dom), con huecos antes/después.
 function diasDelMesEnGrilla(mes, anio) {
   const primerDiaSemana = (new Date(anio, mes - 1, 1).getDay() + 6) % 7; // 0=Lun
   const ultimoDia = new Date(anio, mes, 0).getDate();
@@ -15,16 +14,20 @@ function diasDelMesEnGrilla(mes, anio) {
   return filas;
 }
 
-// Selector tipo calendario: popover con navegación mes a mes y "Aplicar".
-// No elige días ni rangos, solo el mes completo.
-export default function SelectorMesCalendario({ mes, anio, onCambiar, sumarMes, esMesActualGenerico, mesesNombres }) {
+// Selector tipo calendario: popover con navegación mes a mes, elegir un
+// día puntual (click en el número) o quedarse con el mes completo.
+// `dia` es null cuando se ve el mes completo; onCambiar(mes, anio, dia)
+// se llama siempre con los tres, dia en null si no se eligió ninguno.
+export default function SelectorMesCalendario({ mes, anio, dia, onCambiar, sumarMes, esMesActualGenerico, mesesNombres }) {
   const [abierto, setAbierto] = useState(false);
   const [vistaMes, setVistaMes] = useState(mes);
   const [vistaAnio, setVistaAnio] = useState(anio);
+  const [vistaDia, setVistaDia] = useState(dia || null);
 
   const abrir = () => {
     setVistaMes(mes);
     setVistaAnio(anio);
+    setVistaDia(dia || null);
     setAbierto(true);
   };
 
@@ -32,14 +35,17 @@ export default function SelectorMesCalendario({ mes, anio, onCambiar, sumarMes, 
     const { mes: m, anio: a } = sumarMes(vistaMes, vistaAnio, direccion);
     setVistaMes(m);
     setVistaAnio(a);
+    setVistaDia(null); // cambiar de mes sin día elegido todavía tiene más sentido que arrastrar un número que puede no existir
   };
 
   const aplicar = () => {
-    onCambiar(vistaMes, vistaAnio);
+    onCambiar(vistaMes, vistaAnio, vistaDia);
     setAbierto(false);
   };
 
   const vistaEsMesActual = esMesActualGenerico(vistaMes, vistaAnio);
+  const hoy = new Date();
+  const esHoy = (d) => vistaEsMesActual && d === hoy.getDate();
 
   return (
     <div style={{ position: 'relative' }}>
@@ -53,7 +59,7 @@ export default function SelectorMesCalendario({ mes, anio, onCambiar, sumarMes, 
           cursor: 'pointer',
         }}
       >
-        {mesesNombres[mes - 1]} {anio}
+        {dia ? `${dia} de ${mesesNombres[mes - 1]} ${anio}` : `${mesesNombres[mes - 1]} ${anio}`}
         <ChevronDown size={16} style={{ transform: abierto ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
       </button>
 
@@ -96,16 +102,43 @@ export default function SelectorMesCalendario({ mes, anio, onCambiar, sumarMes, 
             </div>
             {diasDelMesEnGrilla(vistaMes, vistaAnio).map((fila, i) => (
               <div key={i} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 2 }}>
-                {fila.map((dia, j) => (
-                  <div key={j} style={{
-                    textAlign: 'center', fontSize: 12.5, padding: '5px 0', borderRadius: 7,
-                    color: dia ? 'var(--dash-text)' : 'transparent',
-                  }}>
-                    {dia || '·'}
-                  </div>
-                ))}
+                {fila.map((d, j) => {
+                  const seleccionado = d && vistaDia === d;
+                  return (
+                    <button
+                      key={j}
+                      type="button"
+                      disabled={!d}
+                      onClick={() => setVistaDia(d)}
+                      style={{
+                        textAlign: 'center', fontSize: 12.5, padding: '5px 0', borderRadius: 7,
+                        border: esHoy(d) && !seleccionado ? '1.5px solid #F57C00' : 'none',
+                        background: seleccionado ? '#F57C00' : 'transparent',
+                        color: !d ? 'transparent' : seleccionado ? '#fff' : 'var(--dash-text)',
+                        fontWeight: seleccionado ? 700 : 500,
+                        cursor: d ? 'pointer' : 'default',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {d || '·'}
+                    </button>
+                  );
+                })}
               </div>
             ))}
+
+            {vistaDia && (
+              <button
+                type="button"
+                onClick={() => setVistaDia(null)}
+                style={{
+                  display: 'block', margin: '0.6rem auto 0', background: 'none', border: 'none',
+                  color: '#F57C00', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', padding: 0,
+                }}
+              >
+                Ver todo el mes
+              </button>
+            )}
 
             <button
               type="button" onClick={aplicar}

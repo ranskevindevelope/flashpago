@@ -1172,6 +1172,65 @@ router.get('/dashboard/pagos', verificarToken, async (req, res) => {
   }
 });
 
+// Lista paginada/ordenable para la tabla de Pagos del dashboard. Endpoint
+// nuevo y separado de /dashboard/pagos (arriba) a propósito: ese lo usa
+// NotificacionesEnVivo.jsx esperando un array plano — si le cambiamos la
+// forma de la respuesta para paginar, se rompen las notificaciones en vivo.
+router.get('/dashboard/pagos-lista', verificarToken, async (req, res) => {
+  try {
+    const nid = req.user.negocio_id;
+    const { mes, anio, dia } = req.query;
+    const porPagina = Math.min(parseInt(req.query.porPagina) || 20, 100);
+    const pagina = Math.max(parseInt(req.query.pagina) || 1, 1);
+    const offset = (pagina - 1) * porPagina;
+
+    // Whitelist de columnas ordenables — nunca interpolar req.query.orden
+    // directo en el SQL.
+    const columnasOrden = {
+      fecha: 'p.creado_en', monto: 'p.monto', cliente: 'p.nombre_cliente', banco: 'p.banco',
+    };
+    const orden = columnasOrden[req.query.orden] || columnasOrden.fecha;
+    const direccion = req.query.direccion === 'asc' ? 'ASC' : 'DESC';
+
+    let condicionFecha = '1=1';
+    let paramsFecha = [];
+    if (mes && anio && dia) {
+      const fechaStr = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+      condicionFecha = 'p.creado_en >= ? AND p.creado_en <= ?';
+      paramsFecha = [`${fechaStr} 00:00:00`, `${fechaStr} 23:59:59`];
+    } else if (mes && anio) {
+      const fechaInicio = `${anio}-${mes.padStart(2, '0')}-01`;
+      const fechaFin = `${anio}-${mes.padStart(2, '0')}-31 23:59:59`;
+      condicionFecha = 'p.creado_en >= ? AND p.creado_en <= ?';
+      paramsFecha = [fechaInicio, fechaFin];
+    }
+
+    db.get(
+      `SELECT COUNT(*) as total FROM pagos p WHERE p.estado = 'REAL' AND p.negocio_id = ? AND ${condicionFecha}`,
+      [nid, ...paramsFecha],
+      (err, filaTotal) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        db.all(
+          `SELECT p.*,
+             (SELECT dr.estado FROM duplicate_reviews dr WHERE dr.pago_id = p.id ORDER BY dr.id DESC LIMIT 1) as revision_duplicado
+           FROM pagos p
+           WHERE p.estado = 'REAL' AND p.negocio_id = ? AND ${condicionFecha}
+           ORDER BY ${orden} ${direccion}
+           LIMIT ? OFFSET ?`,
+          [nid, ...paramsFecha, porPagina, offset],
+          (err2, filas) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            res.json({ filas, total: filaTotal.total, pagina, porPagina });
+          }
+        );
+      }
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.put('/pagos/:id/estado', verificarToken, soloAdmin, (req, res) => {
   const { estado } = req.body;
   const nid = req.user.negocio_id;
@@ -1191,13 +1250,20 @@ router.put('/pagos/:id/estado', verificarToken, soloAdmin, (req, res) => {
 router.get('/dashboard/stats', verificarToken, async (req, res) => {
   try {
     const nid = req.user.negocio_id;
-    const { mes, anio, dias } = req.query;
+    const { mes, anio, dias, dia } = req.query;
 
     let query, params;
     if (mes && anio) {
-      const fechaInicio = `${anio}-${mes.padStart(2, '0')}-01`;
-      const fechaFin = `${anio}-${mes.padStart(2, '0')}-31 23:59:59`;
-      query = `SELECT date(creado_en) as fecha, COUNT(*) as cantidad, SUM(monto) as total 
+      let fechaInicio, fechaFin;
+      if (dia) {
+        const fechaStr = `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+        fechaInicio = `${fechaStr} 00:00:00`;
+        fechaFin = `${fechaStr} 23:59:59`;
+      } else {
+        fechaInicio = `${anio}-${mes.padStart(2, '0')}-01`;
+        fechaFin = `${anio}-${mes.padStart(2, '0')}-31 23:59:59`;
+      }
+      query = `SELECT date(creado_en) as fecha, COUNT(*) as cantidad, SUM(monto) as total
                FROM pagos WHERE estado = 'REAL' AND negocio_id = ?
                AND creado_en >= ? AND creado_en <= ?
                GROUP BY date(creado_en) ORDER BY date(creado_en) ASC`;
@@ -1224,7 +1290,7 @@ router.get('/dashboard/stats', verificarToken, async (req, res) => {
 router.get('/dashboard/resumen-periodo', verificarToken, async (req, res) => {
   try {
     const nid = req.user.negocio_id;
-    const { mes, anio } = req.query;
+    const { mes, anio, dia } = req.query;
 
     if (!mes || !anio) {
       return res.status(400).json({ ok: false, error: 'Falta mes o anio' });
@@ -1232,15 +1298,29 @@ router.get('/dashboard/resumen-periodo', verificarToken, async (req, res) => {
 
     const mesNum = parseInt(mes);
     const anioNum = parseInt(anio);
-    const fechaInicio = `${anio}-${mes.padStart(2, '0')}-01`;
-    const fechaFin = `${anio}-${mes.padStart(2, '0')}-31 23:59:59`;
+    const diaNum = dia ? parseInt(dia) : null;
 
-    // Mes anterior (diciembre del año previo si toca cruzar de enero) — solo
-    // para el delta porcentual que muestra Estadísticas.
-    const mesAnteriorNum = mesNum === 1 ? 12 : mesNum - 1;
-    const anioAnteriorNum = mesNum === 1 ? anioNum - 1 : anioNum;
-    const fechaInicioAnterior = `${anioAnteriorNum}-${String(mesAnteriorNum).padStart(2, '0')}-01`;
-    const fechaFinAnterior = `${anioAnteriorNum}-${String(mesAnteriorNum).padStart(2, '0')}-31 23:59:59`;
+    let fechaInicio, fechaFin, fechaInicioAnterior, fechaFinAnterior;
+    if (diaNum) {
+      // Un día puntual: el "periodo anterior" para el delta es el día
+      // anterior (no el mes anterior) — Date maneja solo el cruce de mes/año.
+      const fechaStr = `${anio}-${mes.padStart(2, '0')}-${String(diaNum).padStart(2, '0')}`;
+      fechaInicio = `${fechaStr} 00:00:00`;
+      fechaFin = `${fechaStr} 23:59:59`;
+      const anteriorObj = new Date(anioNum, mesNum - 1, diaNum - 1);
+      const fechaAnteriorStr = `${anteriorObj.getFullYear()}-${String(anteriorObj.getMonth() + 1).padStart(2, '0')}-${String(anteriorObj.getDate()).padStart(2, '0')}`;
+      fechaInicioAnterior = `${fechaAnteriorStr} 00:00:00`;
+      fechaFinAnterior = `${fechaAnteriorStr} 23:59:59`;
+    } else {
+      fechaInicio = `${anio}-${mes.padStart(2, '0')}-01`;
+      fechaFin = `${anio}-${mes.padStart(2, '0')}-31 23:59:59`;
+      // Mes anterior (diciembre del año previo si toca cruzar de enero) — solo
+      // para el delta porcentual que muestra Estadísticas.
+      const mesAnteriorNum = mesNum === 1 ? 12 : mesNum - 1;
+      const anioAnteriorNum = mesNum === 1 ? anioNum - 1 : anioNum;
+      fechaInicioAnterior = `${anioAnteriorNum}-${String(mesAnteriorNum).padStart(2, '0')}-01`;
+      fechaFinAnterior = `${anioAnteriorNum}-${String(mesAnteriorNum).padStart(2, '0')}-31 23:59:59`;
+    }
 
     const consulta = (sql, params) => new Promise((resolve, reject) => {
       db.get(sql, params, (err, r) => (err ? reject(err) : resolve(r)));
@@ -1276,6 +1356,8 @@ router.get('/dashboard/resumen-periodo', verificarToken, async (req, res) => {
          AND creado_en >= ? AND creado_en <= ?`,
         [nid, fechaInicioAnterior, fechaFinAnterior]
       ),
+      // Un día puntual no necesita esto para el heatmap (se ignora más
+      // abajo), pero se pide igual para no bifurcar el Promise.all.
       consultaVarias(
         `SELECT date(creado_en) as fecha, COUNT(*) as cantidad
          FROM pagos WHERE estado = 'REAL' AND negocio_id = ?
@@ -1292,25 +1374,28 @@ router.get('/dashboard/resumen-periodo', verificarToken, async (req, res) => {
 
     // Heatmap semanal: grilla de 7 columnas (Lun a Dom) x semanas del mes,
     // como un calendario. Los días que caen fuera del mes en la primera o
-    // última semana quedan en 0.
-    const cantidadPorFecha = {};
-    diasDelMes.forEach((f) => { cantidadPorFecha[f.fecha] = f.cantidad; });
-    const ultimoDia = new Date(anioNum, mesNum, 0).getDate();
-    const heatmap_semanal = [];
-    let semana = new Array(7).fill(0);
-    for (let dia = 1; dia <= ultimoDia; dia++) {
-      const fechaStr = `${anio}-${mes.padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
-      const diaSemana = (new Date(anioNum, mesNum - 1, dia).getDay() + 6) % 7; // 0=Lun..6=Dom
-      semana[diaSemana] = cantidadPorFecha[fechaStr] || 0;
-      if (diaSemana === 6 || dia === ultimoDia) {
-        heatmap_semanal.push(semana);
-        semana = new Array(7).fill(0);
+    // última semana quedan en 0. No aplica cuando se filtra por un día
+    // puntual (el frontend ya lo oculta si viene vacío).
+    let heatmap_semanal = [];
+    if (!diaNum) {
+      const cantidadPorFecha = {};
+      diasDelMes.forEach((f) => { cantidadPorFecha[f.fecha] = f.cantidad; });
+      const ultimoDia = new Date(anioNum, mesNum, 0).getDate();
+      let semana = new Array(7).fill(0);
+      for (let dia = 1; dia <= ultimoDia; dia++) {
+        const fechaStr = `${anio}-${mes.padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+        const diaSemana = (new Date(anioNum, mesNum - 1, dia).getDay() + 6) % 7; // 0=Lun..6=Dom
+        semana[diaSemana] = cantidadPorFecha[fechaStr] || 0;
+        if (diaSemana === 6 || dia === ultimoDia) {
+          heatmap_semanal.push(semana);
+          semana = new Array(7).fill(0);
+        }
       }
     }
 
     res.json({
       ok: true,
-      periodo: { mes: mesNum, anio: anioNum },
+      periodo: { mes: mesNum, anio: anioNum, dia: diaNum },
       total: row.total,
       cantidad: row.cantidad,
       pago_mas_alto: row.pago_mas_alto || 0,

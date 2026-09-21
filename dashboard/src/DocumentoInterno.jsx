@@ -81,6 +81,7 @@ export default function DocumentoInterno({ onVolver }) {
               <Card title="♻️ Comprobantes reutilizados">La misma transferencia (real) se reenvía para "pagar" un segundo pedido distinto.</Card>
               <Card title="⏱️ Verificación lenta">Revisar el banco a mano toma minutos que, en hora pico, se traducen en filas.</Card>
               <Card title="😰 Riesgo humano">El empleado que decide es el mismo que puede estar apurado, cansado o coludido con el cliente.</Card>
+              <Card title="🔕 Notificación tardía">El push/SMS del banco a veces llega tarde o no llega — el negocio queda "a ciegas" sin saber si el pago ya entró.</Card>
             </div>
           </section>
 
@@ -123,13 +124,19 @@ export default function DocumentoInterno({ onVolver }) {
 
           <section>
             <h2 style={h2}><span style={num}>06</span> A quién le sirve</h2>
+            <div style={{ background: 'rgba(245,124,0,0.08)', borderLeft: `3px solid ${ORANGE}`, borderRadius: 10, padding: '0.9rem 1.1rem', fontSize: '0.9rem', marginBottom: '1rem' }}>
+              <strong style={{ color: ORANGE }}>El filtro real: volumen de transferencias.</strong> No es el tipo de negocio ni el tamaño — es cuántas transferencias reciben al día/semana. Un negocio chico con buen volumen sí sirve; uno grande con bajo volumen (ej. casi todo efectivo), no. Validado ofreciendo a negocios de bajo volumen: no justifica el esfuerzo de venta, aunque tengan varios empleados.
+            </div>
             <ul style={{ margin: '0 0 1rem', paddingLeft: '1.3rem', color: '#e0e0e0' }}>
-              <li style={{ marginBottom: '0.4rem' }}>Restaurantes y comida rápida (caso piloto: <strong>Vinson Burgers</strong>)</li>
+              <li style={{ marginBottom: '0.4rem' }}>Restaurantes y comida rápida (caso piloto: <strong>Vinson Burgers</strong> — buen volumen de transferencias, 3 empleados + 1 domiciliario)</li>
               <li style={{ marginBottom: '0.4rem' }}>Tiendas y minimarkets</li>
               <li style={{ marginBottom: '0.4rem' }}>Peluquerías, spas y servicios con turnos</li>
               <li style={{ marginBottom: '0.4rem' }}>Domicilios y ventas por WhatsApp/redes sociales</li>
               <li>Cualquier negocio con más de un empleado recibiendo pagos, donde el dueño no puede estar mirando todo el día</li>
             </ul>
+            <p style={{ margin: '0 0 0.6rem', fontSize: '0.88rem', color: MUTED }}>
+              Excepciones donde sí vale la pena aunque el volumen sea bajo: monto alto por transferencia, ya sufrieron una estafa antes, les interesa más el resto de la herramienta (cierre de caja/gastos/estadísticas) que el antifraude, o llegan referidos.
+            </p>
             <div style={{ background: 'rgba(245,124,0,0.08)', borderLeft: `3px solid ${ORANGE}`, borderRadius: 10, padding: '0.9rem 1.1rem', fontSize: '0.9rem' }}>
               <strong style={{ color: ORANGE }}>El dolor central:</strong> negocios que ya perdieron plata al menos una vez por un comprobante falso o reutilizado — ahí FlashPago deja de ser "un lujo" y pasa a ser obvio.
             </div>
@@ -165,6 +172,7 @@ export default function DocumentoInterno({ onVolver }) {
             </div>
             <ul style={{ margin: 0, paddingLeft: '1.3rem', color: '#e0e0e0' }}>
               <li style={{ marginBottom: '0.4rem' }}><strong>No confía en la imagen, confía en el banco.</strong> Cruza contra la notificación real por correo, no solo "lee" la foto.</li>
+              <li style={{ marginBottom: '0.4rem' }}><strong>No depende de que el push llegue rápido.</strong> Si la notificación del banco al celular se demora o falla, FlashPago igual confirma porque lee el correo directamente.</li>
               <li style={{ marginBottom: '0.4rem' }}><strong>Cero fricción de adopción.</strong> El canal (WhatsApp) ya lo usan el dueño, los empleados y los clientes.</li>
               <li><strong>Pensado para el mercado colombiano</strong>, no una adaptación genérica: reconoce los 8 bancos/billeteras más usados del país.</li>
             </ul>
@@ -179,7 +187,9 @@ export default function DocumentoInterno({ onVolver }) {
               <li style={{ marginBottom: '0.4rem' }}><strong>Miedo al fraude</strong> — "¿Y si ese comprobante es falso?", para el dueño que ya perdió plata así una vez.</li>
               <li style={{ marginBottom: '0.4rem' }}><strong>Velocidad operativa</strong> — de "esperar a que alguien revise el banco" a "confirmado en segundos".</li>
               <li style={{ marginBottom: '0.4rem' }}><strong>Cero curva de aprendizaje</strong> — "tu equipo ya sabe usarlo: es WhatsApp."</li>
-              <li><strong>Control sin estar presente</strong> — el dueño ve todo desde el panel, sin tener que estar parado detrás del empleado.</li>
+              <li style={{ marginBottom: '0.4rem' }}><strong>Control sin estar presente</strong> — el dueño ve todo desde el panel, sin tener que estar parado detrás del empleado.</li>
+              <li style={{ marginBottom: '0.4rem' }}><strong>"Yo reviso yo mismo"</strong> — validar que sí revisan, pero mostrar que a simple vista ya no se distinguen los comprobantes falsos de los reales, y que en hora pico no alcanza a revisar todo.</li>
+              <li><strong>Caso propio como prueba</strong> — Vinson Burgers: buen volumen de transferencias, 3 empleados + domiciliario, resolvió tanto el fraude como las notificaciones tardías del banco y la contabilidad en volumen alto. Hablar desde la experiencia propia vende más que la demo.</li>
             </ol>
           </section>
 

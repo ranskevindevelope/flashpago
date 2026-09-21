@@ -153,8 +153,34 @@
   to { transform: rotate(360deg); }
 }
 
+/* ── Brillo activo ──
+   Barrido de luz que se queda corriendo indefinidamente (no solo mientras
+   carga, como el spinner) — para un botón puntual que quieres que llame
+   la atención todo el tiempo, ej. "Activar verificación". */
+.fp-btn--shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.fp-btn--shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.6), transparent);
+  transform: skewX(-20deg);
+  animation: fpShimmerSweep 2.6s ease-in-out infinite;
+}
+@keyframes fpShimmerSweep {
+  0% { left: -60%; }
+  50% { left: 130%; }
+  100% { left: 130%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fp-btn { transition: none; }
   .fp-btn:hover:not(:disabled) { transform: none; }
   .fp-btn__spinner { animation-duration: 1.5s; }
+  .fp-btn--shimmer::after { animation: none; }
 }

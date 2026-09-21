@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, TrendingUp, Download, DollarSign, Calendar, CheckCircle, Shield, Trophy, BarChart3, Eye, X, Moon, Mail, Users, UserX, UserCheck, Edit, Trash2, Save, AlertTriangle, Clock, Bell, Activity, Zap, Wifi, WifiOff, ShoppingBag, Receipt, Wallet, PlusCircle, MinusCircle, ArrowDownUp, ArrowUp, ArrowDown, Settings, Building2, MailCheck, ChevronDown, ChevronUp, Volume2, Package, Rocket, Lock, Inbox, Circle, ChevronRight, RefreshCw } from 'lucide-react';
+import { CreditCard, TrendingUp, DollarSign, Calendar, CheckCircle, Shield, BarChart3, X, Mail, Users, UserX, UserCheck, Edit, Trash2, Save, AlertTriangle, Clock, Bell, Activity, Zap, Wifi, WifiOff, Wallet, Settings, Building2, MailCheck, ChevronDown, ChevronUp, Volume2, Package, Rocket, Lock, Inbox, Circle, ChevronRight, RefreshCw } from 'lucide-react';
 import { createApiClient } from './services/api';
 import Sidebar from './components/Sidebar';
 import DashboardHeader from './components/DashboardHeader';
@@ -9,31 +9,25 @@ import IndicadorActualizacion from './components/IndicadorActualizacion';
 import Button from './components/ui/Button';
 import ModalConfirmacion from './components/ModalConfirmacion';
 import ModalConfirmarWhatsapp from './components/ModalConfirmarWhatsapp';
-import EstadoVacio from './components/ui/EstadoVacio';
 import { FilaSkeleton, TarjetaSkeleton } from './components/ui/Skeleton';
 import SeccionBuscar from './secciones/SeccionBuscar';
 import SeccionUsuarios from './secciones/SeccionUsuarios';
 import SeccionDuplicados from './secciones/SeccionDuplicados';
-import CierreCaja from './secciones/CierreCaja';
+import SeccionPagos from './secciones/SeccionPagos';
+import SeccionEstadisticas from './secciones/SeccionEstadisticas';
+import SeccionExportar from './secciones/SeccionExportar';
+import SeccionVentas from './secciones/SeccionVentas';
 import { useUsuarios } from './hooks/useUsuarios';
-import { formatearMonto, formatearMiles, soloDigitos } from './utils/formato';
-import { getBancoBadge, getPlanLabel, getPlanColor, agruparBancosParaEstadisticas, COLOR_BANCO_ESTADISTICAS } from './utils/bancos';
+import { formatearMonto } from './utils/formato';
+import { getBancoBadge, getPlanLabel, getPlanColor } from './utils/bancos';
 import { permisoNotificaciones, pedirPermisoNotificaciones } from './utils/notificaciones';
-import EstadisticasHeatmap from './components/EstadisticasHeatmap';
-import SelectorMesCalendario from './components/SelectorMesCalendario';
 
 // Recharts pesa ~366 KB: se carga solo cuando el usuario abre una sección
 // que realmente muestra una gráfica, no al entrar al dashboard.
 const VentasPorDiaChart = lazy(() => import('./components/charts/VentasPorDiaChart'));
 const VentasPorHoraChart = lazy(() => import('./components/charts/VentasPorHoraChart'));
-const VentasVsEfectivoChart = lazy(() => import('./components/charts/VentasVsEfectivoChart'));
-const GastosPorCategoriaChart = lazy(() => import('./components/charts/GastosPorCategoriaChart'));
-const VentasAreaChart = lazy(() => import('./components/charts/VentasAreaChart'));
-const BancosDonutChart = lazy(() => import('./components/charts/BancosDonutChart'));
 
-const GraficaCargando = ({ alto = '100%' }) => (
-  <div className="skeleton-block" style={{ width: '100%', height: alto }} />
-);
+import GraficaCargando from './components/GraficaCargando';
 import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
 
@@ -263,35 +257,21 @@ function Dashboard({ onLogout }) {
   }, [confirmacionWpp.abierto, confirmacionWpp.confirmado]);
 
   // ─── Estado para Ventas (cierre de caja) ───────────────
+  // ventasResumen se queda acá porque Panel también lo muestra; el resto
+  // del estado de Ventas (tabs, gastos, historial) vive en SeccionVentas.
   const [ventasResumen, setVentasResumen] = useState(null);
   const [ventasExpandido, setVentasExpandido] = useState(false);
   const [estadisticasExpandido, setEstadisticasExpandido] = useState(false);
-  const [ventasCierres, setVentasCierres] = useState([]);
-  const [ventasSemanal, setVentasSemanal] = useState(null);
-  const [ventasGastosCategorias, setVentasGastosCategorias] = useState([]);
-  const [gastoMonto, setGastoMonto] = useState('');
-  const [gastoCategoria, setGastoCategoria] = useState('general');
-  const [gastoDescripcion, setGastoDescripcion] = useState('');
-  const [gastoMetodo, setGastoMetodo] = useState('efectivo');
-  const [guardandoGasto, setGuardandoGasto] = useState(false);
-  const [ventasTab, setVentasTab] = useState('hoy');
 
   // ─── Estado para filtro por periodo ────────────────────
+  // periodoDia: null = se ve el mes completo; con número, un día puntual
+  // (comparte mes/año con el resto, no es un estado aparte).
   const [periodoMes, setPeriodoMes] = useState(new Date().getMonth() + 1);
   const [periodoAnio, setPeriodoAnio] = useState(new Date().getFullYear());
-  const [gastosMes, setGastosMes] = useState(new Date().getMonth() + 1);
-  const [gastosAnio, setGastosAnio] = useState(new Date().getFullYear());
-  const [exportarMes, setExportarMes] = useState(new Date().getMonth() + 1);
-  const [exportarAnio, setExportarAnio] = useState(new Date().getFullYear());
-  const [historialMes, setHistorialMes] = useState(new Date().getMonth() + 1);
-  const [historialAnio, setHistorialAnio] = useState(new Date().getFullYear());
+  const [periodoDia, setPeriodoDia] = useState(null);
   const [resumenPeriodo, setResumenPeriodo] = useState(null);
   const [statsPeriodo, setStatsPeriodo] = useState([]);
-  const [pagosPeriodo, setPagosPeriodo] = useState([]);
   const [cargandoPeriodo, setCargandoPeriodo] = useState(false);
-  // Bancos crudos (texto libre) agrupados en los 4 grupos que muestra
-  // Estadísticas — ver utils/bancos.js.
-  const bancosAgrupados = useMemo(() => agruparBancosParaEstadisticas(resumenPeriodo?.bancos), [resumenPeriodo]);
 
   const api = useMemo(() => createApiClient(onLogout), [onLogout]);
   const queryClient = useQueryClient();
@@ -373,12 +353,8 @@ function Dashboard({ onLogout }) {
   }, [seccionActiva]);
 
   useEffect(() => {
-    if (seccionActiva === 'ventas') cargarVentas();
-  }, [seccionActiva, gastosMes, gastosAnio, historialMes, historialAnio]);
-
-  useEffect(() => {
     if (seccionActiva === 'estadisticas' || seccionActiva === 'pagos' || seccionActiva === 'panel') cargarPeriodo();
-  }, [seccionActiva, periodoMes, periodoAnio]);
+  }, [seccionActiva, periodoMes, periodoAnio, periodoDia]);
 
   const cargarDatos = async () => {
     try {
@@ -971,15 +947,14 @@ function Dashboard({ onLogout }) {
     setCargandoPeriodo(true);
     const m = String(periodoMes).padStart(2, '0');
     const a = periodoAnio;
+    const d = periodoDia ? `&dia=${String(periodoDia).padStart(2, '0')}` : '';
     try {
-      const [resResumen, resStats, resPagos] = await Promise.all([
-        api.request(`/api/dashboard/resumen-periodo?mes=${m}&anio=${a}`),
-        api.request(`/api/dashboard/stats?mes=${m}&anio=${a}`),
-        api.request(`/api/dashboard/pagos?mes=${m}&anio=${a}&limite=100`),
+      const [resResumen, resStats] = await Promise.all([
+        api.request(`/api/dashboard/resumen-periodo?mes=${m}&anio=${a}${d}`),
+        api.request(`/api/dashboard/stats?mes=${m}&anio=${a}${d}`),
       ]);
       if (resResumen?.ok) setResumenPeriodo(resResumen);
       setStatsPeriodo(Array.isArray(resStats) ? resStats : []);
-      setPagosPeriodo(Array.isArray(resPagos) ? resPagos : []);
     } catch (err) {
       console.error('Error cargando periodo:', err);
     }
@@ -1004,111 +979,18 @@ function Dashboard({ onLogout }) {
     const { mes, anio } = sumarMes(periodoMes, periodoAnio, direccion);
     setPeriodoMes(mes);
     setPeriodoAnio(anio);
+    setPeriodoDia(null);
   };
 
-  const cambiarGastosMes = (direccion) => {
-    const { mes, anio } = sumarMes(gastosMes, gastosAnio, direccion);
-    setGastosMes(mes);
-    setGastosAnio(anio);
-  };
-
-  const cambiarExportarMes = (direccion) => {
-    const { mes, anio } = sumarMes(exportarMes, exportarAnio, direccion);
-    setExportarMes(mes);
-    setExportarAnio(anio);
-  };
-
-  const cambiarHistorialMes = (direccion) => {
-    const { mes, anio } = sumarMes(historialMes, historialAnio, direccion);
-    setHistorialMes(mes);
-    setHistorialAnio(anio);
+  // Handler unificado para SelectorMesCalendario (Estadísticas y Pagos):
+  // dia llega null cuando se elige "ver todo el mes".
+  const cambiarPeriodo = (mes, anio, dia) => {
+    setPeriodoMes(mes);
+    setPeriodoAnio(anio);
+    setPeriodoDia(dia || null);
   };
 
   const esMesActual = esMesActualGenerico(periodoMes, periodoAnio);
-
-  // ─── Funciones de Ventas ─────────────────────────────────
-  const cargarVentas = async () => {
-    try {
-      const [resResumen, resCierres, resSemanal, resCategorias] = await Promise.all([
-        api.request('/api/ventas/resumen'),
-        api.request(`/api/ventas/cierres?mes=${historialMes}&anio=${historialAnio}`),
-        api.request(`/api/ventas/semanal?mes=${historialMes}&anio=${historialAnio}`),
-        api.request(`/api/ventas/gastos/categorias?mes=${gastosMes}&anio=${gastosAnio}`),
-      ]);
-      if (resResumen?.ok) setVentasResumen(resResumen);
-      if (resCierres?.ok) setVentasCierres(resCierres.cierres || []);
-      if (resSemanal?.ok) setVentasSemanal(resSemanal);
-      if (resCategorias?.ok) setVentasGastosCategorias(resCategorias.categorias || []);
-    } catch (err) {
-      console.error('Error cargando ventas:', err);
-    }
-  };
-
-  const agregarGasto = async () => {
-    const monto = parseInt(gastoMonto.replace(/[.,\s]/g, ''));
-    if (!monto || monto <= 0) {
-      toast.error('Ingresa el monto del gasto');
-      return;
-    }
-    if (!gastoDescripcion.trim()) {
-      toast.error('Agrega una descripción del gasto');
-      return;
-    }
-    setGuardandoGasto(true);
-    try {
-      const data = await api.request('/api/ventas/gasto', {
-        method: 'POST',
-        body: JSON.stringify({ monto, categoria: gastoCategoria, descripcion: gastoDescripcion.trim(), metodo_pago: gastoMetodo }),
-      });
-      if (data.ok) {
-        toast.success(`Gasto de $${monto.toLocaleString('es-CO')} registrado`);
-        setGastoMonto('');
-        setGastoDescripcion('');
-        setGastoCategoria('general');
-        setGastoMetodo('efectivo');
-        cargarVentas();
-      } else {
-        toast.error(data.error);
-      }
-    } catch (err) {
-      toast.error('Error registrando gasto');
-    }
-    setGuardandoGasto(false);
-  };
-
-  const eliminarGastoHandler = (id) => {
-    pedirConfirmacion({
-      titulo: '¿Eliminar este gasto?',
-      textoConfirmar: 'Eliminar',
-      peligro: true,
-      accion: () => eliminarGastoConfirmado(id),
-    });
-  };
-
-  const eliminarGastoConfirmado = async (id) => {
-    try {
-      const data = await api.request(`/api/ventas/gasto/${id}`, { method: 'DELETE' });
-      if (data.ok) cargarVentas();
-    } catch (err) {
-      console.error('Error eliminando gasto:', err);
-    }
-  };
-
-  const getCategoriaColor = (cat) => {
-    const colores = {
-      general: '#6B7280', insumos: '#F59E0B', nomina: '#3B82F6',
-      servicios: '#8B5CF6', arriendo: '#EF4444', transporte: '#10B981', otro: '#9CA3AF',
-    };
-    return colores[cat] || '#6B7280';
-  };
-
-  const getCategoriaLabel = (cat) => {
-    const labels = {
-      general: 'General', insumos: 'Insumos', nomina: 'Nómina',
-      servicios: 'Servicios', arriendo: 'Arriendo', transporte: 'Transporte', otro: 'Otro',
-    };
-    return labels[cat] || cat;
-  };
 
 
   const statsFormateados = stats.map(s => ({
@@ -1655,32 +1537,35 @@ function Dashboard({ onLogout }) {
 
               {/* Tarjeta de conectar Gmail */}
               {gmailEstado && !gmailEstado.conectado && esAdmin && (
-                <div style={{
-                  background: 'var(--dash-surface)', borderRadius: 12, padding: '1rem 1.25rem',
-                  marginBottom: '1.25rem', border: '2px solid var(--tint-orange-bg)',
-                  display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
-                }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: 12, background: 'var(--tint-orange-bg)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                <div className="glow-activo-wrap" style={{ marginBottom: '1.25rem' }}>
+                  <div className="glow-activo-ring" />
+                  <div className="glow-activo-body" style={{
+                    background: 'var(--dash-surface)', padding: '1rem 1.25rem',
+                    display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
                   }}>
-                    <Mail size={22} color="var(--tint-orange-fg)" />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 200 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--dash-text)' }}>
-                      Activa la verificación automática de pagos
+                    <div style={{
+                      width: 44, height: 44, borderRadius: 12, background: 'var(--tint-orange-bg)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      <Mail size={22} color="var(--tint-orange-fg)" />
                     </div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--dash-text-muted)', marginTop: 2 }}>
-                      FlashPago necesita leer las notificaciones de tu banco para verificar comprobantes automáticamente.
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--dash-text)' }}>
+                        Activa la verificación automática de pagos
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--dash-text-muted)', marginTop: 2 }}>
+                        FlashPago necesita leer las notificaciones de tu banco para verificar comprobantes automáticamente.
+                      </div>
                     </div>
+                    <Button
+                      onClick={conectarGmail}
+                      loading={gmailCargando}
+                      icon={<Mail size={15} />}
+                      className={gmailCargando ? '' : 'fp-btn--shimmer'}
+                    >
+                      {gmailCargando ? 'Conectando...' : 'Activar verificación'}
+                    </Button>
                   </div>
-                  <Button
-                    onClick={conectarGmail}
-                    loading={gmailCargando}
-                    icon={<Mail size={15} />}
-                  >
-                    {gmailCargando ? 'Conectando...' : 'Activar verificación'}
-                  </Button>
                 </div>
               )}
 
@@ -2025,291 +1910,38 @@ function Dashboard({ onLogout }) {
 
           {/* ─── PAGOS ───────────────────────────── */}
           {seccionActiva === 'pagos' && (
-            <>
-              {/* Selector de mes */}
-              <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <button onClick={() => cambiarMes(-1)} style={{
-                    width: 36, height: 36, borderRadius: 10, border: '2px solid var(--dash-border)',
-                    background: 'var(--dash-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <span style={{ fontSize: '1.1rem' }}>‹</span>
-                  </button>
-                  <div style={{
-                    padding: '0.5rem 1.25rem', borderRadius: 10, background: '#F57C00',
-                    color: '#fff', fontWeight: 700, fontSize: '0.95rem', minWidth: 160, textAlign: 'center',
-                  }}>
-                    {mesesNombres[periodoMes - 1]} {periodoAnio}
-                  </div>
-                  <button onClick={() => cambiarMes(1)} disabled={esMesActual} style={{
-                    width: 36, height: 36, borderRadius: 10, border: '2px solid var(--dash-border)',
-                    background: esMesActual ? 'var(--dash-surface-2)' : 'var(--dash-surface)', cursor: esMesActual ? 'default' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: esMesActual ? 0.4 : 1,
-                  }}>
-                    <span style={{ fontSize: '1.1rem' }}>›</span>
-                  </button>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--dash-text-muted)', fontWeight: 500 }}>
-                    {pagosPeriodo.length} pagos — {formatearMonto(pagosPeriodo.reduce((s, p) => s + p.monto, 0))}
-                  </span>
-                  <button className="exportar-btn" onClick={() => exportarPagos(periodoMes, periodoAnio)}>
-                    <Download size={14} /> Exportar
-                  </button>
-                </div>
-              </div>
-              <div className="seccion">
-                <div className="tabla-container">
-                  <table className="tabla-pagos">
-                    <thead><tr><th>Cliente</th><th>Monto</th><th>Banco</th><th>Fecha</th><th>Hora</th><th>Fuente</th><th>Foto</th></tr></thead>
-                    <tbody>
-                      {cargandoPeriodo ? (
-                        Array.from({ length: 6 }).map((_, i) => (
-                          <FilaSkeleton key={`skeleton-${i}`} columnas={['75%', '55%', 60, 55, 40, 65, 30]} />
-                        ))
-                      ) : pagosPeriodo.length === 0 ? (
-                        <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'var(--dash-text-faint)' }}>No hay pagos en {mesesNombres[periodoMes - 1]} {periodoAnio}</td></tr>
-                      ) : (
-                        pagosPeriodo.map((pago) => {
-                          const banco = getBancoBadge(pago.banco);
-                          return (
-                            <tr key={pago.id}>
-                              <td className="td-cliente">{pago.nombre_cliente || 'Sin nombre'}</td>
-                              <td className="td-monto">{formatearMonto(pago.monto)}</td>
-                              <td><span className={`banco-badge ${banco.clase}`}>{banco.nombre}</span></td>
-                              <td>{pago.fecha || '-'}</td>
-                              <td>{pago.hora || '-'}</td>
-                              <td>
-                                <span className={`fuente-badge ${pago.fuente === 'gmail_nocturna' ? 'fuente-nocturna' : 'fuente-gmail'}`}>
-                                  {pago.fuente === 'gmail_nocturna' ? <><Moon size={11} /> asincronica</> : <><Mail size={11} /> Gmail</>}
-                                </span>
-                              </td>
-                              <td>
-                                {pago.foto ? (
-                                  <button className="ver-foto-btn" onClick={() => setFotoActiva(pago.foto)}><Eye size={13} /> Ver</button>
-                                ) : (<span className="sin-foto">—</span>)}
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
+            <SeccionPagos
+              api={api}
+              periodoMes={periodoMes}
+              periodoAnio={periodoAnio}
+              periodoDia={periodoDia}
+              onCambiarPeriodo={cambiarPeriodo}
+              sumarMes={sumarMes}
+              esMesActualGenerico={esMesActualGenerico}
+              mesesNombres={mesesNombres}
+              resumenPeriodo={resumenPeriodo}
+              statsPeriodo={statsPeriodo}
+              cargandoPeriodo={cargandoPeriodo}
+              duplicadosPendientes={duplicadosPendientes}
+              exportarPagos={exportarPagos}
+              onVerFoto={setFotoActiva}
+            />
           )}
 
           {/* ─── ESTADÍSTICAS ────────────────────── */}
           {seccionActiva === 'estadisticas' && (
-            <>
-              {/* Selector de mes */}
-              <div style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem',
-              }}>
-                <SelectorMesCalendario
-                  mes={periodoMes}
-                  anio={periodoAnio}
-                  onCambiar={(m, a) => { setPeriodoMes(m); setPeriodoAnio(a); }}
-                  sumarMes={sumarMes}
-                  esMesActualGenerico={esMesActualGenerico}
-                  mesesNombres={mesesNombres}
-                />
-              </div>
-
-              {/* Cards del periodo */}
-              <div className="tarjetas-grid">
-                {cargandoPeriodo ? (
-                  <>
-                    <TarjetaSkeleton />
-                    <TarjetaSkeleton />
-                    <TarjetaSkeleton />
-                    <TarjetaSkeleton />
-                  </>
-                ) : (
-                  <>
-                    <div className="tarjeta tarjeta-accent">
-                      <div className="tarjeta-icon-box tarjeta-icon-naranja"><DollarSign size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Total {mesesNombres[periodoMes - 1]}</span>
-                        <span className="tarjeta-valor">{formatearMonto(resumenPeriodo?.total || 0)}</span>
-                        {typeof resumenPeriodo?.delta_vs_anterior === 'number' ? (
-                          <span className="tarjeta-sub" style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            color: resumenPeriodo.delta_vs_anterior >= 0 ? 'var(--tint-green-fg)' : 'var(--tint-red-fg)',
-                          }}>
-                            {resumenPeriodo.delta_vs_anterior >= 0 ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
-                            {Math.abs(resumenPeriodo.delta_vs_anterior)}% vs mes anterior
-                          </span>
-                        ) : (
-                          <span className="tarjeta-sub">{resumenPeriodo?.cantidad || 0} transacciones</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="tarjeta">
-                      <div className="tarjeta-icon-box tarjeta-icon-azul"><BarChart3 size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Promedio diario</span>
-                        <span className="tarjeta-valor">
-                          {formatearMonto(resumenPeriodo?.promedio_diario || 0)}
-                        </span>
-                        <span className="tarjeta-sub">{resumenPeriodo?.dias_con_ventas || 0} días con ventas</span>
-                      </div>
-                    </div>
-                    <div className="tarjeta">
-                      <div className="tarjeta-icon-box tarjeta-icon-verde"><Trophy size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Pago más alto</span>
-                        <span className="tarjeta-valor">
-                          {formatearMonto(resumenPeriodo?.pago_mas_alto || 0)}
-                        </span>
-                        <span className="tarjeta-sub">En una sola transacción</span>
-                      </div>
-                    </div>
-                    <div className="tarjeta">
-                      <div className="tarjeta-icon-box tarjeta-icon-morado"><Shield size={22} /></div>
-                      <div className="tarjeta-info">
-                        <span className="tarjeta-label">Ticket promedio</span>
-                        <span className="tarjeta-valor">
-                          {formatearMonto(resumenPeriodo?.ticket_promedio || 0)}
-                        </span>
-                        <span className="tarjeta-sub">Por transacción</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Ventas por día — area chart con línea de promedio */}
-              <div className="seccion" style={{ marginBottom: '1.25rem' }}>
-                <div className="seccion-header">
-                  <h2 className="seccion-titulo"><TrendingUp size={18} /> Ventas por día — {mesesNombres[periodoMes - 1]} {periodoAnio}</h2>
-                </div>
-                {cargandoPeriodo ? (
-                  <div className="grafica-container">
-                    <div className="skeleton-block" style={{ width: '100%', height: '100%' }} />
-                  </div>
-                ) : statsPeriodo.length === 0 ? (
-                  <EstadoVacio
-                    icono={<TrendingUp size={20} color="#F57C00" />}
-                    titulo="No hay ventas registradas en este mes"
-                    subtitulo="En cuanto el bot verifique un pago, aparece aquí"
-                  />
-                ) : (
-                  <>
-                    <div style={{ display: 'flex', gap: '1.25rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 3, background: '#1565C0', display: 'inline-block' }} />
-                        <span style={{ fontSize: 12.5, color: 'var(--dash-text-muted)' }}>Ventas diarias</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 16, borderTop: '2px dashed #F57C00', display: 'inline-block' }} />
-                        <span style={{ fontSize: 12.5, color: 'var(--dash-text-muted)' }}>
-                          Promedio {formatearMonto(resumenPeriodo?.promedio_diario || 0)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="grafica-container">
-                      <Suspense fallback={<GraficaCargando alto={300} />}>
-                        <VentasAreaChart
-                          height={300}
-                          promedioK={Math.round((resumenPeriodo?.promedio_diario || 0) / 1000)}
-                          data={statsPeriodo.map(s => ({
-                            ...s,
-                            fecha: s.fecha ? s.fecha.slice(8, 10) + '/' + s.fecha.slice(5, 7) : '',
-                            totalK: Math.round(s.total / 1000),
-                          }))}
-                        />
-                      </Suspense>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Bancos más usados + distribución (donut) */}
-              <div className="estadisticas-bancos-grid" style={{ marginBottom: '1.25rem' }}>
-                <div className="seccion" style={{ marginBottom: 0 }}>
-                  <h2 className="seccion-titulo"><CreditCard size={18} /> Bancos más usados</h2>
-                  {bancosAgrupados.length === 0 ? (
-                    <EstadoVacio
-                      icono={<CreditCard size={20} color="#F57C00" />}
-                      titulo="Sin pagos este mes"
-                      subtitulo="En cuanto el bot verifique un pago, aparece aquí"
-                    />
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', marginTop: '0.75rem' }}>
-                      {bancosAgrupados.map((b) => {
-                        const max = Math.max(...bancosAgrupados.map(x => x.total));
-                        const pct = max > 0 ? Math.round((b.total / max) * 100) : 0;
-                        const color = COLOR_BANCO_ESTADISTICAS[b.nombre] || COLOR_BANCO_ESTADISTICAS.Otro;
-                        return (
-                          <div key={b.nombre}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--dash-text)' }}>{b.nombre}</span>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--dash-text-muted)' }}>
-                                {b.pagos} pagos / {formatearMonto(b.total)}
-                              </span>
-                            </div>
-                            <div style={{ height: 8, background: 'var(--dash-surface-2)', borderRadius: 4, overflow: 'hidden' }}>
-                              <div style={{
-                                width: `${pct}%`, height: '100%', background: color,
-                                borderRadius: 4, transition: 'width 0.5s ease',
-                              }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="seccion" style={{ marginBottom: 0 }}>
-                  <h2 className="seccion-titulo"><Package size={18} /> Distribución por banco</h2>
-                  {bancosAgrupados.length === 0 ? (
-                    <EstadoVacio icono={<Package size={20} color="#F57C00" />} titulo="Sin datos" subtitulo="" />
-                  ) : (
-                    <>
-                      <div style={{ height: 190, marginTop: '0.5rem' }}>
-                        <Suspense fallback={<GraficaCargando alto={190} />}>
-                          <BancosDonutChart
-                            data={bancosAgrupados}
-                            getColor={(n) => COLOR_BANCO_ESTADISTICAS[n] || COLOR_BANCO_ESTADISTICAS.Otro}
-                          />
-                        </Suspense>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginTop: '1rem' }}>
-                        {bancosAgrupados.map((b) => {
-                          const totalGeneral = bancosAgrupados.reduce((s, x) => s + x.total, 0);
-                          const pct = totalGeneral > 0 ? Math.round((b.total / totalGeneral) * 100) : 0;
-                          const color = COLOR_BANCO_ESTADISTICAS[b.nombre] || COLOR_BANCO_ESTADISTICAS.Otro;
-                          return (
-                            <div key={b.nombre} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem' }}>
-                              <span style={{ width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
-                              <span style={{ color: 'var(--dash-text)', fontWeight: 500 }}>{b.nombre}</span>
-                              <span style={{ color: 'var(--dash-text-faint)', marginLeft: 'auto' }}>{pct}%</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Heatmap de actividad semanal */}
-              {resumenPeriodo?.heatmap_semanal?.length > 0 && (
-                <div className="seccion">
-                  <h2 className="seccion-titulo"><Activity size={18} /> Actividad semanal</h2>
-                  <div style={{ marginTop: '0.75rem' }}>
-                    <EstadisticasHeatmap matriz={resumenPeriodo.heatmap_semanal} />
-                  </div>
-                </div>
-              )}
-            </>
+            <SeccionEstadisticas
+              periodoMes={periodoMes}
+              periodoAnio={periodoAnio}
+              periodoDia={periodoDia}
+              onCambiarPeriodo={cambiarPeriodo}
+              sumarMes={sumarMes}
+              esMesActualGenerico={esMesActualGenerico}
+              mesesNombres={mesesNombres}
+              resumenPeriodo={resumenPeriodo}
+              statsPeriodo={statsPeriodo}
+              cargandoPeriodo={cargandoPeriodo}
+            />
           )}
 
           {/* ─── BUSCAR ──────────────────────────── */}
@@ -2317,514 +1949,27 @@ function Dashboard({ onLogout }) {
 
           {/* ─── EXPORTAR ────────────────────────── */}
           {seccionActiva === 'exportar' && (
-            <div className="seccion exportar-seccion">
-              <div className="exportar-card">
-                <div className="exportar-icon-box"><Download size={32} color="#F57C00" /></div>
-                <h2>Exportar pagos a Excel</h2>
-                <p>Elige el mes y descarga sus pagos verificados. Se abre en Excel, Google Sheets o cualquier programa de hojas de cálculo.</p>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'center', margin: '1rem 0' }}>
-                  <button onClick={() => cambiarExportarMes(-1)} style={{
-                    width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
-                    background: 'var(--dash-surface)', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <span style={{ fontSize: '1rem' }}>‹</span>
-                  </button>
-                  <div style={{
-                    padding: '0.4rem 1rem', borderRadius: 9, background: '#F57C00',
-                    color: '#fff', fontWeight: 700, fontSize: '0.85rem', minWidth: 140, textAlign: 'center',
-                  }}>
-                    {mesesNombres[exportarMes - 1]} {exportarAnio}
-                  </div>
-                  <button onClick={() => cambiarExportarMes(1)} disabled={esMesActualGenerico(exportarMes, exportarAnio)} style={{
-                    width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
-                    background: esMesActualGenerico(exportarMes, exportarAnio) ? 'var(--dash-surface-2)' : 'var(--dash-surface)',
-                    cursor: esMesActualGenerico(exportarMes, exportarAnio) ? 'default' : 'pointer',
-                    opacity: esMesActualGenerico(exportarMes, exportarAnio) ? 0.4 : 1,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <span style={{ fontSize: '1rem' }}>›</span>
-                  </button>
-                </div>
-
-                <button className="exportar-btn" onClick={() => exportarPagos(exportarMes, exportarAnio)}>
-                  <Download size={14} /> Exportar Excel
-                </button>
-              </div>
-            </div>
+            <SeccionExportar
+              mesesNombres={mesesNombres}
+              sumarMes={sumarMes}
+              esMesActualGenerico={esMesActualGenerico}
+              exportarPagos={exportarPagos}
+            />
           )}
 
           {/* ─── VENTAS (Cierre de Caja) ────────── */}
           {seccionActiva === 'ventas' && (
-            <>
-
-              {/* Tabs */}
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
-                {[
-                  { id: 'hoy', label: 'Hoy', icon: <Receipt size={15} /> },
-                  { id: 'historial', label: 'Historial', icon: <Calendar size={15} /> },
-                  { id: 'gastos', label: 'Gastos', icon: <MinusCircle size={15} /> },
-                ].map(tab => (
-                  <button key={tab.id} onClick={() => setVentasTab(tab.id)} style={{
-                    padding: '0.5rem 1rem', borderRadius: 10, border: 'none', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600,
-                    background: ventasTab === tab.id ? '#F57C00' : 'var(--dash-surface-2)',
-                    color: ventasTab === tab.id ? '#fff' : 'var(--dash-text-muted)',
-                  }}>
-                    {tab.icon} {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* ── TAB: HOY ──────────────────────────── */}
-              {ventasTab === 'hoy' && (
-                <>
-                  {/* Cards resumen del día */}
-                  <div className="tarjetas-grid">
-                    {!ventasResumen ? (
-                      <>
-                        <TarjetaSkeleton />
-                        <TarjetaSkeleton />
-                        <TarjetaSkeleton />
-                        <TarjetaSkeleton />
-                      </>
-                    ) : (
-                      <>
-                        <div className="tarjeta tarjeta-accent">
-                          <div className="tarjeta-icon-box tarjeta-icon-naranja"><ArrowDownUp size={22} /></div>
-                          <div className="tarjeta-info">
-                            <span className="tarjeta-label">Transferencias hoy</span>
-                            <span className="tarjeta-valor">{formatearMonto(ventasResumen?.transferencias?.total || 0)}</span>
-                            <span className="tarjeta-sub">{ventasResumen?.transferencias?.cantidad || 0} verificadas</span>
-                          </div>
-                        </div>
-                        <div className="tarjeta">
-                          <div className="tarjeta-icon-box tarjeta-icon-rojo"><MinusCircle size={22} /></div>
-                          <div className="tarjeta-info">
-                            <span className="tarjeta-label">Gastos hoy</span>
-                            <span className="tarjeta-valor" style={{ color: '#E53935' }}>{formatearMonto(ventasResumen?.gastos?.total || 0)}</span>
-                            <span className="tarjeta-sub">{ventasResumen?.gastos?.cantidad || 0} registrados</span>
-                          </div>
-                        </div>
-                        <div className="tarjeta">
-                          <div className="tarjeta-icon-box tarjeta-icon-verde"><Wallet size={22} /></div>
-                          <div className="tarjeta-info">
-                            <span className="tarjeta-label">Efectivo esperado</span>
-                            <span className="tarjeta-valor" style={{ color: '#43A047' }}>
-                              {ventasResumen?.cierre
-                                ? formatearMonto(ventasResumen.cierre.total_efectivo)
-                                : '—'}
-                            </span>
-                            <span className="tarjeta-sub">{ventasResumen?.cierre ? 'Cierre registrado' : 'Sin cierre aún'}</span>
-                          </div>
-                        </div>
-                        <div className="tarjeta">
-                          <div className="tarjeta-icon-box tarjeta-icon-morado"><ShoppingBag size={22} /></div>
-                          <div className="tarjeta-info">
-                            <span className="tarjeta-label">Total ventas</span>
-                            <span className="tarjeta-valor">
-                              {ventasResumen?.cierre
-                                ? formatearMonto(ventasResumen.cierre.total_ventas)
-                                : '—'}
-                            </span>
-                            <span className="tarjeta-sub">{ventasResumen?.cierre ? 'Del cierre de caja' : 'Pendiente de cierre'}</span>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="dashboard-overview-grid">
-                    {/* Cierre de caja */}
-                    <div className="seccion dashboard-chart-card">
-                      <div className="seccion-header">
-                        <h2 className="seccion-titulo"><Receipt size={18} /> Cierre de caja</h2>
-                      </div>
-                      <CierreCaja
-                        resumen={ventasResumen}
-                        api={api}
-                        esAdmin={esAdmin}
-                        onGuardado={() => { cargarVentas(); cargarDatos(); }}
-                      />
-                    </div>
-
-                    {/* Gastos rápidos */}
-                    <div className="seccion alertas-card">
-                      <div className="seccion-header">
-                        <h2 className="seccion-titulo"><MinusCircle size={18} /> Registrar gasto</h2>
-                      </div>
-                      <div style={{ marginBottom: '0.6rem' }}>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="Monto ($)"
-                          value={formatearMiles(gastoMonto)}
-                          onChange={(e) => setGastoMonto(soloDigitos(e.target.value))}
-                          style={{
-                            width: '100%', padding: '0.55rem 0.8rem', borderRadius: 8,
-                            border: '2px solid var(--dash-border)', fontSize: '0.95rem', fontWeight: 600,
-                            outline: 'none', marginBottom: '0.5rem', boxSizing: 'border-box',
-                          }}
-                        />
-                        <select
-                          value={gastoCategoria}
-                          onChange={(e) => setGastoCategoria(e.target.value)}
-                          style={{
-                            width: '100%', padding: '0.5rem 0.8rem', borderRadius: 8,
-                            border: '2px solid var(--dash-border)', fontSize: '0.85rem',
-                            outline: 'none', marginBottom: '0.5rem', background: 'var(--dash-surface)', boxSizing: 'border-box',
-                          }}
-                        >
-                          <option value="general">General</option>
-                          <option value="insumos">Insumos</option>
-                          <option value="nomina">Nómina</option>
-                          <option value="servicios">Servicios</option>
-                          <option value="arriendo">Arriendo</option>
-                          <option value="transporte">Transporte</option>
-                          <option value="otro">Otro</option>
-                        </select>
-                        <input
-                          type="text"
-                          placeholder="Descripción del gasto"
-                          value={gastoDescripcion}
-                          onChange={(e) => setGastoDescripcion(e.target.value)}
-                          style={{
-                            width: '100%', padding: '0.55rem 0.8rem', borderRadius: 8,
-                            border: '2px solid var(--dash-border)', fontSize: '0.85rem',
-                            outline: 'none', marginBottom: '0.6rem', boxSizing: 'border-box',
-                          }}
-                        />
-                        {/* Solo lo pagado en efectivo sale del cajón, así que
-                            define si el gasto se resta del cierre. */}
-                        <div className="gasto-metodo">
-                          <button
-                            type="button"
-                            aria-pressed={gastoMetodo === 'efectivo'}
-                            onClick={() => setGastoMetodo('efectivo')}
-                          >
-                            Pagué en efectivo
-                          </button>
-                          <button
-                            type="button"
-                            aria-pressed={gastoMetodo === 'transferencia'}
-                            onClick={() => setGastoMetodo('transferencia')}
-                          >
-                            Por transferencia
-                          </button>
-                        </div>
-                        <button
-                          className="btn-registrar-gasto"
-                          disabled={guardandoGasto || !gastoMonto || !gastoDescripcion.trim()}
-                          onClick={agregarGasto}
-                          style={{
-                            width: '100%', padding: '0.6rem', borderRadius: 8, border: 'none',
-                            background: gastoMonto && gastoDescripcion.trim() ? '#E53935' : 'var(--dash-surface-2)',
-                            color: gastoMonto && gastoDescripcion.trim() ? '#fff' : 'var(--dash-text-faint)',
-                            fontWeight: 600, fontSize: '0.85rem', cursor: gastoMonto ? 'pointer' : 'default',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
-                          }}
-                        >
-                          {guardandoGasto
-                            ? <span className="fp-btn__spinner" style={{ width: 15, height: 15 }} aria-hidden="true" />
-                            : <PlusCircle size={15} />}
-                          {guardandoGasto ? 'Guardando...' : 'Registrar gasto'}
-                        </button>
-                      </div>
-
-                      {/* Lista de gastos de hoy */}
-                      {ventasResumen?.gastos?.lista?.length > 0 && (
-                        <div style={{ borderTop: '1px solid var(--dash-border-soft)', paddingTop: '0.6rem', marginTop: '0.3rem' }}>
-                          <div style={{ fontSize: '0.78rem', color: 'var(--dash-text-faint)', fontWeight: 600, marginBottom: '0.4rem' }}>
-                            GASTOS DE HOY
-                          </div>
-                          {ventasResumen.gastos.lista.map((g) => (
-                            <div key={g.id} style={{
-                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                              padding: '0.4rem 0', borderBottom: '1px solid var(--dash-border-soft)',
-                            }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{
-                                  width: 8, height: 8, borderRadius: '50%',
-                                  background: getCategoriaColor(g.categoria), flexShrink: 0,
-                                }} />
-                                <div>
-                                  <div style={{ fontSize: '0.82rem', fontWeight: 500 }}>{g.descripcion}</div>
-                                  <div style={{ fontSize: '0.72rem', color: 'var(--dash-text-faint)' }}>
-                                    {getCategoriaLabel(g.categoria)}
-                                    {' · '}
-                                    {(g.metodo_pago || 'efectivo') === 'transferencia' ? 'Transferencia' : 'Efectivo'}
-                                  </div>
-                                </div>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#E53935' }}>
-                                  -{formatearMonto(g.monto)}
-                                </span>
-                                {esAdmin && (
-                                  <button onClick={() => eliminarGastoHandler(g.id)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--dash-text-faint)' }}>
-                                    <Trash2 size={13} />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* ── TAB: HISTORIAL ────────────────────── */}
-              {ventasTab === 'historial' && (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
-                    <button onClick={() => cambiarHistorialMes(-1)} style={{
-                      width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
-                      background: 'var(--dash-surface)', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <span style={{ fontSize: '1rem' }}>‹</span>
-                    </button>
-                    <div style={{
-                      padding: '0.4rem 1rem', borderRadius: 9, background: '#F57C00',
-                      color: '#fff', fontWeight: 700, fontSize: '0.85rem', minWidth: 140, textAlign: 'center',
-                    }}>
-                      {mesesNombres[historialMes - 1]} {historialAnio}
-                    </div>
-                    <button onClick={() => cambiarHistorialMes(1)} disabled={esMesActualGenerico(historialMes, historialAnio)} style={{
-                      width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
-                      background: esMesActualGenerico(historialMes, historialAnio) ? 'var(--dash-surface-2)' : 'var(--dash-surface)',
-                      cursor: esMesActualGenerico(historialMes, historialAnio) ? 'default' : 'pointer',
-                      opacity: esMesActualGenerico(historialMes, historialAnio) ? 0.4 : 1,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <span style={{ fontSize: '1rem' }}>›</span>
-                    </button>
-                  </div>
-
-                  {/* Resumen del mes seleccionado */}
-                  {!ventasResumen ? (
-                    <div className="tarjetas-grid">
-                      <TarjetaSkeleton />
-                      <TarjetaSkeleton />
-                      <TarjetaSkeleton />
-                      <TarjetaSkeleton />
-                    </div>
-                  ) : ventasSemanal && (
-                    <div className="tarjetas-grid">
-                      <div className="tarjeta tarjeta-accent">
-                        <div className="tarjeta-icon-box tarjeta-icon-naranja"><ShoppingBag size={22} /></div>
-                        <div className="tarjeta-info">
-                          <span className="tarjeta-label">Ventas — {mesesNombres[historialMes - 1]}</span>
-                          <span className="tarjeta-valor">{formatearMonto(ventasSemanal.totales?.ventas || 0)}</span>
-                          <span className="tarjeta-sub">{ventasSemanal.dias?.length || 0} cierres</span>
-                        </div>
-                      </div>
-                      <div className="tarjeta">
-                        <div className="tarjeta-icon-box tarjeta-icon-azul"><ArrowDownUp size={22} /></div>
-                        <div className="tarjeta-info">
-                          <span className="tarjeta-label">Transferencias</span>
-                          <span className="tarjeta-valor">{formatearMonto(ventasSemanal.totales?.transferencias || 0)}</span>
-                          <span className="tarjeta-sub">Verificadas en el mes</span>
-                        </div>
-                      </div>
-                      <div className="tarjeta">
-                        <div className="tarjeta-icon-box tarjeta-icon-verde"><Wallet size={22} /></div>
-                        <div className="tarjeta-info">
-                          <span className="tarjeta-label">Efectivo</span>
-                          <span className="tarjeta-valor" style={{ color: '#43A047' }}>{formatearMonto(ventasSemanal.totales?.efectivo || 0)}</span>
-                          <span className="tarjeta-sub">Total en caja</span>
-                        </div>
-                      </div>
-                      <div className="tarjeta">
-                        <div className="tarjeta-icon-box tarjeta-icon-rojo"><MinusCircle size={22} /></div>
-                        <div className="tarjeta-info">
-                          <span className="tarjeta-label">Gastos</span>
-                          <span className="tarjeta-valor" style={{ color: '#E53935' }}>{formatearMonto(ventasSemanal.totales?.gastos || 0)}</span>
-                          <span className="tarjeta-sub">En el mes</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Gráfica semanal */}
-                  {ventasSemanal?.dias?.length > 0 && (
-                    <div className="seccion" style={{ marginBottom: '1.25rem' }}>
-                      <h2 className="seccion-titulo"><BarChart3 size={18} /> Ventas vs Efectivo — {mesesNombres[historialMes - 1]}</h2>
-                      <div className="grafica-container">
-                        <Suspense fallback={<GraficaCargando alto={260} />}>
-                          <VentasVsEfectivoChart dias={ventasSemanal.dias} />
-                        </Suspense>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tabla historial */}
-                  <div className="seccion">
-                    <div className="seccion-header">
-                      <h2 className="seccion-titulo"><Calendar size={18} /> Historial de cierres</h2>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--dash-text-faint)' }}>{ventasCierres.length} cierres</span>
-                    </div>
-                    {!ventasResumen ? (
-                      <div className="tabla-container">
-                        <table className="tabla-pagos">
-                          <thead>
-                            <tr>
-                              <th>Fecha</th>
-                              <th>Ventas</th>
-                              <th>Transferencias</th>
-                              <th>Efectivo</th>
-                              <th>Gastos</th>
-                              <th>Cerrado por</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {Array.from({ length: 5 }).map((_, i) => (
-                              <FilaSkeleton key={`skeleton-${i}`} columnas={[70, '55%', '55%', '55%', '45%', '50%']} />
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : ventasCierres.length === 0 ? (
-                      <EstadoVacio
-                        icono={<Receipt size={20} color="#F57C00" />}
-                        titulo={`No hay cierres registrados en ${mesesNombres[historialMes - 1]}`}
-                        subtitulo={esMesActualGenerico(historialMes, historialAnio) ? 'Cuando cierres caja por primera vez, aparece aquí' : undefined}
-                      />
-                    ) : (
-                      <div className="tabla-container">
-                        <table className="tabla-pagos">
-                          <thead>
-                            <tr>
-                              <th>Fecha</th>
-                              <th>Ventas</th>
-                              <th>Transferencias</th>
-                              <th>Efectivo</th>
-                              <th>Gastos</th>
-                              <th>Cerrado por</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ventasCierres.map((c) => (
-                              <tr key={c.id}>
-                                <td style={{ fontWeight: 500 }}>{c.fecha}</td>
-                                <td className="td-monto">{formatearMonto(c.total_ventas)}</td>
-                                <td style={{ color: '#1565C0' }}>{formatearMonto(c.total_transferencias)}</td>
-                                <td style={{ color: '#2E7D32', fontWeight: 600 }}>{formatearMonto(c.total_efectivo)}</td>
-                                <td style={{ color: '#E53935' }}>{c.total_gastos > 0 ? `-${formatearMonto(c.total_gastos)}` : '$0'}</td>
-                                <td style={{ fontSize: '0.8rem' }}>{c.cerrado_por || '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* ── TAB: GASTOS ───────────────────────── */}
-              {ventasTab === 'gastos' && (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
-                    <button onClick={() => cambiarGastosMes(-1)} style={{
-                      width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
-                      background: 'var(--dash-surface)', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <span style={{ fontSize: '1rem' }}>‹</span>
-                    </button>
-                    <div style={{
-                      padding: '0.4rem 1rem', borderRadius: 9, background: '#F57C00',
-                      color: '#fff', fontWeight: 700, fontSize: '0.85rem', minWidth: 140, textAlign: 'center',
-                    }}>
-                      {mesesNombres[gastosMes - 1]} {gastosAnio}
-                    </div>
-                    <button onClick={() => cambiarGastosMes(1)} disabled={esMesActualGenerico(gastosMes, gastosAnio)} style={{
-                      width: 34, height: 34, borderRadius: 9, border: '2px solid var(--dash-border)',
-                      background: esMesActualGenerico(gastosMes, gastosAnio) ? 'var(--dash-surface-2)' : 'var(--dash-surface)',
-                      cursor: esMesActualGenerico(gastosMes, gastosAnio) ? 'default' : 'pointer',
-                      opacity: esMesActualGenerico(gastosMes, gastosAnio) ? 0.4 : 1,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <span style={{ fontSize: '1rem' }}>›</span>
-                    </button>
-                  </div>
-
-                  {/* Gastos por categoría */}
-                  {ventasGastosCategorias.length > 0 && (
-                    <>
-                      <div className="tarjetas-grid" style={{ gridTemplateColumns: 'minmax(0, 320px)' }}>
-                        <div className="tarjeta tarjeta-accent">
-                          <div className="tarjeta-icon-box tarjeta-icon-rojo"><MinusCircle size={22} /></div>
-                          <div className="tarjeta-info">
-                            <span className="tarjeta-label">Total gastos — {mesesNombres[gastosMes - 1]}</span>
-                            <span className="tarjeta-valor" style={{ color: '#E53935' }}>
-                              {formatearMonto(ventasGastosCategorias.reduce((s, c) => s + c.total, 0))}
-                            </span>
-                            <span className="tarjeta-sub">{ventasGastosCategorias.reduce((s, c) => s + c.cantidad, 0)} gastos</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="seccion">
-                        <h2 className="seccion-titulo"><BarChart3 size={18} /> Gastos por categoría — {mesesNombres[gastosMes - 1]} {gastosAnio}</h2>
-                        <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '1rem' }}>
-                          <div style={{ position: 'relative', width: 190, height: 190, flexShrink: 0, margin: '0 auto' }}>
-                            <Suspense fallback={<GraficaCargando />}>
-                              <GastosPorCategoriaChart
-                                categorias={ventasGastosCategorias}
-                                getColor={getCategoriaColor}
-                                getLabel={getCategoriaLabel}
-                              />
-                            </Suspense>
-                            <div style={{
-                              position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                              textAlign: 'center', pointerEvents: 'none',
-                            }}>
-                              <div style={{ fontSize: '0.7rem', color: 'var(--dash-text-faint)' }}>Total</div>
-                              <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#E53935' }}>
-                                {formatearMonto(ventasGastosCategorias.reduce((s, c) => s + c.total, 0))}
-                              </div>
-                            </div>
-                          </div>
-                          <div style={{ flex: 1, minWidth: 220, display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-                            {ventasGastosCategorias.map((cat) => {
-                              const totalGeneral = ventasGastosCategorias.reduce((s, c) => s + c.total, 0);
-                              const pct = totalGeneral > 0 ? Math.round((cat.total / totalGeneral) * 100) : 0;
-                              return (
-                                <div key={cat.categoria} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <span style={{ fontSize: '0.85rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: getCategoriaColor(cat.categoria), flexShrink: 0 }} />
-                                    {getCategoriaLabel(cat.categoria)}
-                                  </span>
-                                  <span style={{ fontSize: '0.85rem', textAlign: 'right' }}>
-                                    <strong style={{ color: 'var(--dash-text)' }}>{formatearMonto(cat.total)}</strong>{' '}
-                                    <span style={{ color: 'var(--dash-text-faint)' }}>({pct}% · {cat.cantidad})</span>
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {ventasGastosCategorias.length === 0 && (
-                    <div className="seccion">
-                      <EstadoVacio
-                        icono={<Wallet size={20} color="#F57C00" />}
-                        titulo={`No hay gastos registrados en ${mesesNombres[gastosMes - 1]}`}
-                      />
-                    </div>
-                  )}
-                </>
-              )}
-            </>
+            <SeccionVentas
+              api={api}
+              esAdmin={esAdmin}
+              ventasResumen={ventasResumen}
+              setVentasResumen={setVentasResumen}
+              cargarDatos={cargarDatos}
+              pedirConfirmacion={pedirConfirmacion}
+              mesesNombres={mesesNombres}
+              sumarMes={sumarMes}
+              esMesActualGenerico={esMesActualGenerico}
+            />
           )}
 
           {/* ─── USUARIOS ────────────────────────── */}
