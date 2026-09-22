@@ -26,3 +26,7 @@ strix_runs/
 
 # pruebas de rendimiento
 loadtest/
+
+
+# test pruebas
+test/
