@@ -3,12 +3,16 @@
 // solo acepta plantillas aprobadas (error 131047, manejado en openwa.js).
 // `cuerpo` debe ser EXACTAMENTE el texto registrado en el panel de Meta.
 
+// "Spanish (COL)" en Meta. Tiene que coincidir exacto: con otro código Meta
+// responde que la plantilla no existe.
+const IDIOMA = 'es_CO';
+
 const PLANTILLAS = {
   // Variable de plantilla no admite saltos de línea, así que la versión de
   // Meta va resumida (cifras, sin detalle); openwa manda el texto completo.
   reporte_diario: {
     nombre: 'reporte_diario',
-    idioma: 'es',
+    idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del negocio', 'cantidad de pagos', 'total recibido'],
     cuerpo:
@@ -18,7 +22,7 @@ const PLANTILLAS = {
 
   verificacion_nocturna: {
     nombre: 'verificacion_nocturna',
-    idioma: 'es',
+    idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del negocio', 'cantidad de pagos', 'total recuperado'],
     cuerpo:
@@ -28,7 +32,7 @@ const PLANTILLAS = {
 
   pagos_no_confirmados: {
     nombre: 'pagos_no_confirmados',
-    idioma: 'es',
+    idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del negocio', 'cantidad de pagos'],
     cuerpo:
@@ -38,7 +42,7 @@ const PLANTILLAS = {
 
   ingresos_sin_comprobante: {
     nombre: 'ingresos_sin_comprobante',
-    idioma: 'es',
+    idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del negocio', 'cantidad de transferencias', 'total sin comprobante'],
     cuerpo:
@@ -48,7 +52,7 @@ const PLANTILLAS = {
 
   plan_por_vencer: {
     nombre: 'plan_por_vencer',
-    idioma: 'es',
+    idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del admin', 'nombre del plan', 'fecha de vencimiento'],
     cuerpo:
@@ -58,7 +62,7 @@ const PLANTILLAS = {
 
   plan_vencido: {
     nombre: 'plan_vencido',
-    idioma: 'es',
+    idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del admin', 'fecha de vencimiento'],
     cuerpo:
