@@ -10,7 +10,7 @@ Guía rápida para trabajar en este repo con Claude Code. La documentación comp
 
 - Backend: raíz del repo — `index.js` (entrypoint), `config.js`, `auth.js`, `db.js`, `ocr.js`, `gmail.js`, `verificador.js`.
 - Rutas: `routes/api.js` (dashboard/API), `routes/webhook.js` (WhatsApp).
-- Lógica del bot: `bot/` (`comandos.js`, `reportes.js`, `festivos.js`, `state.js`, `openwa.js`, `utils.js`).
+- Lógica del bot: `bot/` (`comandos.js`, `pendientes.js`, `reportes.js`, `festivos.js`, `state.js`, `openwa.js`, `utils.js`).
 - Frontend: `dashboard/` (React, con su propio `package.json`).
 
 ## Comandos
@@ -21,13 +21,13 @@ cd dashboard && npm start  # dashboard en desarrollo
 cd dashboard && npm run build  # build servido por el backend en /panel
 ```
 
-No hay suite de pruebas automatizada configurada.
+`npm test` corre los tests de `test/` (node:test) contra la BD local, con negocios de prueba que se crean y se borran. `test/` no está en git.
 
 ## Cosas a tener en cuenta
 
 - **Sin migraciones formales**: el esquema de `pagos` y `usuarios` se crea directamente en `db.js`. Cambios de esquema van ahí.
-- **Verificación de pagos**: Gmail exige monto exacto; si no confirma, `verificador.js` devuelve directamente "no encontrado" (Prometeo ya no se usa).
-- **Festivos/fines de semana**: `bot/festivos.js` aplica la Ley Emiliani colombiana; `index.js` decide si corren verificaciones nocturnas (21:00/22:00) y el reporte diario según las variables `HABILITAR_*` del `.env`.
+- **Verificación de pagos**: Gmail exige monto exacto y un correo confirma un solo pago (`gmail_id` único). Si no confirma, queda "no encontrado" y `bot/pendientes.js` lo sigue buscando 15 minutos, solo con correos que llegaron en ese plazo (Prometeo ya no se usa).
+- **Festivos/fines de semana**: `bot/festivos.js` aplica la Ley Emiliani colombiana; `index.js` decide si sale el cierre de turno (15 min después de la hora de cierre de cada negocio) según las variables `HABILITAR_*` del `.env`.
 - **Endpoint legado**: `/pago-recibido` está retirado (responde 410); no reintroducir lógica de MacroDroid/SMS/Android.
 - **Remitentes autorizados**: el webhook solo procesa empleados de la tabla `usuarios` con el WhatsApp confirmado desde el dashboard (`confirmar <código>`). No hay listas de números en el código.
 - **Proveedor de WhatsApp**: `WA_PROVIDER` (`.env`) switchea entre `openwa` (default, no oficial) y `meta` (API oficial, de respaldo por si banean el número). El switch vive en `bot/openwa.js` (envío) y `routes/webhook.js` (recepción + verificación de firma/handshake). Detalle completo en el README, sección "Respaldo: migrar a la API oficial de Meta".

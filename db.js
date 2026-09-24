@@ -958,6 +958,102 @@ async function correoUsadoPorOtroPago(err, { referencia, negocio_id, monto }) {
   return !duplicado;
 }
 
+// ─── Pagos "no encontrado" esperando el correo del banco ───
+// fuente: 'pendiente' (dentro de su plazo), 'sin_correo' (venció el plazo y ya
+// se avisó) o 'reintento' (el empleado lo reenvió; cuenta el último intento).
+
+// creado_epoch (segundos) es para comparar con la hora de llegada de los correos.
+function pagosEsperandoCorreo({ negocio_id, minutos, soloHoy } = {}) {
+  const condiciones = [`estado = 'NO_ENCONTRADO'`, `fuente = 'pendiente'`];
+  const valores = [];
+  if (negocio_id) {
+    condiciones.push('negocio_id = ?');
+    valores.push(negocio_id);
+  }
+  if (minutos) {
+    condiciones.push(`creado_en >= datetime('now', 'localtime', ?)`);
+    valores.push(`-${minutos} minutes`);
+  }
+  if (soloHoy) condiciones.push(`date(creado_en) = date('now', 'localtime')`);
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT id, monto, referencia, banco, hora, negocio_id, verificado_por,
+              CAST(strftime('%s', creado_en, 'utc') AS INTEGER) AS creado_epoch
+       FROM pagos WHERE ${condiciones.join(' AND ')} ORDER BY id`,
+      valores,
+      (err, filas) => (err ? reject(err) : resolve(filas))
+    );
+  });
+}
+
+// Llegó tarde el correo del banco: el pago queda confirmado.
+function confirmarPagoTardio(id, { gmail_id, nombre_cliente }) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `UPDATE pagos SET estado = 'REAL', fuente = 'gmail_asincronica', gmail_id = ?,
+              nombre_cliente = COALESCE(?, nombre_cliente)
+       WHERE id = ? AND estado = 'NO_ENCONTRADO'`,
+      [gmail_id || null, nombre_cliente || null, id],
+      function (err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      }
+    );
+  });
+}
+
+// Venció el plazo sin correo. Devuelve 0 si ya estaba marcado (no se avisa dos veces).
+function marcarSinCorreo(id) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `UPDATE pagos SET fuente = 'sin_correo' WHERE id = ? AND estado = 'NO_ENCONTRADO' AND fuente = 'pendiente'`,
+      [id],
+      function (err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      }
+    );
+  });
+}
+
+// Al reenviar un comprobante, los intentos anteriores sin confirmar dejan de contar.
+function marcarIntentosAnteriores({ negocio_id, referencia, monto, excepto_id }) {
+  if (!referencia) return Promise.resolve(0);
+  return new Promise((resolve, reject) => {
+    db.run(
+      `UPDATE pagos SET fuente = 'reintento'
+       WHERE negocio_id = ? AND referencia = ? AND monto = ? AND id != ?
+       AND estado = 'NO_ENCONTRADO' AND fuente IN ('pendiente', 'sin_correo')`,
+      [negocio_id || 1, referencia, monto, excepto_id || 0],
+      function (err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      }
+    );
+  });
+}
+
+// Para el reporte de cierre de turno. Solo los que ya vencieron su plazo: uno
+// de último momento que siga esperando recibe su propio aviso al vencer.
+function pagosNoConfirmadosDeHoy(negocio_id) {
+  return pagosDeHoy(negocio_id, `estado = 'NO_ENCONTRADO' AND fuente = 'sin_correo'`);
+}
+
+function pagosConfirmadosTardeDeHoy(negocio_id) {
+  return pagosDeHoy(negocio_id, `estado = 'REAL' AND fuente = 'gmail_asincronica'`);
+}
+
+function pagosDeHoy(negocio_id, condicion) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT * FROM pagos WHERE ${condicion} AND negocio_id = ?
+       AND date(creado_en) = date('now', 'localtime') ORDER BY id`,
+      [negocio_id || 1],
+      (err, filas) => (err ? reject(err) : resolve(filas))
+    );
+  });
+}
+
 function totalDelDia(negocio_id) {
   return new Promise((resolve, reject) => {
     db.all(
@@ -1428,6 +1524,12 @@ module.exports = {
   buscarDuplicadoReciente,
   correosYaUsados,
   correoUsadoPorOtroPago,
+  pagosEsperandoCorreo,
+  confirmarPagoTardio,
+  marcarSinCorreo,
+  marcarIntentosAnteriores,
+  pagosNoConfirmadosDeHoy,
+  pagosConfirmadosTardeDeHoy,
   totalDelDia,
   buscarPorCliente,
   resumenDelDia,

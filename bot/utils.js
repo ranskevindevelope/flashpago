@@ -12,7 +12,7 @@ function formatearResultado(datos, verificacion) {
   lineas.push('');
   if (verificacion.estado === 'REAL')                 lineas.push('✅ Puedes finalizar el pedido.');
   else if (verificacion.estado === 'DUPLICADO')        lineas.push('🚫 Por favor verifica. Comprobante ya utilizado.');
-  else if (verificacion.estado === 'NO_ENCONTRADO')    lineas.push('⚠️ No pude verificar este pago automáticamente. Revisa la transferencia al final del turno.');
+  else if (verificacion.estado === 'NO_ENCONTRADO')    lineas.push('⏳ Sigo revisando: te aviso si llega en los próximos 15 minutos. No hace falta reenviarlo.');
   else if (verificacion.estado === 'MONTO_INCORRECTO') lineas.push('🚫 No vemos coincidencia. Montos no coinciden.');
   return lineas.join('\n');
 }

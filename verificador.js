@@ -9,7 +9,7 @@ function verificarPago({ monto }) {
 
   return {
     estado: 'NO_ENCONTRADO',
-    mensaje: '⚠️ ADVERTENCIA: No encontré esta transacción. intenta de nuevo.',
+    mensaje: '⏳ Todavía no veo esta transferencia en el banco.',
   };
 }
 

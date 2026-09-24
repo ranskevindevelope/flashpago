@@ -2,7 +2,8 @@
 const { enviarMensaje, enviarImagen } = require('./openwa');
 const { db, totalDelDia, totalUltimos30Dias, obtenerPagosExportables, buscarPorCliente, obtenerNegocio, contarComprobantesDelMes } = require('../db');
 const { historialPagos } = require('./state');
-const { enviarReporteDiario, verificacionNocturna } = require('./reportes');
+const { enviarReporteDiario } = require('./reportes');
+const { revisarPendientes } = require('./pendientes');
 const config = require('../config');
 
 // Admin dinámico: busca rol en BD. El número puede estar guardado con o sin
@@ -262,10 +263,13 @@ async function handleTextEvent(from, text, negocio_id = 1) {
     return true;
   }
 
-  // ─── Verificación nocturna manual (solo admin) ────────
+  // ─── Revisar ya los pagos pendientes (solo admin, solo su negocio) ───
   if (body === 'nocturna') {
     if (!admin) return true;
-    await verificacionNocturna(negocio_id);
+    const r = await revisarPendientes({ negocio_id });
+    await enviarMensaje(from, r
+      ? `🔄 Revisé los pagos pendientes: ${r.confirmados} confirmado(s), ${r.esperando} esperando el correo del banco, ${r.sinCorreo} sin correo.`
+      : '⏳ Ya hay una revisión en curso. Intenta en un momento.');
     return true;
   }
 

@@ -1,8 +1,9 @@
-// reportes.js — Reportes y verificación nocturna (multi-negocio)
-const { db, resumenDelDia, obtenerNegocio, totalDelDia } = require('../db');
-const { verificarPorGmail, listarIngresosDelDia } = require('../gmail');
-const { enviarMensaje, enviarPlantilla } = require('./openwa');
-const { pagosPendientes } = require('./state');
+// reportes.js — Reportes del cierre de turno (multi-negocio)
+const {
+  db, resumenDelDia, obtenerNegocio, totalDelDia, correosYaUsados, pagosNoConfirmadosDeHoy, pagosConfirmadosTardeDeHoy,
+} = require('../db');
+const { listarIngresosDelDia } = require('../gmail');
+const { enviarPlantilla } = require('./openwa');
 
 // ─── Obtener admins de un negocio ───────────────────────
 function obtenerAdminsNegocio(negocio_id) {
@@ -73,144 +74,64 @@ async function enviarReporteDiario(negocio_id = 1) {
   }
 }
 
-async function verificacionNocturna(revision, negocio_id) {
-  // Filtrar pendientes de este negocio
-  const pendientesNegocio = negocio_id
-    ? pagosPendientes.filter(p => (p.negocio_id || 1) === negocio_id)
-    : pagosPendientes;
+// ─── Cierre de turno: pagos que llegaron tarde y los que nunca aparecieron ───
+async function enviarReportePendientes(negocio_id) {
+  try {
+    const [tarde, noConfirmados] = await Promise.all([
+      pagosConfirmadosTardeDeHoy(negocio_id),
+      pagosNoConfirmadosDeHoy(negocio_id),
+    ]);
+    if (tarde.length === 0 && noConfirmados.length === 0) return;
 
-  if (pendientesNegocio.length === 0) {
-    console.log(`[Asincronica] No hay pagos pendientes (negocio ${negocio_id || 'todos'})`);
-    return;
-  }
-
-  console.log(`[Asincronica] Revisión ${revision}: verificando ${pendientesNegocio.length} pago(s) pendiente(s) (negocio ${negocio_id || 'todos'})...`);
-
-  const verificados = [];
-  const noEncontrados = [];
-
-  for (let i = pagosPendientes.length - 1; i >= 0; i--) {
-    const pago = pagosPendientes[i];
-    const pagoNegocioId = pago.negocio_id || 1;
-
-    // Si se especificó negocio, solo verificar los de ese negocio
-    if (negocio_id && pagoNegocioId !== negocio_id) continue;
-
-    try {
-      const resultado = await verificarPorGmail(pago.monto, pagoNegocioId, { intentos: 1, esperaMs: 0 });
-
-      if (resultado) {
-        // Por id cuando se tiene (evita marcar como REAL otra fila con la
-        // misma referencia — ej. un reenvío tras un NO_ENCONTRADO anterior,
-        // que ya no se bloquea como duplicado). Fallback por referencia solo
-        // para entradas viejas en memoria que no traigan id.
-        const [condicion, valores] = pago.id
-          ? [`id = ?`, [pago.id]]
-          : [`referencia = ? AND negocio_id = ? AND estado = 'NO_ENCONTRADO'`, [pago.referencia, pagoNegocioId]];
-        const actualizado = await new Promise((resolve) => db.run(
-          `UPDATE pagos SET estado = 'REAL', fuente = 'gmail_asincronica', nombre_cliente = ?, gmail_id = ? WHERE ${condicion}`,
-          [resultado.nombre || null, resultado.gmail_id || null, ...valores],
-          function (err) {
-            if (err) console.error('[Asincronica] Error actualizando:', err.message);
-            else console.log(`[Asincronica] ✅ Pago actualizado a REAL: ${pago.referencia} (negocio ${pagoNegocioId})`);
-            resolve(!err);
-          }
-        ));
-        // Si no se guardó (ej. ese correo ya confirmó otro pago), sigue pendiente.
-        if (!actualizado) {
-          noEncontrados.push(pago);
-          continue;
-        }
-
-        verificados.push({
-          monto: pago.monto,
-          nombre: resultado.nombre || 'Sin nombre',
-          referencia: pago.referencia || 'Sin ref',
-          negocio_id: pagoNegocioId,
-        });
-
-        pagosPendientes.splice(i, 1);
-      } else {
-        noEncontrados.push(pago);
-      }
-    } catch (err) {
-      console.error(`[Asincronica] Error verificando $${pago.monto}:`, err.message);
-    }
-  }
-
-  // Enviar reportes agrupados por negocio
-  const negociosAfectados = [...new Set([
-    ...verificados.map(p => p.negocio_id),
-    ...(revision === 2 ? noEncontrados.map(p => p.negocio_id || 1) : []),
-  ])];
-
-  for (const nid of negociosAfectados) {
-    const numerosReporte = await obtenerAdminsNegocio(nid);
     let negocioNombre = 'FlashPago';
     try {
-      const neg = await obtenerNegocio(nid);
+      const neg = await obtenerNegocio(negocio_id);
       if (neg) negocioNombre = neg.nombre;
     } catch (_) {}
+    const numerosReporte = await obtenerAdminsNegocio(negocio_id);
 
-    const verificadosNeg = verificados.filter(p => p.negocio_id === nid);
-    if (verificadosNeg.length > 0) {
-      const totalRecuperado = verificadosNeg.reduce((s, p) => s + p.monto, 0);
-      const lista = verificadosNeg.map(p => `✅ $${p.monto.toLocaleString('es-CO')} — ${p.nombre} (Ref: ${p.referencia})`).join('\n');
+    if (tarde.length > 0) {
+      const total = tarde.reduce((s, p) => s + p.monto, 0);
+      const lista = tarde.map(p => `✅ $${p.monto.toLocaleString('es-CO')} — ${p.nombre_cliente || 'Sin nombre'} (Ref: ${p.referencia || 'Sin ref'})`).join('\n');
 
       const mensaje =
-        `🔔 *${negocioNombre} — Verificación nocturna${revision === 2 ? ' (2da revisión)' : ''}*\n\n` +
+        `🔔 *${negocioNombre} — Pagos que llegaron tarde*\n\n` +
         `${lista}\n\n` +
-        `📊 ${verificadosNeg.length} pago(s) verificado(s) y guardado(s)\n` +
-        `💵 Total recuperado: $${totalRecuperado.toLocaleString('es-CO')}`;
+        `📊 ${tarde.length} pago(s) confirmado(s) cuando llegó tarde el correo del banco\n` +
+        `💵 Total: $${total.toLocaleString('es-CO')}`;
 
       for (const numero of numerosReporte) {
         await enviarPlantilla(
           numero,
           'verificacion_nocturna',
-          [negocioNombre, String(verificadosNeg.length), totalRecuperado.toLocaleString('es-CO')],
+          [negocioNombre, String(tarde.length), total.toLocaleString('es-CO')],
           { textoOpenwa: mensaje }
         );
       }
     }
 
-    if (revision === 2) {
-      const noEncontradosNeg = noEncontrados.filter(p => (p.negocio_id || 1) === nid);
-      if (noEncontradosNeg.length > 0) {
-        const lista = noEncontradosNeg.map(p => `• $${p.monto.toLocaleString('es-CO')} — Ref: ${p.referencia || 'Sin ref'} — ${p.hora}`).join('\n');
+    if (noConfirmados.length > 0) {
+      const lista = noConfirmados.map(p => `• $${p.monto.toLocaleString('es-CO')} — Ref: ${p.referencia || 'Sin ref'} — ${p.hora}`).join('\n');
 
-        const mensaje =
-          `⚠️ *${negocioNombre} — Pagos no confirmados*\n\n` +
-          `Se revisaron ${noEncontradosNeg.length} pago(s) pendientes.\n` +
-          `No se encontraron en las notificaciones del banco:\n\n` +
-          `${lista}\n\n` +
-          `Revisa manualmente en la app del banco si es necesario.`;
+      const mensaje =
+        `⚠️ *${negocioNombre} — Pagos no confirmados*\n\n` +
+        `No llegó la notificación del banco de estos ${noConfirmados.length} pago(s):\n\n` +
+        `${lista}\n\n` +
+        `Revísalos en la app del banco.`;
 
-        for (const numero of numerosReporte) {
-          await enviarPlantilla(
-            numero,
-            'pagos_no_confirmados',
-            [negocioNombre, String(noEncontradosNeg.length)],
-            { textoOpenwa: mensaje }
-          );
-        }
+      for (const numero of numerosReporte) {
+        await enviarPlantilla(
+          numero,
+          'pagos_no_confirmados',
+          [negocioNombre, String(noConfirmados.length)],
+          { textoOpenwa: mensaje }
+        );
       }
     }
+    console.log(`[Reporte] Pendientes del cierre enviados (negocio ${negocio_id}): ${tarde.length} tarde, ${noConfirmados.length} sin confirmar`);
+  } catch (err) {
+    console.error('[Reporte] Error en pendientes del cierre:', err.message);
   }
-
-  // Limpiar pendientes verificados del negocio en la 2da revisión
-  if (revision === 2 && negocio_id) {
-    for (let i = pagosPendientes.length - 1; i >= 0; i--) {
-      if ((pagosPendientes[i].negocio_id || 1) === negocio_id) {
-        pagosPendientes.splice(i, 1);
-      }
-    }
-    console.log(`[Asincronica] Pendientes limpiados (negocio ${negocio_id})`);
-  } else if (revision === 2 && !negocio_id) {
-    pagosPendientes.length = 0;
-    console.log('[Asincronica] Todos los pendientes limpiados');
-  }
-
-  console.log(`[Asincronica] Revisión ${revision} completada. Verificados: ${verificados.length}, Pendientes restantes: ${pagosPendientes.length}`);
 }
 
 // ─── Buscar transferencias recibidas SIN comprobante ───────
@@ -223,12 +144,27 @@ async function buscarIngresosSinComprobante(negocio_id = 1) {
       return;
     }
 
-    // 2) Montos REAL ya registrados del día
+    // 2) Se compara correo por correo, no por monto: dos transferencias
+    //    iguales con un solo comprobante deben avisarse.
+    const usados = await correosYaUsados(ingresos.map(i => i.gmail_id));
+    // Los pagos del día confirmados sin correo (a mano, o de antes de guardar
+    // gmail_id) cubren cada uno un correo de su mismo monto.
     const { pagos } = await totalDelDia(negocio_id);
-    const montosRegistrados = new Set((pagos || []).map(p => p.monto));
+    const cupos = new Map();
+    for (const p of pagos || []) {
+      if (!p.gmail_id) cupos.set(p.monto, (cupos.get(p.monto) || 0) + 1);
+    }
 
     // 3) Ingresos del banco que no tienen pago registrado
-    const sinComprobante = ingresos.filter(i => !montosRegistrados.has(i.monto));
+    const sinComprobante = ingresos.filter(i => {
+      if (usados.has(i.gmail_id)) return false;
+      const libres = cupos.get(i.monto) || 0;
+      if (libres > 0) {
+        cupos.set(i.monto, libres - 1);
+        return false;
+      }
+      return true;
+    });
 
     if (sinComprobante.length === 0) {
       console.log(`[SinComprobante] Todos los ingresos del banco tienen comprobante (negocio ${negocio_id})`);
@@ -267,4 +203,4 @@ async function buscarIngresosSinComprobante(negocio_id = 1) {
   }
 }
 
-module.exports = { enviarReporteDiario, verificacionNocturna, buscarIngresosSinComprobante, obtenerAdminsNegocio };
+module.exports = { enviarReporteDiario, enviarReportePendientes, buscarIngresosSinComprobante, obtenerAdminsNegocio };

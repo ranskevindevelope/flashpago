@@ -19,8 +19,14 @@ logica vive en las carpetas `routes/` y `bot/`.
 3. El servidor valida el secreto del webhook y que el remitente este autorizado.
 4. Claude extrae banco, monto, referencia y fecha del comprobante.
 5. Gmail busca una notificacion reciente de Bancolombia con el mismo monto.
-6. Si Gmail no confirma el pago, se responde que no se encontro la transaccion.
+6. Si Gmail no confirma el pago, queda como "no encontrado" y el bot lo sigue
+   buscando cada 2 minutos durante 15 (el correo del banco a veces llega
+   tarde). Si llega, confirma el pago y le avisa al empleado; si no, les avisa
+   al empleado y al administrador para que lo revisen en la app del banco.
 7. El resultado se guarda en la tabla `pagos` y se responde por WhatsApp.
+8. En el cierre de turno (15 minutos despues de la hora de cierre) sale el
+   reporte del dia: pagos que llegaron tarde, pagos no confirmados,
+   transferencias sin comprobante y el resumen del dia.
 
 La comprobacion de Gmail usa el monto exacto.
 
@@ -58,8 +64,9 @@ flashpago-backend/
 │   └── webhook.js        # Procesamiento de mensajes de WhatsApp
 ├── bot/
 │   ├── comandos.js       # Comandos de texto del bot (hola, total, buscar...)
-│   ├── reportes.js       # Reporte diario y verificacion nocturna
-│   ├── state.js          # Estado en memoria (pendientes e historial)
+│   ├── pendientes.js     # Pagos "no encontrado": plazo de 15 min y cierre de turno
+│   ├── reportes.js       # Reportes del cierre de turno
+│   ├── state.js          # Estado en memoria (historial)
 │   ├── openwa.js         # Envio de mensajes e imagenes por OpenWA
 │   └── utils.js          # Utilidades (formatear resultado, guardar foto)
 ├── package.json          # Dependencias del backend
@@ -145,8 +152,8 @@ almacenan en la tabla `usuarios` de la base de datos y se gestionan desde el
 dashboard por un administrador. `MY_WHATSAPP` recibe las alertas de pagos que
 requieren revision manual.
 
-Las variables `HABILITAR_*` permiten decidir si el bot ejecuta las
-verificaciones nocturnas y el reporte diario en días festivos o fines de
+Las variables `HABILITAR_*` permiten decidir si el bot envia el cierre de
+turno (pagos no confirmados y reporte diario) en días festivos o fines de
 semana. Si se ponen en `false`, esos procesos se omiten los días
 correspondientes (por ejemplo, si en un festivo el negocio no opera y no hay
 movimientos que revisar).
@@ -194,8 +201,9 @@ Para activarlo el día que haga falta:
    registrar el número de teléfono ahí (tiene que estar libre de WhatsApp
    normal y de la app de WhatsApp Business).
 2. Pedir la aprobación de las plantillas que se usan fuera de la ventana de
-   24h: reporte diario, verificación nocturna y alerta de pago sospechoso
-   (`bot/reportes.js`, y la alerta en `routes/webhook.js`). Esto puede tardar
+   24h: reporte diario, pagos que llegaron tarde, pagos no confirmados y
+   alerta de pago sospechoso (`bot/reportes.js`, `bot/pendientes.js` y la
+   alerta en `routes/webhook.js`). Esto puede tardar
    días — conviene dejarlo pedido de antemano, no reactivamente tras un ban.
 3. En `.env`, agregar:
 
@@ -216,7 +224,7 @@ Para activarlo el día que haga falta:
 
 Con la oficial, los mensajes que son *respuesta directa* al empleado (OCR,
 duplicado, límite, trial vencido) llegan siempre. Los que el bot *inicia* sin
-que le hayan escrito antes (reporte diario, verificación nocturna, alerta al
+que le hayan escrito antes (reporte diario, cierre de turno, alertas al
 admin) solo llegan si la plantilla correspondiente ya está aprobada por Meta.
 
 ## Configurar OpenWA
@@ -247,7 +255,9 @@ excepto Año Nuevo, Día del Trabajo, Independencia, Batalla de Boyacá y
 Navidad). Tambien calcula los dias que son fin de semana.
 
 La logica vive en `bot/festivos.js` y se usa en `index.js` para decidir si se
-ejecutan las verificaciones nocturnas (21:00 y 22:00) y el reporte diario.
+envia el cierre de turno de cada negocio, que sale 15 minutos despues de su
+hora de cierre. La busqueda de pagos "no encontrado" (15 minutos despues de
+cada comprobante) corre siempre que haya pagos pendientes.
 Con las variables `HABILITAR_*_FESTIVOS` y `HABILITAR_*_FIN_SEMANA` del `.env`
 (por defecto `true`) puedes activar o desactivar estos procesos en festivos o
 fines de semana. En dias laborables siempre se ejecutan.

@@ -1132,6 +1132,7 @@ router.get('/dashboard/pendientes', verificarToken, async (req, res) => {
     db.get(
       `SELECT COUNT(*) as cantidad, COALESCE(SUM(monto),0) as total 
        FROM pagos WHERE estado = 'NO_ENCONTRADO' AND negocio_id = ?
+       AND COALESCE(fuente, '') != 'reintento'
        AND date(creado_en) = date('now', 'localtime')`,
       [nid],
       (err, row) => {

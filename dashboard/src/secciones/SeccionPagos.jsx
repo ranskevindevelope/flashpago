@@ -110,7 +110,7 @@ export default function SeccionPagos({
       getBancoBadge(p.banco).nombre,
       p.fecha || '',
       p.hora || '',
-      p.fuente === 'gmail_nocturna' ? 'asincronica' : 'Gmail',
+      ['gmail_nocturna', 'gmail_asincronica'].includes(p.fuente) ? 'asincronica' : 'Gmail',
     ]);
     const csv = [encabezado, ...cuerpo]
       .map((fila) => fila.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
@@ -279,8 +279,8 @@ export default function SeccionPagos({
                       <td>{pago.fecha || '-'}</td>
                       <td>{pago.hora || '-'}</td>
                       <td>
-                        <span className={`fuente-badge ${pago.fuente === 'gmail_nocturna' ? 'fuente-nocturna' : 'fuente-gmail'}`}>
-                          {pago.fuente === 'gmail_nocturna' ? <><Moon size={11} /> asincronica</> : <><Mail size={11} /> Gmail</>}
+                        <span className={`fuente-badge ${['gmail_nocturna', 'gmail_asincronica'].includes(pago.fuente) ? 'fuente-nocturna' : 'fuente-gmail'}`}>
+                          {['gmail_nocturna', 'gmail_asincronica'].includes(pago.fuente) ? <><Moon size={11} /> asincronica</> : <><Mail size={11} /> Gmail</>}
                         </span>
                       </td>
                       <td>

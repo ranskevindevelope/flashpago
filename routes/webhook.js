@@ -8,7 +8,7 @@ const { leerComprobante } = require('../ocr');
 const { verificarPorGmail } = require('../gmail');
 const { verificarPago } = require('../verificador');
 const {
-  db, guardarPago, buscarDuplicadoReciente, correoUsadoPorOtroPago, contarComprobantesDelMes, obtenerNegocio, verificarTrialActivo,
+  db, guardarPago, buscarDuplicadoReciente, correoUsadoPorOtroPago, marcarIntentosAnteriores, contarComprobantesDelMes, obtenerNegocio, verificarTrialActivo,
   marcarNegocioPagado, actualizarPagoPlataforma, obtenerAdminDeNegocio, planBase, asociarWhatsappNegocio,
   asociarWhatsappUsuario,
 } = require('../db');
@@ -19,7 +19,7 @@ const {
 const eventos = require('../eventos');
 const salud = require('../salud');
 const { formatearResultado, guardarFoto } = require('../bot/utils');
-const { pagosPendientes, historialPagos } = require('../bot/state');
+const { historialPagos } = require('../bot/state');
 const comandos = require('../bot/comandos');
 const { obtenerTransferenciaEsperada, limpiarTransferenciaEsperada } = require('./wompi');
 const { enviarGraciasPago } = require('../mailer');
@@ -476,7 +476,6 @@ router.post('/', async (req, res) => {
       : await verificarPago(datos);
 
     // ─── Guardar el pago en la base de datos ────────────
-    let pagoPendienteId = null; // id exacto si queda NO_ENCONTRADO (ver pagosPendientes.push abajo)
     if (verificacion.estado === 'REAL') {
       try {
         const pagoId = await guardarPago({
@@ -494,6 +493,9 @@ router.post('/', async (req, res) => {
           gmail_id: pagoGmail?.gmail_id || null,
         });
         console.log('[DB] Pago guardado (negocio:', negocio_id, ')');
+        // Si es el reenvío de un comprobante que había quedado pendiente, ese intento ya no cuenta.
+        await marcarIntentosAnteriores({ negocio_id, referencia: datos.referencia, monto: montoNum, excepto_id: pagoId })
+          .catch((e) => console.error('[DB] Error marcando intentos anteriores:', e.message));
 
         // Aviso inmediato a los dashboards abiertos; el id evita que el
         // polling lo anuncie de nuevo.
@@ -543,7 +545,8 @@ router.post('/', async (req, res) => {
     // Aparte, no "else": un REAL cuyo correo ya estaba usado termina aquí.
     if (verificacion.estado === 'NO_ENCONTRADO') {
       try {
-        pagoPendienteId = await guardarPago({
+        // bot/pendientes.js lo sigue buscando en Gmail durante 15 minutos.
+        const pendienteId = await guardarPago({
           monto: montoNum,
           referencia: datos.referencia || null,
           banco: datos.banco || null,
@@ -557,6 +560,9 @@ router.post('/', async (req, res) => {
           foto: nombreFoto,
         });
         console.log('[DB] Pago pendiente guardado (negocio:', negocio_id, ')');
+        // Si es un reenvío, el intento anterior deja de contar: se sigue este.
+        await marcarIntentosAnteriores({ negocio_id, referencia: datos.referencia, monto: montoNum, excepto_id: pendienteId })
+          .catch((e) => console.error('[DB] Error marcando intentos anteriores:', e.message));
       } catch (err) {
         console.error('[DB] Error guardando pendiente:', err.message);
       }
@@ -580,21 +586,6 @@ router.post('/', async (req, res) => {
     if (['NO_ENCONTRADO', 'DUPLICADO', 'MONTO_INCORRECTO'].includes(verificacion.estado)) {
       const alerta = `🚨 *ALERTA — ${negocio_nombre}*\n\n${verificacion.mensaje}\n\nEmpleado: ${from}\nHora: ${new Date().toLocaleTimeString('es-CO')}`;
       await enviarMensaje(process.env.MY_WHATSAPP, alerta);
-
-      if (verificacion.estado === 'NO_ENCONTRADO') {
-        pagosPendientes.push({
-          id: pagoPendienteId,
-          monto: montoNum,
-          referencia: datos.referencia || null,
-          banco: datos.banco || null,
-          fecha: new Date().toLocaleDateString('es-CO'),
-          hora: new Date().toLocaleTimeString('es-CO'),
-          empleado: from,
-          negocio_id,
-          foto: mediaBase64 ? guardarFoto(mediaBase64, datos.referencia) : null,
-        });
-        console.log(`[Pendientes] Pago de $${montoNum} guardado (negocio ${negocio_id}). Total pendientes: ${pagosPendientes.length}`);
-      }
     }
   } catch (err) {
     console.error('[Bot] Error procesando imagen:', err);

@@ -9,7 +9,8 @@ const path = require('path');
 const config = require('./config');
 const { verificarToken, soloAdmin } = require('./auth');
 const { obtenerPagosExportables, listarNegocios, horaCierreDelDia } = require('./db');
-const { verificacionNocturna, enviarReporteDiario, buscarIngresosSinComprobante } = require('./bot/reportes');
+const { enviarReportePendientes, enviarReporteDiario, buscarIngresosSinComprobante } = require('./bot/reportes');
+const { revisarPendientes, cerrarPendientes, PLAZO_CORREO_MIN } = require('./bot/pendientes');
 const { revisarVencimientos } = require('./bot/avisos');
 const { ejecutarCobrosAutomaticos } = require('./bot/cobros-automaticos');
 const { esFestivo, esFinDeSemana } = require('./bot/festivos');
@@ -363,50 +364,41 @@ setInterval(async () => {
     const diasOperacion = parseDiasOperacion(neg.dias_operacion);
     if (!diasOperacion.includes(dia)) continue; // el negocio no opera hoy
 
-    const horaCierre = horaCierreDelDia(neg.hora_cierre, dia);
-    const horaPrevia = sumarMinutos(horaCierre, -15);
+    // Cierre de turno: sale 15 min después de la hora de cierre, para que los
+    // pagos de último momento alcancen su plazo de espera del correo del banco.
+    const horaCierreTurno = sumarMinutos(horaCierreDelDia(neg.hora_cierre, dia), PLAZO_CORREO_MIN);
+    if (horaActual !== horaCierreTurno) continue;
 
-    // 15 min antes del cierre: revisión 1 + búsqueda de pagos recuperados,
-    // así ya están listos para el reporte que sale justo al cerrar.
-    if (horaActual === horaPrevia) {
-      if (verificOk) {
-        console.log(`[Asincronica] 1ra revisión — ${neg.nombre}`);
-        try { await verificacionNocturna(1, neg.id); }
-        catch (err) { console.error(`[Scheduler] Error en negocio ${neg.id} (${neg.nombre}):`, err.message); }
-      } else {
-        console.log(`[Asincronica] 1ra revisión omitida (festivo/fin de semana) — ${neg.nombre}`);
+    if (verificOk) {
+      console.log(`[Pendientes] Cierre de turno — ${neg.nombre}`);
+      try {
+        await cerrarPendientes(neg.id);
+        await enviarReportePendientes(neg.id);
+      } catch (err) {
+        console.error(`[Scheduler] Error en negocio ${neg.id} (${neg.nombre}):`, err.message);
       }
-
-      if (reporteOk) {
-        console.log(`[Reporte] Buscando ingresos sin comprobante — ${neg.nombre}`);
-        try { await buscarIngresosSinComprobante(neg.id); }
-        catch (err) { console.error(`[Scheduler] Error buscando ingresos del negocio ${neg.id} (${neg.nombre}):`, err.message); }
-      }
+    } else {
+      console.log(`[Pendientes] Cierre de turno omitido (festivo/fin de semana) — ${neg.nombre}`);
     }
 
-    // A la hora de cierre exacta: revisión 2 + envío del reporte
-    if (horaActual === horaCierre) {
-      if (verificOk) {
-        console.log(`[Asincronica] 2da revisión — ${neg.nombre}`);
-        try { await verificacionNocturna(2, neg.id); }
-        catch (err) { console.error(`[Scheduler] Error en negocio ${neg.id} (${neg.nombre}):`, err.message); }
-      } else {
-        console.log(`[Asincronica] 2da revisión omitida (festivo/fin de semana) — ${neg.nombre}`);
+    if (reporteOk) {
+      console.log(`[Reporte] Enviando reporte diario — ${neg.nombre}`);
+      try {
+        await buscarIngresosSinComprobante(neg.id);
+        await enviarReporteDiario(neg.id);
+      } catch (err) {
+        console.error(`[Scheduler] Error en reporte del negocio ${neg.id} (${neg.nombre}):`, err.message);
       }
-
-      if (reporteOk) {
-        console.log(`[Reporte] Enviando reporte diario — ${neg.nombre}`);
-        try {
-          await enviarReporteDiario(neg.id);
-        } catch (err) {
-          console.error(`[Scheduler] Error en reporte del negocio ${neg.id} (${neg.nombre}):`, err.message);
-        }
-      } else {
-        console.log(`[Reporte] Omitido (festivo/fin de semana) — ${neg.nombre}`);
-      }
+    } else {
+      console.log(`[Reporte] Omitido (festivo/fin de semana) — ${neg.nombre}`);
     }
   }
 }, 60000);
+
+// ─── Pagos "no encontrado": se buscan cada 2 min durante su plazo ─
+setInterval(() => {
+  revisarPendientes().catch((err) => console.error('[Pendientes] Error:', err.message));
+}, 2 * 60 * 1000);
 
 // ─── Avisos de vencimiento de plan ────────────────────────
 // Cada hora, no una vez al día: si el proceso se reinicia justo al chequeo,

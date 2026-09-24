@@ -94,6 +94,16 @@ function esIngreso(snippet, cuerpo) {
   return /recibiste|recibido|recibida|recibimos|consignaci|abono|un pago de|una transferencia|transferencia de|te hicieron|te realizaron|a tu cuenta|a su cuenta|ingresó|ingreso de|depósito|deposito/i.test(texto);
 }
 
+// La búsqueda de Gmail ya filtra por fecha; esto lo asegura con la hora exacta
+// de llegada (internalDate, en ms). Sin ventana o sin hora, no filtra.
+function llegoEnVentana(detalle, { desde, hasta } = {}) {
+  const llegada = Number(detalle?.data?.internalDate) / 1000;
+  if (!llegada) return true;
+  if (desde && llegada < desde) return false;
+  if (hasta && llegada > hasta) return false;
+  return true;
+}
+
 function obtenerRemitente(mensajeDetalle) {
   const headers = mensajeDetalle?.data?.payload?.headers || [];
   const from = headers.find((h) => h.name === 'From');
@@ -159,9 +169,12 @@ async function getAuth(negocio_id) {
 }
 
 // ─── Función principal con reintentos ─────────────────────
+// opciones.desde / opciones.hasta (segundos desde 1970): solo cuentan correos
+// que llegaron en ese rango. Sin ellos, los de las últimas 24 horas.
 async function verificarPorGmail(montoEsperado, negocio_id = 1, opciones = {}) {
   const maxIntentos = opciones.intentos || 4;
   const esperaMs = opciones.esperaMs || 10000;
+  const ventana = { desde: opciones.desde, hasta: opciones.hasta };
 
   const auth = await getAuth(negocio_id);
   if (!auth) {
@@ -171,7 +184,7 @@ async function verificarPorGmail(montoEsperado, negocio_id = 1, opciones = {}) {
 
   for (let intento = 1; intento <= maxIntentos; intento++) {
     try {
-      const resultado = await buscarEnGmail(auth, montoEsperado);
+      const resultado = await buscarEnGmail(auth, montoEsperado, ventana);
 
       if (resultado) {
         console.log(`[Gmail] ✅ Pago encontrado al intento ${intento} (negocio ${negocio_id})`);
@@ -193,13 +206,16 @@ async function verificarPorGmail(montoEsperado, negocio_id = 1, opciones = {}) {
 }
 
 // ─── Función interna que hace la búsqueda real ────────────
-async function buscarEnGmail(auth, montoEsperado) {
+async function buscarEnGmail(auth, montoEsperado, ventana = {}) {
   try {
     const gmail = google.gmail({ version: 'v1', auth });
 
+    const rango = ventana.desde
+      ? `after:${ventana.desde}${ventana.hasta ? ` before:${ventana.hasta}` : ''}`
+      : 'newer_than:1d';
     const res = await gmail.users.messages.list({
       userId: 'me',
-      q: `${QUERY_REMITENTES} is:unread newer_than:1d`,
+      q: `${QUERY_REMITENTES} is:unread ${rango}`,
       maxResults: 10,
     });
 
@@ -220,6 +236,7 @@ async function buscarEnGmail(auth, montoEsperado) {
         id: msg.id,
         format: 'full',
       });
+      if (!llegoEnVentana(detalle, ventana)) continue;
 
       const snippet = detalle.data.snippet || '';
       const remitente = obtenerRemitente(detalle);
@@ -307,7 +324,7 @@ async function listarIngresosDelDia(negocio_id = 1) {
       const extraido = extraerMontoYNombre(snippet, remitente, cuerpo);
       if (!extraido) continue;
 
-      ingresos.push({ monto: extraido.monto, nombre: extraido.nombre, snippet });
+      ingresos.push({ monto: extraido.monto, nombre: extraido.nombre, snippet, gmail_id: msg.id });
     }
 
     console.log(`[Gmail] Ingresos detectados del día (negocio ${negocio_id}): ${ingresos.length}`);
