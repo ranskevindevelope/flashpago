@@ -233,9 +233,9 @@ Cada solicitud debe incluir:
 X-Webhook-Secret: el_mismo_valor_de_INBOUND_WEBHOOK_SECRET
 ```
 
-El webhook tambien aplica una lista de numeros autorizados definida en
-`bot/comandos.js`. Los eventos de remitentes que no esten en esa lista se
-ignoran. El endpoint legado `/pago-recibido` esta retirado y responde `410
+El webhook solo procesa mensajes de usuarios registrados en el dashboard que
+confirmaron su WhatsApp (tabla `usuarios`); los demas remitentes se ignoran.
+No hay listas de numeros en el codigo. El endpoint legado `/pago-recibido` esta retirado y responde `410
 Gone`; ya no se usan MacroDroid, SMS ni una aplicacion Android para recibir
 pagos.
 

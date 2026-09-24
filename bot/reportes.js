@@ -107,14 +107,20 @@ async function verificacionNocturna(revision, negocio_id) {
         const [condicion, valores] = pago.id
           ? [`id = ?`, [pago.id]]
           : [`referencia = ? AND negocio_id = ? AND estado = 'NO_ENCONTRADO'`, [pago.referencia, pagoNegocioId]];
-        db.run(
-          `UPDATE pagos SET estado = 'REAL', fuente = 'gmail_asincronica', nombre_cliente = ? WHERE ${condicion}`,
-          [resultado.nombre || null, ...valores],
+        const actualizado = await new Promise((resolve) => db.run(
+          `UPDATE pagos SET estado = 'REAL', fuente = 'gmail_asincronica', nombre_cliente = ?, gmail_id = ? WHERE ${condicion}`,
+          [resultado.nombre || null, resultado.gmail_id || null, ...valores],
           function (err) {
             if (err) console.error('[Asincronica] Error actualizando:', err.message);
             else console.log(`[Asincronica] ✅ Pago actualizado a REAL: ${pago.referencia} (negocio ${pagoNegocioId})`);
+            resolve(!err);
           }
-        );
+        ));
+        // Si no se guardó (ej. ese correo ya confirmó otro pago), sigue pendiente.
+        if (!actualizado) {
+          noEncontrados.push(pago);
+          continue;
+        }
 
         verificados.push({
           monto: pago.monto,

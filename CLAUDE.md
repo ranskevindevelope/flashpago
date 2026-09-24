@@ -29,7 +29,7 @@ No hay suite de pruebas automatizada configurada.
 - **Verificación de pagos**: Gmail exige monto exacto; si no confirma, `verificador.js` devuelve directamente "no encontrado" (Prometeo ya no se usa).
 - **Festivos/fines de semana**: `bot/festivos.js` aplica la Ley Emiliani colombiana; `index.js` decide si corren verificaciones nocturnas (21:00/22:00) y el reporte diario según las variables `HABILITAR_*` del `.env`.
 - **Endpoint legado**: `/pago-recibido` está retirado (responde 410); no reintroducir lógica de MacroDroid/SMS/Android.
-- **Lista de autorizados**: el webhook solo procesa remitentes definidos en `bot/comandos.js`.
+- **Remitentes autorizados**: el webhook solo procesa empleados de la tabla `usuarios` con el WhatsApp confirmado desde el dashboard (`confirmar <código>`). No hay listas de números en el código.
 - **Proveedor de WhatsApp**: `WA_PROVIDER` (`.env`) switchea entre `openwa` (default, no oficial) y `meta` (API oficial, de respaldo por si banean el número). El switch vive en `bot/openwa.js` (envío) y `routes/webhook.js` (recepción + verificación de firma/handshake). Detalle completo en el README, sección "Respaldo: migrar a la API oficial de Meta".
 
 ## Seguridad y datos sensibles

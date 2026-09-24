@@ -224,6 +224,15 @@ db.run(`
   else {
     console.log('[DB] Tabla "pagos_plataforma" lista');
     db.run('CREATE INDEX IF NOT EXISTS idx_pagos_plataforma_negocio ON pagos_plataforma (negocio_id)');
+    // Correo de Gmail que confirmó la transferencia: un correo, un solo pago.
+    db.run(`ALTER TABLE pagos_plataforma ADD COLUMN gmail_id TEXT`, (e) => {
+      if (e && !e.message.includes('duplicate column')) {
+        console.error('[DB] Error migrando gmail_id en pagos_plataforma:', e.message);
+        return;
+      }
+      db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pagos_plataforma_gmail
+              ON pagos_plataforma (gmail_id) WHERE gmail_id IS NOT NULL`);
+    });
   }
 });
 
@@ -260,6 +269,16 @@ db.run(`
     db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pagos_unico_real
             ON pagos (negocio_id, referencia, monto)
             WHERE estado = 'REAL' AND referencia IS NOT NULL`);
+    // Correo de Gmail que confirmó el pago: un correo no puede confirmar dos
+    // pagos, aunque los comprobantes sean distintos.
+    db.run(`ALTER TABLE pagos ADD COLUMN gmail_id TEXT`, (e) => {
+      if (e && !e.message.includes('duplicate column')) {
+        console.error('[DB] Error migrando gmail_id en pagos:', e.message);
+        return;
+      }
+      db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_pagos_gmail
+              ON pagos (gmail_id) WHERE gmail_id IS NOT NULL`);
+    });
   }
 });
 
@@ -501,11 +520,11 @@ function obtenerPagoPlataforma(referencia) {
   });
 }
 
-function actualizarPagoPlataforma(referencia, { estado, wompi_transaction_id }) {
+function actualizarPagoPlataforma(referencia, { estado, wompi_transaction_id, gmail_id }) {
   return new Promise((resolve, reject) => {
     db.run(
-      `UPDATE pagos_plataforma SET estado = ?, wompi_transaction_id = ?, actualizado_en = datetime('now','localtime') WHERE referencia = ?`,
-      [estado, wompi_transaction_id || null, referencia],
+      `UPDATE pagos_plataforma SET estado = ?, wompi_transaction_id = ?, gmail_id = COALESCE(?, gmail_id), actualizado_en = datetime('now','localtime') WHERE referencia = ?`,
+      [estado, wompi_transaction_id || null, gmail_id || null, referencia],
       function (err) {
         if (err) reject(err);
         else resolve({ changes: this.changes });
@@ -869,11 +888,11 @@ function obtenerTokenGmail(negocio_id) {
 
 function guardarPago(pago) {
   return new Promise((resolve, reject) => {
-    const { monto, referencia, banco, fecha, hora, estado, fuente, nombre_cliente, verificado_por, negocio_id, foto } = pago;
+    const { monto, referencia, banco, fecha, hora, estado, fuente, nombre_cliente, verificado_por, negocio_id, foto, gmail_id } = pago;
     db.run(
-      `INSERT INTO pagos (monto, referencia, banco, fecha, hora, estado, fuente, nombre_cliente, verificado_por, negocio_id, foto)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [monto, referencia, banco, fecha, hora, estado, fuente, nombre_cliente || null, verificado_por || null, negocio_id || 1, foto || null],
+      `INSERT INTO pagos (monto, referencia, banco, fecha, hora, estado, fuente, nombre_cliente, verificado_por, negocio_id, foto, gmail_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [monto, referencia, banco, fecha, hora, estado, fuente, nombre_cliente || null, verificado_por || null, negocio_id || 1, foto || null, gmail_id || null],
       function (err) {
         if (err) reject(err);
         else resolve(this.lastID);
@@ -911,6 +930,32 @@ function buscarDuplicadoReciente(referencia, negocio_id, monto) {
       }
     );
   });
+}
+
+// Cuáles de estos correos de Gmail ya confirmaron un pago (de cliente o de suscripción).
+function correosYaUsados(ids) {
+  if (!ids || ids.length === 0) return Promise.resolve(new Set());
+  const marcas = ids.map(() => '?').join(', ');
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT gmail_id FROM pagos WHERE gmail_id IN (${marcas})
+       UNION SELECT gmail_id FROM pagos_plataforma WHERE gmail_id IN (${marcas})`,
+      [...ids, ...ids],
+      (err, filas) => {
+        if (err) reject(err);
+        else resolve(new Set(filas.map((f) => f.gmail_id)));
+      }
+    );
+  });
+}
+
+// El INSERT de un pago falló solo porque otro comprobante ya usó ese correo.
+// Si además es el mismo comprobante (reenvío), es un duplicado normal: false.
+async function correoUsadoPorOtroPago(err, { referencia, negocio_id, monto }) {
+  if (!err || !err.message || !err.message.includes('UNIQUE constraint failed: pagos.gmail_id')) return false;
+  if (!referencia) return true;
+  const duplicado = await buscarDuplicadoReciente(referencia, negocio_id, monto).catch(() => null);
+  return !duplicado;
 }
 
 function totalDelDia(negocio_id) {
@@ -1381,6 +1426,8 @@ module.exports = {
   guardarPago,
   buscarPorReferencia,
   buscarDuplicadoReciente,
+  correosYaUsados,
+  correoUsadoPorOtroPago,
   totalDelDia,
   buscarPorCliente,
   resumenDelDia,

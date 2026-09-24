@@ -5,23 +5,15 @@ const { historialPagos } = require('./state');
 const { enviarReporteDiario, verificacionNocturna } = require('./reportes');
 const config = require('../config');
 
-// Fallback: lista vieja para retrocompatibilidad hasta migrar empleados a BD
-const ADMIN = ['573045530381@c.us', '573044372639@c.us'];
-const EMPLEADOS = ['573013411244@c.us', '573167064671@c.us'];
-const NUMEROS_AUTORIZADOS = [...ADMIN, ...EMPLEADOS];
-
-function esAdmin(numero) {
-  return ADMIN.includes(numero);
-}
-
-// Admin dinámico: busca rol en BD
+// Admin dinámico: busca rol en BD. El número puede estar guardado con o sin
+// "@c.us" (el formulario del dashboard lo guarda sin), igual que en cargarEmpleados.
 function esAdminDB(from) {
   return new Promise((resolve) => {
     db.get(
-      `SELECT rol FROM usuarios WHERE whatsapp = ? AND activo = 1`,
-      [from],
+      `SELECT rol FROM usuarios WHERE whatsapp IN (?, ?) AND activo = 1`,
+      [from, from.replace('@c.us', '')],
       (err, row) => {
-        if (err || !row) return resolve(esAdmin(from)); // fallback lista vieja
+        if (err || !row) return resolve(false);
         resolve(row.rol === 'admin');
       }
     );
@@ -316,4 +308,4 @@ async function handleTextEvent(from, text, negocio_id = 1) {
   return false;
 }
 
-module.exports = { handleTextEvent, esAdmin, esAdminDB, ADMIN, EMPLEADOS, NUMEROS_AUTORIZADOS };
+module.exports = { handleTextEvent, esAdminDB };

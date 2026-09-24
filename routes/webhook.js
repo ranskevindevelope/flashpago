@@ -8,7 +8,7 @@ const { leerComprobante } = require('../ocr');
 const { verificarPorGmail } = require('../gmail');
 const { verificarPago } = require('../verificador');
 const {
-  db, guardarPago, buscarDuplicadoReciente, contarComprobantesDelMes, obtenerNegocio, verificarTrialActivo,
+  db, guardarPago, buscarDuplicadoReciente, correoUsadoPorOtroPago, contarComprobantesDelMes, obtenerNegocio, verificarTrialActivo,
   marcarNegocioPagado, actualizarPagoPlataforma, obtenerAdminDeNegocio, planBase, asociarWhatsappNegocio,
   asociarWhatsappUsuario,
 } = require('../db');
@@ -66,8 +66,10 @@ async function procesarPagoPlataforma(from, transferencia, mediaUrl, mediaBase64
     });
 
     if (confirmadoPorBanco) {
+      // Primero se guarda qué correo lo confirmó (falla si otro pago ya lo usó)
+      // y solo después se activa el plan.
+      await actualizarPagoPlataforma(transferencia.referencia, { estado: 'APROBADO', gmail_id: confirmadoPorBanco.gmail_id });
       await marcarNegocioPagado(negocio_id, transferencia.plan);
-      await actualizarPagoPlataforma(transferencia.referencia, { estado: 'APROBADO' });
       limpiarTransferenciaEsperada(from);
       await enviarMensaje(from, `✅ ¡Pago confirmado! Tu plan quedó activo. Gracias por confiar en FlashPago. 🚀`);
 
@@ -130,15 +132,6 @@ setInterval(() => {
     if (ahora - datos.inicio > RAFAGA_VENTANA_MS) comprobanteIntentos.delete(from);
   }
 }, 5 * 60 * 1000).unref();
-
-// Mapeo manual de LID a números reales, atajo para los ya agregados a mano.
-// Clientes nuevos se resuelven solos (ver resolverLidConCache).
-const lidMap = {
-  '234668473466924@lid': '573045530381@c.us',
-  '61856135819279@lid': '573013411244@c.us',
-  '165369796944036@lid': '573167064671@c.us',
-  '241759531581483@c.us': '573044372639@c.us',
-};
 
 // Cache en memoria de LID -> número real (no caduca, un LID no cambia).
 // Evita pegarle a la API de OpenWA en cada comprobante del mismo cliente.
@@ -285,7 +278,7 @@ router.post('/', async (req, res) => {
     const data = evento.data || evento;
 
     const rawId = data.chatId || data.from || '';
-    from = lidMap[rawId] || rawId;
+    from = rawId;
     if (from.endsWith('@lid')) {
       from = await resolverLidConCache(from);
     }
@@ -337,11 +330,9 @@ router.post('/', async (req, res) => {
   const empleado = await getEmpleadoInfo(from);
 
   if (!empleado) {
-    // Fallback: si está en lista vieja de comandos, usar negocio 1
-    if (!comandos.NUMEROS_AUTORIZADOS.includes(from)) {
-      console.log('[Webhook] Remitente no autorizado:', from);
-      return;
-    }
+    // Se autoriza desde el dashboard: el empleado confirma su WhatsApp con "confirmar <código>".
+    console.log('[Webhook] Remitente no autorizado:', from);
+    return;
   }
 
   const negocio_id = empleado?.negocio_id || 1;
@@ -500,6 +491,7 @@ router.post('/', async (req, res) => {
           verificado_por: from,
           negocio_id,
           foto: nombreFoto,
+          gmail_id: pagoGmail?.gmail_id || null,
         });
         console.log('[DB] Pago guardado (negocio:', negocio_id, ')');
 
@@ -512,7 +504,11 @@ router.post('/', async (req, res) => {
           nombre_cliente: pagoGmail?.nombre || null,
         });
       } catch (err) {
-        if (err.message && err.message.includes('UNIQUE constraint failed')) {
+        if (await correoUsadoPorOtroPago(err, { referencia: datos.referencia, negocio_id, monto: montoNum })) {
+          // Otro comprobante usó ese correo segundos antes: este queda pendiente.
+          console.warn('[DB] El correo de Gmail ya confirmó otro pago; queda pendiente (negocio:', negocio_id, ')');
+          verificacion = await verificarPago(datos);
+        } else if (err.message && err.message.includes('UNIQUE constraint failed')) {
           // Dos peticiones casi simultáneas (reenvío, reintento de OpenWA)
           // pasaron el chequeo de duplicado antes de que esta terminara de
           // guardar; la base de datos rechazó el segundo REAL. Se corrige el
@@ -543,7 +539,9 @@ router.post('/', async (req, res) => {
           console.error('[DB] Error guardando pago:', err.message);
         }
       }
-    } else if (verificacion.estado === 'NO_ENCONTRADO') {
+    }
+    // Aparte, no "else": un REAL cuyo correo ya estaba usado termina aquí.
+    if (verificacion.estado === 'NO_ENCONTRADO') {
       try {
         pagoPendienteId = await guardarPago({
           monto: montoNum,

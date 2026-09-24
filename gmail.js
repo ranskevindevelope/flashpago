@@ -2,7 +2,7 @@
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
-const { obtenerTokenGmail, guardarTokenGmail } = require('./db');
+const { obtenerTokenGmail, guardarTokenGmail, correosYaUsados } = require('./db');
 
 const CREDENTIALS_PATH = path.join(__dirname, 'credentials.json');
 
@@ -78,6 +78,20 @@ function textoDelCuerpo(payload) {
 function cuerpoSiHaceFalta(detalle, remitente) {
   if (!/bbva\.com/i.test(remitente || '')) return undefined;
   return textoDelCuerpo(detalle && detalle.data && detalle.data.payload);
+}
+
+// ¿Transferencia recibida y no una salida de dinero? Mira el mismo texto que el
+// parser: el snippet, más el cuerpo en BBVA (su snippet no dice "recibido").
+function esIngreso(snippet, cuerpo) {
+  const texto = cuerpo ? `${snippet} ${cuerpo}` : snippet;
+
+  // ❌ Excluir retiros / salidas de dinero (evitar falsos "ingresos")
+  if (/retiraste|retiró|retiro|debitaste|pagaste|descont|cajero|de tu t\.deb|de tu t deb|de su t\.deb|compra|compraste|folios?|avance|retiro en/i.test(texto)) {
+    return false;
+  }
+
+  // ✅ Requerir señales claras de INGRESO (transferencias recibidas)
+  return /recibiste|recibido|recibida|recibimos|consignaci|abono|un pago de|una transferencia|transferencia de|te hicieron|te realizaron|a tu cuenta|a su cuenta|ingresó|ingreso de|depósito|deposito/i.test(texto);
 }
 
 function obtenerRemitente(mensajeDetalle) {
@@ -195,8 +209,12 @@ async function buscarEnGmail(auth, montoEsperado) {
     }
 
     const montoBuscado = parseInt(montoEsperado);
+    // Un correo confirma un solo pago: se saltan los que ya confirmaron otro.
+    const yaUsados = await correosYaUsados(res.data.messages.map((m) => m.id));
 
     for (const msg of res.data.messages) {
+      if (yaUsados.has(msg.id)) continue;
+
       const detalle = await gmail.users.messages.get({
         userId: 'me',
         id: msg.id,
@@ -213,6 +231,11 @@ async function buscarEnGmail(auth, montoEsperado) {
       const { monto: montoCorreo, nombre: nombreCliente } = extraido;
 
       if (montoCorreo === montoBuscado) {
+        // Una compra o transferencia que hizo el negocio no confirma un pago recibido.
+        if (!esIngreso(snippet, cuerpo)) {
+          console.log('[Gmail] Mismo monto pero no es un ingreso, se descarta:', snippet);
+          continue;
+        }
         console.log(`[Gmail] ✅ Pago encontrado: $${montoCorreo}`);
         if (nombreCliente) console.log('[Gmail] Cliente:', nombreCliente);
 
@@ -229,7 +252,7 @@ async function buscarEnGmail(auth, montoEsperado) {
           console.error('[Gmail] No se pudo marcar el correo como leído (no afecta la verificación):', errModify.message);
         }
 
-        return { monto: montoCorreo, fuente: 'Gmail', nombre: nombreCliente };
+        return { monto: montoCorreo, fuente: 'Gmail', nombre: nombreCliente, gmail_id: msg.id };
       }
     }
 
@@ -279,20 +302,7 @@ async function listarIngresosDelDia(negocio_id = 1) {
       const remitente = obtenerRemitente(detalle);
       const cuerpo = cuerpoSiHaceFalta(detalle, remitente);
 
-      // Los filtros miran el mismo texto que el parser. Para Bancolombia y Nequi
-      // `cuerpo` es undefined, asi que esto es exactamente el snippet de siempre;
-      // BBVA necesita el cuerpo porque su snippet no dice "recibido" por ningun lado.
-      const textoFiltros = cuerpo ? `${snippet} ${cuerpo}` : snippet;
-
-      // ❌ Excluir retiros / salidas de dinero (evitar falsos "ingresos")
-      if (/retiraste|retiró|retiro|debitaste|pagaste|descont|cajero|de tu t\.deb|de tu t deb|de su t\.deb|compra|compraste|folios?|avance|retiro en/i.test(textoFiltros)) {
-        continue;
-      }
-
-      // ✅ Requerir señales claras de INGRESO (transferencias recibidas)
-      if (!/recibiste|recibido|recibida|recibimos|consignaci|abono|un pago de|una transferencia|transferencia de|te hicieron|te realizaron|a tu cuenta|a su cuenta|ingresó|ingreso de|depósito|deposito/i.test(textoFiltros)) {
-        continue;
-      }
+      if (!esIngreso(snippet, cuerpo)) continue;
 
       const extraido = extraerMontoYNombre(snippet, remitente, cuerpo);
       if (!extraido) continue;
@@ -309,4 +319,4 @@ async function listarIngresosDelDia(negocio_id = 1) {
   }
 }
 
-module.exports = { verificarPorGmail, listarIngresosDelDia, extraerMontoYNombre };
+module.exports = { verificarPorGmail, listarIngresosDelDia, extraerMontoYNombre, esIngreso };
