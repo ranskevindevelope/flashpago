@@ -221,7 +221,8 @@ Para activarlo el día que haga falta:
    normal y de la app de WhatsApp Business).
 2. Pedir la aprobación de las plantillas que se usan fuera de la ventana de
    24h: reporte diario, pagos que llegaron tarde, pagos no confirmados,
-   avisos de límite del plan y alerta de pago sospechoso (`bot/reportes.js`,
+   vencimiento del plan o de la prueba gratis, avisos de límite del plan y
+   alerta de pago sospechoso (`bot/reportes.js`,
    `bot/pendientes.js`, `bot/avisos.js` y la alerta en `routes/webhook.js`;
    el texto exacto de las plantillas está en `bot/plantillas.js`). Esto puede tardar
    días — conviene dejarlo pedido de antemano, no reactivamente tras un ban.

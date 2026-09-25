@@ -368,24 +368,61 @@ Expira en 10 minutos. Si no solicitaste este cambio, ignora este correo y tu con
   console.log(`[Mailer] Código de recuperación enviado a ${email}`);
 }
 
-async function enviarAvisoPlan(email, nombre, plan, fechaVence, diasRestantes) {
+// Textos del aviso de vencimiento. La prueba gratis no habla de "renovar":
+// todavía no ha pagado nada.
+function textosAvisoPlan({ nombre, nombrePlan, fecha, diasRestantes, vencido, esPrueba }) {
+  const quedan = diasRestantes === 1 ? 'queda 1 día' : `quedan ${diasRestantes} días`;
+  if (esPrueba) {
+    const delPlan = nombrePlan ? ` del plan <strong>${nombrePlan}</strong>` : '';
+    return vencido
+      ? {
+        asunto: 'Tu prueba gratis de FlashPago terminó',
+        titulo: 'Tu prueba gratis terminó',
+        cuerpo: `Hola ${nombre}, tu prueba gratis${delPlan} terminó el <strong>${fecha}</strong>. El bot dejó de verificar comprobantes, así que tus empleados no pueden validar pagos hasta que elijas un plan.`,
+        nota: 'Tus datos y tu historial siguen intactos. En cuanto elijas un plan, el bot vuelve a funcionar al instante.',
+        preheader: 'Elige un plan para reactivar el bot',
+        cta: 'Elegir un plan',
+      }
+      : {
+        asunto: `Tu prueba gratis de FlashPago termina el ${fecha}`,
+        titulo: 'Tu prueba gratis está por terminar',
+        cuerpo: `Hola ${nombre}, tu prueba gratis${delPlan} termina el <strong>${fecha}</strong> — ${quedan}. Elige un plan antes de esa fecha para que el bot siga verificando tus pagos.`,
+        nota: 'Al elegir un plan sigues exactamente donde quedaste: tus pagos, usuarios y configuración se conservan.',
+        preheader: `Quedan ${diasRestantes} días de tu prueba gratis`,
+        cta: 'Elegir mi plan',
+      };
+  }
+  return vencido
+    ? {
+      asunto: `Tu plan ${nombrePlan} de FlashPago venció`,
+      titulo: 'Tu plan venció',
+      cuerpo: `Hola ${nombre}, tu plan <strong>${nombrePlan}</strong> venció el <strong>${fecha}</strong>. El bot dejó de verificar comprobantes, así que tus empleados no pueden validar pagos hasta que renueves.`,
+      nota: 'Tus datos y tu historial siguen intactos. En cuanto renueves, el bot vuelve a funcionar al instante.',
+      preheader: 'Renueva para reactivar el bot',
+      cta: 'Renovar ahora',
+    }
+    : {
+      asunto: `Tu plan ${nombrePlan} vence el ${fecha}`,
+      titulo: 'Tu plan está por vencer',
+      cuerpo: `Hola ${nombre}, tu plan <strong>${nombrePlan}</strong> vence el <strong>${fecha}</strong> — ${quedan}. Renueva antes de esa fecha para que el bot no deje de verificar pagos.`,
+      nota: 'No tienes que hacer nada más que renovar: el servicio continúa sin interrupción.',
+      preheader: `Quedan ${diasRestantes} días de tu plan`,
+      cta: 'Renovar mi plan',
+    };
+}
+
+async function enviarAvisoPlan(email, nombre, plan, fechaVence, diasRestantes, { esPrueba = false } = {}) {
   const nombrePlan = NOMBRE_PLAN[plan] || plan || '';
   const vencido = diasRestantes <= 0;
   const fecha = formatearFecha(fechaVence);
-
-  const titulo = vencido ? 'Tu plan venció' : 'Tu plan está por vencer';
-  const cuerpo = vencido
-    ? `Hola ${nombre}, tu plan <strong>${nombrePlan}</strong> venció el <strong>${fecha}</strong>. El bot dejó de verificar comprobantes, así que tus empleados no pueden validar pagos hasta que renueves.`
-    : `Hola ${nombre}, tu plan <strong>${nombrePlan}</strong> vence el <strong>${fecha}</strong> — ${diasRestantes === 1 ? 'queda 1 día' : `quedan ${diasRestantes} días`}. Renueva antes de esa fecha para que el bot no deje de verificar pagos.`;
+  const t = textosAvisoPlan({ nombre, nombrePlan, fecha, diasRestantes, vencido, esPrueba });
 
   const contenido = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: ${vencido ? '#FFF1F1' : '#FFF6EC'}; border-left: 3px solid ${vencido ? '#D93025' : COLOR_ACCENT}; border-radius: 8px; margin: 4px 0 18px;">
       <tr>
         <td style="padding: 14px 16px;">
           <p style="margin: 0; font-size: 13px; color: ${vencido ? '#8A1F1B' : '#7A4A00'}; line-height: 1.6;">
-            ${vencido
-              ? 'Tus datos y tu historial siguen intactos. En cuanto renueves, el bot vuelve a funcionar al instante.'
-              : 'No tienes que hacer nada más que renovar: el servicio continúa sin interrupción.'}
+            ${t.nota}
           </p>
         </td>
       </tr>
@@ -396,26 +433,24 @@ async function enviarAvisoPlan(email, nombre, plan, fechaVence, diasRestantes) {
     from: REMITENTE,
     replyTo: RESPUESTA_A,
     to: email,
-    subject: vencido
-      ? `Tu plan ${nombrePlan} de FlashPago venció`
-      : `Tu plan ${nombrePlan} vence el ${fecha}`,
-    text: `${titulo}
+    subject: t.asunto,
+    text: `${t.titulo}
 
-${cuerpo.replace(/<[^>]+>/g, '')}
+${t.cuerpo.replace(/<[^>]+>/g, '')}
 
-Renovar: ${DASHBOARD_URL}${PIE_TEXTO}`,
+${t.cta}: ${DASHBOARD_URL}${PIE_TEXTO}`,
     html: plantilla({
-      preheader: vencido ? `Renueva para reactivar el bot` : `Quedan ${diasRestantes} días de tu plan`,
-      titulo,
-      descripcion: cuerpo,
+      preheader: t.preheader,
+      titulo: t.titulo,
+      descripcion: t.cuerpo,
       contenido,
-      ctaTexto: vencido ? 'Renovar ahora' : 'Renovar mi plan',
+      ctaTexto: t.cta,
       ctaUrl: DASHBOARD_URL,
     }),
     attachments: ADJUNTOS,
   });
 
-  console.log(`[Mailer] Aviso de plan (${vencido ? 'vencido' : diasRestantes + 'd'}) enviado a ${email}`);
+  console.log(`[Mailer] Aviso de ${esPrueba ? 'prueba' : 'plan'} (${vencido ? 'vencido' : diasRestantes + 'd'}) enviado a ${email}`);
 }
 
 // Se manda cuando Wompi rechaza la renovación automática (cobros-automaticos.js)
@@ -509,4 +544,4 @@ Mejorar plan: ${DASHBOARD_URL}${PIE_TEXTO}`,
   console.log(`[Mailer] Aviso de límite (${tipo}) enviado a ${email}`);
 }
 
-module.exports = { enviarCodigoVerificacion, enviarBienvenida, enviarCodigoRecuperacion, enviarGraciasPago, enviarAvisoPlan, enviarAvisoCobroFallido, enviarAvisoLimite, formatearFecha, NOMBRE_PLAN };
+module.exports = { enviarCodigoVerificacion, enviarBienvenida, enviarCodigoRecuperacion, enviarGraciasPago, enviarAvisoPlan, textosAvisoPlan, enviarAvisoCobroFallido, enviarAvisoLimite, formatearFecha, NOMBRE_PLAN };

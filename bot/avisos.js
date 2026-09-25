@@ -34,6 +34,16 @@ function decidirAviso(estado) {
   return null;
 }
 
+// Plantilla de WhatsApp según sea prueba gratis o plan pagado, y si ya venció.
+function plantillaAviso({ esPrueba, dias, nombre, nombrePlan, fecha }) {
+  if (esPrueba) {
+    return { clave: dias > 0 ? 'prueba_por_terminar' : 'prueba_terminada', variables: [nombre, fecha] };
+  }
+  return dias > 0
+    ? { clave: 'plan_por_vencer', variables: [nombre, nombrePlan, fecha] }
+    : { clave: 'plan_vencido', variables: [nombre, fecha] };
+}
+
 async function avisarNegocio(negocio) {
   const estado = await verificarTrialActivo(negocio.id);
   const aviso = decidirAviso(estado);
@@ -50,9 +60,11 @@ async function avisarNegocio(negocio) {
   const nombrePlan = NOMBRE_PLAN[estado.plan] || estado.plan || 'Básico';
   const fecha = formatearFecha(aviso.vence);
 
+  const esPrueba = !estado.pagado;
+
   if (admin.email) {
     try {
-      await enviarAvisoPlan(admin.email, admin.nombre, estado.plan, aviso.vence, aviso.dias);
+      await enviarAvisoPlan(admin.email, admin.nombre, estado.plan, aviso.vence, aviso.dias, { esPrueba });
     } catch (err) {
       console.error(`[Avisos] Correo falló (negocio ${negocio.id}):`, err.message);
     }
@@ -61,11 +73,8 @@ async function avisarNegocio(negocio) {
   if (admin.whatsapp) {
     // Falle lo que falle aqui, el aviso queda registrado igual: reintentar cada
     // hora seria acosar al admin, y el correo normalmente ya salio.
-    if (aviso.dias > 0) {
-      await enviarPlantilla(admin.whatsapp, 'plan_por_vencer', [admin.nombre, nombrePlan, fecha]);
-    } else {
-      await enviarPlantilla(admin.whatsapp, 'plan_vencido', [admin.nombre, fecha]);
-    }
+    const { clave, variables } = plantillaAviso({ esPrueba, dias: aviso.dias, nombre: admin.nombre, nombrePlan, fecha });
+    await enviarPlantilla(admin.whatsapp, clave, variables);
   }
 
   await registrarAviso(negocio.id, aviso.tipo, aviso.vence);
@@ -131,4 +140,4 @@ async function avisarLimite(negocio, tipo, { limite, tope }) {
   return true;
 }
 
-module.exports = { revisarVencimientos, decidirAviso, avisarLimite, mesActual, DIAS_AVISO, DIAS_AVISO_ANUAL };
+module.exports = { revisarVencimientos, decidirAviso, plantillaAviso, avisarLimite, mesActual, DIAS_AVISO, DIAS_AVISO_ANUAL };

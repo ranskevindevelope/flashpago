@@ -70,15 +70,38 @@ const PLANTILLAS = {
       'Tus empleados no podrán validar pagos hasta que renueves en flashpago.co/panel.',
   },
 
+  // Periodo de prueba: solo informan el estado de la cuenta. Con "prueba gratis"
+  // o "elige un plan" Meta las clasifica como Marketing.
+  prueba_por_terminar: {
+    nombre: 'prueba_por_terminar',
+    idioma: IDIOMA,
+    categoria: 'UTILITY',
+    variables: ['nombre del admin', 'fecha de fin de la prueba'],
+    cuerpo:
+      'Hola {{1}}, el periodo de prueba de tu cuenta de FlashPago termina el {{2}}. ' +
+      'A partir de esa fecha el bot dejará de verificar comprobantes. ' +
+      'Puedes revisar el estado de tu cuenta en flashpago.co/panel.',
+  },
+
+  prueba_terminada: {
+    nombre: 'prueba_terminada',
+    idioma: IDIOMA,
+    categoria: 'UTILITY',
+    variables: ['nombre del admin', 'fecha de fin de la prueba'],
+    cuerpo:
+      'Hola {{1}}, el periodo de prueba de tu cuenta de FlashPago terminó el {{2}} y el bot dejó de verificar comprobantes. ' +
+      'Tus datos siguen guardados. Puedes revisar el estado de tu cuenta en flashpago.co/panel.',
+  },
+
   limite_alcanzado: {
     nombre: 'limite_alcanzado',
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del admin', 'nombre del negocio', 'límite del plan', 'comprobantes de cortesía'],
     cuerpo:
-      'Hola {{1}}, {{2}} llegó a los {{3}} comprobantes de su plan este mes. ' +
-      'El bot sigue verificando {{4}} comprobantes más de cortesía. ' +
-      'Mejora tu plan en flashpago.co/panel para no quedarte sin verificación.',
+      'Hola {{1}}, {{2}} llegó a los {{3}} comprobantes incluidos en su plan este mes. ' +
+      'El bot seguirá verificando {{4}} comprobantes adicionales de cortesía y después se detendrá hasta el próximo mes. ' +
+      'Puedes ver el uso de tu cuenta en flashpago.co/panel.',
   },
 
   limite_agotado: {
@@ -87,8 +110,9 @@ const PLANTILLAS = {
     categoria: 'UTILITY',
     variables: ['nombre del admin', 'nombre del negocio', 'comprobantes usados'],
     cuerpo:
-      'Hola {{1}}, {{2}} usó los {{3}} comprobantes de su plan y la cortesía de este mes, ' +
-      'así que el bot dejó de verificar pagos. Mejora tu plan en flashpago.co/panel y vuelve a funcionar al instante.',
+      'Hola {{1}}, {{2}} usó los {{3}} comprobantes de su plan de este mes, incluida la cortesía, ' +
+      'y el bot dejó de verificar pagos. La verificación se reactiva el primer día del próximo mes ' +
+      'o cuando actualices tu plan en flashpago.co/panel.',
   },
 };
 
