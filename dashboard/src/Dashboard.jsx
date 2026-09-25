@@ -18,7 +18,7 @@ import SeccionEstadisticas from './secciones/SeccionEstadisticas';
 import SeccionExportar from './secciones/SeccionExportar';
 import SeccionVentas from './secciones/SeccionVentas';
 import { useUsuarios } from './hooks/useUsuarios';
-import { formatearMonto } from './utils/formato';
+import { formatearMonto, formatearFechaPlan, sumarDias, diasDeServicio } from './utils/formato';
 import { getBancoBadge, getPlanLabel, getPlanColor, nombrePlan, sinTopeComprobantes } from './utils/bancos';
 import { permisoNotificaciones, pedirPermisoNotificaciones } from './utils/notificaciones';
 
@@ -770,13 +770,13 @@ function Dashboard({ onLogout }) {
     if (n.plan_ilimitado) return { label: 'Ilimitado', clase: 'badge-nequi' };
     if (n.pagado) {
       if (!n.plan_vence) return { label: 'Pagado', clase: 'badge-nequi' };
-      const diasRestantes = Math.ceil((new Date(n.plan_vence) - new Date()) / (1000 * 60 * 60 * 24));
+      const diasRestantes = diasDeServicio(n.plan_vence);
       if (diasRestantes <= 0) return { label: 'Plan vencido', clase: 'badge-avvillas' };
       if (diasRestantes <= 5) return { label: `Pagado (${diasRestantes}d)`, clase: 'badge-transfiya' };
       return { label: 'Pagado', clase: 'badge-nequi' };
     }
     if (!n.trial_fin) return { label: 'Activo', clase: 'badge-nequi' };
-    const diasRestantes = Math.ceil((new Date(n.trial_fin) - new Date()) / (1000 * 60 * 60 * 24));
+    const diasRestantes = diasDeServicio(n.trial_fin);
     if (diasRestantes <= 0) return { label: 'Trial vencido', clase: 'badge-avvillas' };
     return { label: `Trial (${diasRestantes}d)`, clase: 'badge-transfiya' };
   };
@@ -1449,7 +1449,7 @@ function Dashboard({ onLogout }) {
                       {planInfo.trial.activo
                         ? planInfo.trial.dias <= 3
                           ? 'Elige un plan para seguir verificando sin interrupción.'
-                          : `Tu periodo de prueba termina el ${new Date(planInfo.trial.trial_fin).toLocaleDateString('es-CO')}. Todas las funciones están activas.`
+                          : `Tu periodo de prueba termina el ${formatearFechaPlan(planInfo.trial.trial_fin)}. Todas las funciones están activas.`
                         : 'El bot dejó de verificar comprobantes. Elige un plan para reactivar.'
                       }
                     </div>
@@ -1461,7 +1461,7 @@ function Dashboard({ onLogout }) {
                         <div style={{
                           height: '100%', borderRadius: 2,
                           background: planInfo.trial.dias <= 3 ? '#F57C00' : '#1565C0',
-                          width: `${Math.round(((15 - planInfo.trial.dias) / 15) * 100)}%`,
+                          width: `${Math.max(0, Math.min(100, Math.round(((15 - planInfo.trial.dias) / 15) * 100)))}%`,
                           transition: 'width 0.5s ease',
                         }} />
                       </div>
@@ -1493,7 +1493,7 @@ function Dashboard({ onLogout }) {
                       Tu plan vence en {planInfo.trial.dias} día{planInfo.trial.dias === 1 ? '' : 's'}
                     </div>
                     <div style={{ fontSize: '0.78rem', marginTop: 2, color: 'var(--tint-orange-fg)' }}>
-                      Renueva antes del {new Date(planInfo.trial.plan_vence).toLocaleDateString('es-CO')} para que el bot no deje de verificar comprobantes.
+                      Tu plan va hasta el {formatearFechaPlan(planInfo.trial.plan_vence)}. Renueva antes para que el bot no deje de verificar comprobantes.
                     </div>
                   </div>
                   <Button onClick={() => setModalPagoPlan(PLANES_INFO[planInfo.plan] || PLANES_INFO.basico)}>
@@ -2390,7 +2390,7 @@ function Dashboard({ onLogout }) {
                         display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: 'var(--dash-text-faint)',
                         marginBottom: 14, padding: '0 2px',
                       }}>
-                        <Clock size={13} /> Próximo cobro automático: {new Date(planInfo.trial.plan_vence).toLocaleDateString('es-CO')}
+                        <Clock size={13} /> Próximo cobro automático: {formatearFechaPlan(sumarDias(planInfo.trial.plan_vence, -1))}
                       </div>
                     )}
 
@@ -2466,7 +2466,7 @@ function Dashboard({ onLogout }) {
                   <div className="tarjeta-icon-box tarjeta-icon-azul"><Clock size={22} /></div>
                   <div className="tarjeta-info">
                     <span className="tarjeta-label">En trial</span>
-                    <span className="tarjeta-valor">{negocios.filter(n => !n.pagado && n.trial_fin && new Date(n.trial_fin) >= new Date()).length}</span>
+                    <span className="tarjeta-valor">{negocios.filter(n => !n.pagado && n.trial_fin && diasDeServicio(n.trial_fin) > 0).length}</span>
                     <span className="tarjeta-sub">Prueba gratuita</span>
                   </div>
                 </div>

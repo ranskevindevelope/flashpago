@@ -10,16 +10,17 @@ const {
   crearPagoPlataforma,
   obtenerAdminDeNegocio,
   PRECIOS_CENTAVOS,
+  diasDeServicio,
 } = require('../db');
 
 // Un día antes de vencer, para dejar margen si algo sale mal antes de que
 // el bot deje de verificar pagos.
 const DIAS_ANTES_DE_COBRAR = 1;
 
+// Días que faltan para el último día pagado (0 = hoy es el último), en hora de Colombia.
 function diasRestantes(planVence) {
   if (!planVence) return null;
-  const hoy = new Date().toISOString().split('T')[0];
-  return Math.ceil((new Date(planVence) - new Date(hoy)) / (1000 * 60 * 60 * 24));
+  return diasDeServicio(planVence) - 1;
 }
 
 // Determina si toca cobrar. Pura, para poder probarla sin tocar la BD ni Wompi.

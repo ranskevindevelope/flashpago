@@ -413,13 +413,32 @@ db.run(`
 //  FUNCIONES — NEGOCIOS
 // ═══════════════════════════════════════════════════════════
 
+// ─── Fechas de prueba y plan ──────────────────────────────
+// trial_fin y plan_vence son el ÚLTIMO día con servicio ('AAAA-MM-DD', hora de
+// Colombia): el bot corta a la medianoche siguiente. No usar toISOString() para
+// "hoy": da la fecha UTC, que desde las 7 p. m. ya es el día siguiente.
+function fechaColombia(fecha = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(fecha);
+}
+
+function sumarDias(fechaStr, dias) {
+  const d = new Date(`${String(fechaStr).slice(0, 10)}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
+// Días con servicio que quedan, contando hoy: 1 = hoy es el último; 0 o menos = vencido.
+function diasDeServicio(fechaFin, hoy = fechaColombia()) {
+  const fin = Date.parse(`${String(fechaFin).slice(0, 10)}T00:00:00Z`);
+  return Math.round((fin - Date.parse(`${hoy}T00:00:00Z`)) / 86400000) + 1;
+}
+
 function crearNegocio({ nombre, whatsapp, plan, limite_comprobantes, ciudad, banco, sinTrial }) {
   const limite = limite_comprobantes || LIMITES_PLAN[plan] || 300;
-  // Trial de 15 días, salvo que ya haya usado uno antes (sinTrial): ahí se
-  // crea con el trial ya vencido, para caer directo al paywall existente.
-  const trial = sinTrial
-    ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    : new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  // Trial de 15 días completos después del día del registro, salvo que ya haya
+  // usado uno (sinTrial): ahí queda vencido desde ayer, directo al paywall.
+  const hoy = fechaColombia();
+  const trial = sinTrial ? sumarDias(hoy, -1) : sumarDias(hoy, 15);
   return new Promise((resolve, reject) => {
     db.run(
       // dias_operacion arranca vacío a propósito: sin horario configurado no
@@ -580,13 +599,15 @@ function marcarNegocioPagado(negocio_id, plan) {
   const limite = LIMITES_PLAN[base] || 300;
   const dias = anual ? 365 : 30;
   return new Promise((resolve, reject) => {
-    // Si renueva antes de vencer, los días se suman desde el vencimiento
-    // vigente, no desde hoy.
+    // Si renueva antes de vencer, los días nuevos van después del último día
+    // pagado; si no, cuentan desde hoy (hoy es el día 1).
     db.get(`SELECT plan_vence FROM negocios WHERE id = ?`, [negocio_id], (err, row) => {
       if (err) return reject(err);
-      const venceActual = row?.plan_vence ? new Date(row.plan_vence).getTime() : 0;
-      const desde = Math.max(Date.now(), venceActual);
-      const nuevoVence = new Date(desde + dias * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const hoy = fechaColombia();
+      const vigente = row?.plan_vence && String(row.plan_vence).slice(0, 10) >= hoy
+        ? String(row.plan_vence).slice(0, 10)
+        : null;
+      const nuevoVence = vigente ? sumarDias(vigente, dias) : sumarDias(hoy, dias - 1);
 
       db.run(
         `UPDATE negocios SET pagado = 1, plan = ?, limite_comprobantes = ?, plan_vence = ?, plan_anual = ? WHERE id = ?`,
@@ -862,8 +883,7 @@ function verificarTrialActivo(negocio_id) {
           // activo indefinidamente hasta que se procese su próximo pago.
           if (!row.plan_vence) return resolve({ activo: true, pagado: true, plan: row.plan });
 
-          const hoy = new Date().toISOString().split('T')[0];
-          const diasRestantes = Math.ceil((new Date(row.plan_vence) - new Date(hoy)) / (1000 * 60 * 60 * 24));
+          const diasRestantes = diasDeServicio(row.plan_vence);
           const anual = Boolean(row.plan_anual);
 
           if (diasRestantes <= 0) {
@@ -875,8 +895,7 @@ function verificarTrialActivo(negocio_id) {
         // Si no tiene trial_fin (negocio viejo), está activo
         if (!row.trial_fin) return resolve({ activo: true, pagado: false, plan: row.plan });
 
-        const hoy = new Date().toISOString().split('T')[0];
-        const diasRestantes = Math.ceil((new Date(row.trial_fin) - new Date(hoy)) / (1000 * 60 * 60 * 24));
+        const diasRestantes = diasDeServicio(row.trial_fin);
 
         if (diasRestantes <= 0) {
           return resolve({ activo: false, razon: 'trial_expirado', trial_fin: row.trial_fin, dias: 0, plan: row.plan });
@@ -1552,6 +1571,9 @@ module.exports = {
   MARGEN_LIMITE_PCT,
   topeConMargen,
   incluyeReportes,
+  fechaColombia,
+  sumarDias,
+  diasDeServicio,
   esAnual,
   planBase,
   guardarMetodoPago,

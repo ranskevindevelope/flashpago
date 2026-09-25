@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { CreditCard, Download, LayoutDashboard, LogOut, Search, TrendingUp, Users, AlertTriangle, Menu, X, ShoppingBag, Settings, Building2, Sun, Moon, Infinity as InfinityIcon, Clock, CheckCircle2 } from 'lucide-react';
 import { getPlanColor, nombrePlan, sinTopeComprobantes } from '../utils/bancos';
+import { formatearFechaPlan } from '../utils/formato';
 
 // Estado del plan resumido en una línea: qué mostrar y de qué color.
 function estadoDelPlan(planInfo) {
@@ -22,7 +23,7 @@ function estadoDelPlan(planInfo) {
       texto: trial.plan_vence ? `Vence en ${dias} día${dias === 1 ? '' : 's'}` : 'Activo',
       Icono: dias <= 5 && trial.plan_vence ? Clock : CheckCircle2,
       tono: dias <= 5 && trial.plan_vence ? 'aviso' : 'ok',
-      detalle: trial.plan_vence ? `Hasta el ${new Date(trial.plan_vence).toLocaleDateString('es-CO')}` : 'Plan pagado',
+      detalle: trial.plan_vence ? `Hasta el ${formatearFechaPlan(trial.plan_vence)}` : 'Plan pagado',
     };
   }
   const dias = trial.dias || 0;
@@ -30,7 +31,7 @@ function estadoDelPlan(planInfo) {
     texto: `Prueba · ${dias} día${dias === 1 ? '' : 's'}`,
     Icono: Clock,
     tono: dias <= 3 ? 'aviso' : 'neutro',
-    detalle: trial.trial_fin ? `Hasta el ${new Date(trial.trial_fin).toLocaleDateString('es-CO')}` : null,
+    detalle: trial.trial_fin ? `Hasta el ${formatearFechaPlan(trial.trial_fin)}` : null,
   };
 }
 
