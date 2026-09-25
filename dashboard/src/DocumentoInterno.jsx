@@ -117,7 +117,7 @@ export default function DocumentoInterno({ onVolver }) {
               <li style={{ marginBottom: '0.4rem' }}><strong>Pendientes y duplicados</strong> — todo lo que necesita revisión manual, en un solo lugar.</li>
               <li style={{ marginBottom: '0.4rem' }}><strong>Cierre de caja</strong> — ventas, gastos y efectivo esperado del turno.</li>
               <li style={{ marginBottom: '0.4rem' }}><strong>Equipo</strong> — administra qué empleados pueden usar el bot.</li>
-              <li style={{ marginBottom: '0.4rem' }}><strong>Reportes automáticos</strong> — un resumen del día por WhatsApp al cerrar.</li>
+              <li style={{ marginBottom: '0.4rem' }}><strong>Reportes automáticos</strong> — un resumen del día por WhatsApp al cerrar (desde Premium).</li>
               <li><strong>Exportar a Excel</strong> — los pagos del mes, listos para contabilidad.</li>
             </ul>
           </section>
@@ -157,8 +157,8 @@ export default function DocumentoInterno({ onVolver }) {
             <ul style={{ margin: '0.6rem 0 1rem', paddingLeft: '1.3rem', color: '#e0e0e0' }}>
               <li style={{ marginBottom: '0.4rem' }}><strong>Básico</strong> — un solo punto de venta, volumen bajo-medio al mes.</li>
               <li style={{ marginBottom: '0.4rem' }}><strong>Premium</strong> — más movimiento y varios empleados enviando comprobantes.</li>
-              <li style={{ marginBottom: '0.4rem' }}><strong>Premium Plus</strong> — volumen alto, más margen antes del límite mensual.</li>
-              <li><strong>Empresarial</strong> — cadenas o negocios de alto volumen, límite prácticamente ilimitado.</li>
+              <li style={{ marginBottom: '0.4rem' }}><strong>Premium Plus</strong> — volumen alto, hasta 3.000 comprobantes al mes.</li>
+              <li><strong>Empresarial</strong> — cadenas o multi-sucursal, sin tope de comprobantes ni usuarios (uso razonable de 10.000 al mes por sede).</li>
             </ul>
             <p>El pago de la suscripción se hace con tarjeta/PSE (Wompi) o por transferencia bancaria directa.</p>
           </section>

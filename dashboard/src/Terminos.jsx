@@ -16,7 +16,7 @@ export default function Terminos({ onVolver }) {
         <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2rem", color: "#fff", marginBottom: "0.5rem" }}>
           Términos y Condiciones
         </h1>
-        <p style={{ color: "#8888a8", marginBottom: "2.5rem" }}>Última actualización: Septiembre 2026 · Versión 2</p>
+        <p style={{ color: "#8888a8", marginBottom: "2.5rem" }}>Última actualización: Septiembre 2026 · Versión 3</p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "2rem", lineHeight: 1.8, fontSize: "0.95rem" }}>
 
@@ -107,11 +107,18 @@ export default function Terminos({ onVolver }) {
               medio de pago registrado, salvo que el usuario cancele antes de la fecha de renovación.
             </p>
             <p style={{ marginTop: "0.75rem" }}>
-              Cada plan tiene un límite mensual de comprobantes verificados. Si el negocio supera ese límite, se le
-              notificará para que actualice de plan; el Servicio no queda suspendido de inmediato por exceder el
-              límite. En caso de falta de pago en la fecha de renovación, el acceso al Servicio puede suspenderse
-              hasta que se regularice el pago, sin que ello implique la eliminación inmediata de los datos del
-              negocio.
+              Cada plan tiene un límite mensual de comprobantes verificados. Al alcanzarlo, el Servicio no se
+              suspende de inmediato: se notifica al administrador y el bot sigue verificando un{' '}
+              <strong>10% adicional de cortesía</strong>. Superado ese margen, la verificación automática se detiene
+              hasta el inicio del mes siguiente o hasta que el negocio mejore su plan. En caso de falta de pago en la
+              fecha de renovación, el acceso al Servicio puede suspenderse hasta que se regularice el pago, sin que
+              ello implique la eliminación inmediata de los datos del negocio.
+            </p>
+            <p style={{ marginTop: "0.75rem" }}>
+              Cada plan permite un número máximo de usuarios activos, contando al titular del negocio. El plan
+              Empresarial no tiene límite de comprobantes ni de usuarios, sujeto a un uso razonable de hasta{' '}
+              <strong>10.000 comprobantes al mes por sede</strong>; por encima de ese volumen, FlashPago acordará con
+              el negocio las condiciones del servicio.
             </p>
           </section>
 

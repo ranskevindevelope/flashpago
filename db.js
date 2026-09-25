@@ -481,13 +481,28 @@ function actualizarHorarioNegocio(id, { hora_cierre, dias_operacion }) {
 //  FUNCIONES — PAGOS DE SUSCRIPCIÓN (Wompi)
 // ═══════════════════════════════════════════════════════════
 
-const LIMITES_PLAN = { basico: 300, premium: 1000, premium_plus: 999999, empresarial: 999999 };
+// Solo Empresarial va sin tope: cada comprobante es una lectura pagada de Claude.
+const LIMITES_PLAN = { basico: 300, premium: 1000, premium_plus: 3000, empresarial: 999999 };
 const PRECIOS_CENTAVOS = {
   basico: 3990000, premium: 7990000, premium_plus: 10990000, empresarial: 17990000,
-  // Precio anual: 25/30/35% off sobre 12 meses sueltos. El límite de
-  // comprobantes sigue siendo MENSUAL.
-  basico_anual: 35900000, premium_anual: 66900000, premium_plus_anual: 85900000,
+  // Precio anual: 2 meses gratis (se pagan 10). El límite de comprobantes
+  // sigue siendo MENSUAL.
+  basico_anual: 39900000, premium_anual: 79900000, premium_plus_anual: 109900000,
 };
+
+// Al llegar al límite el bot sigue verificando un 10% más de cortesía y
+// avisa al dueño; pasado ese margen se detiene (routes/webhook.js).
+const MARGEN_LIMITE_PCT = 10;
+function topeConMargen(limite) {
+  return limite + Math.floor((limite * MARGEN_LIMITE_PCT) / 100);
+}
+
+// Reporte diario e ingresos sin comprobante: desde Premium. La prueba gratis
+// tiene todo; el aviso de pagos no confirmados del cierre es para todos.
+function incluyeReportes(negocio) {
+  if (!negocio) return false;
+  return !!negocio.plan_ilimitado || !negocio.pagado || planBase(negocio.plan) !== 'basico';
+}
 
 // Plan anual = sufijo '_anual' en el id del checkout. LIMITES_PLAN y el
 // resto de la app solo conocen los 4 planes base.
@@ -781,12 +796,13 @@ function yaSeAviso(negocio_id, tipo, vence) {
   });
 }
 
+// Resuelve true solo si este llamado registró el aviso (false si ya existía).
 function registrarAviso(negocio_id, tipo, vence) {
   return new Promise((resolve, reject) => {
     db.run(
       `INSERT OR IGNORE INTO avisos_plan (negocio_id, tipo, vence) VALUES (?, ?, ?)`,
       [negocio_id, tipo, vence],
-      (err) => (err ? reject(err) : resolve())
+      function (err) { if (err) reject(err); else resolve(this.changes > 0); }
     );
   });
 }
@@ -1533,6 +1549,9 @@ module.exports = {
   LIMITES_PLAN,
   LIMITES_USUARIOS,
   cupoUsuarios,
+  MARGEN_LIMITE_PCT,
+  topeConMargen,
+  incluyeReportes,
   esAnual,
   planBase,
   guardarMetodoPago,

@@ -8,7 +8,7 @@ const path = require('path');
 
 const config = require('./config');
 const { verificarToken, soloAdmin } = require('./auth');
-const { obtenerPagosExportables, listarNegocios, horaCierreDelDia } = require('./db');
+const { obtenerPagosExportables, listarNegocios, horaCierreDelDia, incluyeReportes } = require('./db');
 const { enviarReportePendientes, enviarReporteDiario, buscarIngresosSinComprobante } = require('./bot/reportes');
 const { revisarPendientes, cerrarPendientes, PLAZO_CORREO_MIN } = require('./bot/pendientes');
 const { revisarVencimientos } = require('./bot/avisos');
@@ -380,6 +380,9 @@ setInterval(async () => {
     } else {
       console.log(`[Pendientes] Cierre de turno omitido (festivo/fin de semana) — ${neg.nombre}`);
     }
+
+    // Plan Básico: sin reporte diario ni ingresos sin comprobante (el cierre de arriba sí va).
+    if (!incluyeReportes(neg)) continue;
 
     if (reporteOk) {
       console.log(`[Reporte] Enviando reporte diario — ${neg.nombre}`);

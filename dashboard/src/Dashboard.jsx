@@ -19,7 +19,7 @@ import SeccionExportar from './secciones/SeccionExportar';
 import SeccionVentas from './secciones/SeccionVentas';
 import { useUsuarios } from './hooks/useUsuarios';
 import { formatearMonto } from './utils/formato';
-import { getBancoBadge, getPlanLabel, getPlanColor } from './utils/bancos';
+import { getBancoBadge, getPlanLabel, getPlanColor, nombrePlan, sinTopeComprobantes } from './utils/bancos';
 import { permisoNotificaciones, pedirPermisoNotificaciones } from './utils/notificaciones';
 
 // Recharts pesa ~366 KB: se carga solo cuando el usuario abre una sección
@@ -46,17 +46,19 @@ const PLANES_INFO = {
   premium_plus: { id: 'premium_plus', nombre: 'Premium Plus', precio: '$109.900' },
 };
 
-// Precios anuales de lanzamiento (25/30/35% off sobre 12 meses sueltos, hasta
-// 4.2 meses gratis en Premium Plus). Deben coincidir con PRECIOS_CENTAVOS en
-// db.js — si cambian ahí, cambian aquí también.
+// Precio anual = 2 meses gratis (se pagan 10). Deben coincidir con
+// PRECIOS_CENTAVOS en db.js — si cambian ahí, cambian aquí también.
 const PLANES_PRECIOS = [
-  { id: 'basico', nombre: 'Básico', Icono: Package, precioMensual: 39900, precioAnual: 359000,
+  { id: 'basico', nombre: 'Básico', Icono: Package, precioMensual: 39900, precioAnual: 399000,
     features: ['Verificación por WhatsApp', 'IA para lectura de bancos', '300 comprobantes/mes'] },
-  { id: 'premium', nombre: 'Premium', Icono: Rocket, popular: true, precioMensual: 79900, precioAnual: 669000,
-    features: ['Todo lo de Básico', 'Reportes diarios automáticos', 'Dashboard completo'] },
-  { id: 'premium_plus', nombre: 'Premium Plus', Icono: Zap, precioMensual: 109900, precioAnual: 859000,
-    features: ['Todo lo de Premium', 'Comprobantes ilimitados', 'Soporte prioritario'] },
+  { id: 'premium', nombre: 'Premium', Icono: Rocket, popular: true, precioMensual: 79900, precioAnual: 799000,
+    features: ['Todo lo de Básico', 'Reportes diarios automáticos', '1,000 comprobantes/mes'] },
+  { id: 'premium_plus', nombre: 'Premium Plus', Icono: Zap, precioMensual: 109900, precioAnual: 1099000,
+    features: ['Todo lo de Premium', '3,000 comprobantes/mes', 'Soporte prioritario'] },
 ];
+
+// Plan al que se sube desde el actual; Premium Plus pasa a Empresarial (ventas).
+const PLAN_SIGUIENTE = { basico: 'premium', premium: 'premium_plus' };
 
 function Dashboard({ onLogout }) {
   const getInitialSection = () => {
@@ -1510,9 +1512,14 @@ function Dashboard({ onLogout }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Zap size={18} color="#F57C00" />
                     <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--dash-text)' }}>
-                      Plan {getPlanLabel(planInfo.plan)}
+                      {nombrePlan(planInfo)}
                     </span>
                   </div>
+                  {sinTopeComprobantes(planInfo) ? (
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--tint-green-fg)' }}>
+                      {planInfo.usados} comprobantes este mes · sin límite
+                    </span>
+                  ) : (<>
                   <div style={{ flex: 1, minWidth: 150 }}>
                     <div style={{
                       height: 8, background: 'var(--dash-surface-2)', borderRadius: 4, overflow: 'hidden',
@@ -1531,7 +1538,20 @@ function Dashboard({ onLogout }) {
                     color: getPlanColor(planInfo.porcentaje),
                   }}>
                     {planInfo.usados} / {planInfo.limite} comprobantes ({planInfo.porcentaje}%)
+                    {planInfo.usados >= planInfo.limite && planInfo.tope && ` · cortesía hasta ${planInfo.tope}`}
                   </span>
+                  {esAdmin && planInfo.porcentaje >= 80 && (
+                    PLAN_SIGUIENTE[planInfo.plan] ? (
+                      <Button onClick={() => setModalPagoPlan(PLANES_INFO[PLAN_SIGUIENTE[planInfo.plan]])}>
+                        Mejorar plan
+                      </Button>
+                    ) : (
+                      <Button onClick={() => window.open(`https://wa.me/573167064671?text=${encodeURIComponent('Hola, quiero conocer el plan Empresarial de FlashPago')}`, '_blank', 'noopener')}>
+                        Pasar a Empresarial
+                      </Button>
+                    )
+                  )}
+                  </>)}
                 </div>
               )}
 
@@ -1729,12 +1749,16 @@ function Dashboard({ onLogout }) {
                   )}
 
                   {/* Alerta de plan si está cerca del límite */}
-                  {planInfo && planInfo.porcentaje >= 80 && (
+                  {planInfo && !sinTopeComprobantes(planInfo) && planInfo.porcentaje >= 80 && (
                     <div className="alerta-item alerta-item-warning">
                       <Zap size={17} />
                       <div>
                         <strong>Plan {getPlanLabel(planInfo.plan)} al {planInfo.porcentaje}%</strong>
-                        <span>{planInfo.limite - planInfo.usados} comprobantes restantes</span>
+                        <span>
+                          {planInfo.usados >= planInfo.limite
+                            ? `Usando la cortesía: el bot se detiene en ${planInfo.tope ?? planInfo.limite} comprobantes`
+                            : `${planInfo.limite - planInfo.usados} comprobantes restantes`}
+                        </span>
                       </div>
                     </div>
                   )}
@@ -2003,8 +2027,8 @@ function Dashboard({ onLogout }) {
                 <div style={{ maxWidth: 520 }}>
                   <p style={{ color: 'var(--dash-text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: 1.6 }}>
                     Define qué días opera tu negocio y a qué hora cierra cada uno (puede variar, por ejemplo
-                    cerrar más tarde el fin de semana). El bot usa esta información para saber cuándo hacer
-                    las verificaciones nocturnas de pagos y enviar el reporte diario.
+                    cerrar más tarde el fin de semana). El bot usa esta información para saber cuándo enviar
+                    el cierre de turno.
                   </p>
 
                   <div style={{
@@ -2092,7 +2116,7 @@ function Dashboard({ onLogout }) {
                   </div>
 
                   <p style={{ fontSize: '0.8rem', color: 'var(--dash-text-faint)', marginBottom: '1.5rem' }}>
-                    Las verificaciones se hacen a esa hora y una hora después; el reporte diario se envía junto con la segunda verificación.
+                    El cierre de turno sale 15 minutos después de esa hora: pagos que no se pudieron confirmar y, desde el plan Premium, el reporte diario.
                   </p>
 
                   <Button onClick={guardarConfiguracion} loading={guardandoConfig} icon={<Save size={15} />}>
@@ -2486,7 +2510,7 @@ function Dashboard({ onLogout }) {
                         <select value={formNegocio.plan} onChange={(e) => setFormNegocio({ ...formNegocio, plan: e.target.value })}>
                           <option value="basico">Básico (300/mes)</option>
                           <option value="premium">Premium (1,000/mes)</option>
-                          <option value="premium_plus">Premium Plus (ilimitado)</option>
+                          <option value="premium_plus">Premium Plus (3,000/mes)</option>
                         </select>
                       </div>
                     </div>
@@ -2497,7 +2521,7 @@ function Dashboard({ onLogout }) {
                           checked={formNegocio.plan_ilimitado}
                           onChange={(e) => setFormNegocio({ ...formNegocio, plan_ilimitado: e.target.checked })}
                         />
-                        Plan ilimitado (nunca vence, sin importar pagos ni trial — para cuentas internas)
+                        Plan ilimitado (no vence y no tiene tope de comprobantes ni de usuarios — para cuentas internas)
                       </label>
                     )}
                     <div className="usuario-form-acciones">
@@ -2533,7 +2557,8 @@ function Dashboard({ onLogout }) {
                       <tbody>
                         {negocios.map(n => {
                           const estado = estadoNegocioInfo(n);
-                          const porcentaje = n.limite_comprobantes ? Math.min(100, Math.round((n.comprobantes_usados / n.limite_comprobantes) * 100)) : 0;
+                          const sinTope = !!n.plan_ilimitado || n.limite_comprobantes === 999999;
+                          const porcentaje = !sinTope && n.limite_comprobantes ? Math.min(100, Math.round((n.comprobantes_usados / n.limite_comprobantes) * 100)) : 0;
                           return (
                             <tr key={n.id} style={!n.activo ? { opacity: 0.5 } : {}}>
                               <td className="td-cliente">{n.nombre}</td>
@@ -2548,7 +2573,7 @@ function Dashboard({ onLogout }) {
                                   <div style={{ width: `${porcentaje}%`, height: '100%', background: getPlanColor(porcentaje), borderRadius: 4 }} />
                                 </div>
                                 <span style={{ fontSize: '0.75rem', color: 'var(--dash-text-faint)' }}>
-                                  {n.comprobantes_usados} / {n.limite_comprobantes === 999999 ? '∞' : n.limite_comprobantes}
+                                  {n.comprobantes_usados} / {sinTope ? '∞' : n.limite_comprobantes}
                                 </span>
                               </td>
                               <td>

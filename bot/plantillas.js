@@ -69,6 +69,27 @@ const PLANTILLAS = {
       'Hola {{1}}, tu plan de FlashPago venció el {{2}} y el bot dejó de verificar comprobantes. ' +
       'Tus empleados no podrán validar pagos hasta que renueves en flashpago.co/panel.',
   },
+
+  limite_alcanzado: {
+    nombre: 'limite_alcanzado',
+    idioma: IDIOMA,
+    categoria: 'UTILITY',
+    variables: ['nombre del admin', 'nombre del negocio', 'límite del plan', 'comprobantes de cortesía'],
+    cuerpo:
+      'Hola {{1}}, {{2}} llegó a los {{3}} comprobantes de su plan este mes. ' +
+      'El bot sigue verificando {{4}} comprobantes más de cortesía. ' +
+      'Mejora tu plan en flashpago.co/panel para no quedarte sin verificación.',
+  },
+
+  limite_agotado: {
+    nombre: 'limite_agotado',
+    idioma: IDIOMA,
+    categoria: 'UTILITY',
+    variables: ['nombre del admin', 'nombre del negocio', 'comprobantes usados'],
+    cuerpo:
+      'Hola {{1}}, {{2}} usó los {{3}} comprobantes de su plan y la cortesía de este mes, ' +
+      'así que el bot dejó de verificar pagos. Mejora tu plan en flashpago.co/panel y vuelve a funcionar al instante.',
+  },
 };
 
 // Reglas que Meta aplica al aprobar una plantilla. Se validan en los tests para

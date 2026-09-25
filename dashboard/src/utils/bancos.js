@@ -43,6 +43,17 @@ export function getPlanLabel(plan) {
   return labels[plan] || plan;
 }
 
+// Sin tope de comprobantes: cuenta con plan ilimitado, o un plan de 999999
+// (Premium Plus, Empresarial). Evita mostrar "98 / 999999".
+export function sinTopeComprobantes(planInfo) {
+  return !!planInfo?.trial?.ilimitado || (planInfo?.limite ?? 0) >= 999999;
+}
+
+// Nombre a mostrar: una cuenta con plan ilimitado se ve así, no con el plan de base.
+export function nombrePlan(planInfo) {
+  return planInfo?.trial?.ilimitado ? 'Plan ilimitado' : `Plan ${getPlanLabel(planInfo?.plan)}`;
+}
+
 export function getPlanColor(porcentaje) {
   if (porcentaje >= 90) return '#E53935';
   if (porcentaje >= 70) return '#FF9800';

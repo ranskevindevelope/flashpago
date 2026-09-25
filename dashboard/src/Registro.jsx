@@ -89,9 +89,9 @@ function Registro({ onBack, datosGoogle }) {
   // luego en el dashboard. Debe coincidir con PRECIOS_CENTAVOS (db.js),
   // PLANES_PRECIOS (Dashboard.jsx) y `planes` (Flashpagolanding.jsx).
   const planes = [
-    { id: 'basico', nombre: 'Básico', precio: '$39.900', precioMensual: 39900, precioAnual: 359000, comprobantes: '300 comprobantes/mes', corto: '300/mes', popular: false, Icono: Package },
-    { id: 'premium', nombre: 'Premium', precio: '$79.900', precioMensual: 79900, precioAnual: 669000, comprobantes: '1,000 comprobantes/mes', corto: '1,000/mes', popular: true, Icono: Rocket },
-    { id: 'premium_plus', nombre: 'Premium Plus', precio: '$109.900', precioMensual: 109900, precioAnual: 859000, comprobantes: 'Ilimitado', corto: 'Ilimitado', popular: false, Icono: Zap },
+    { id: 'basico', nombre: 'Básico', precio: '$39.900', precioMensual: 39900, precioAnual: 399000, comprobantes: '300 comprobantes/mes', corto: '300/mes', popular: false, Icono: Package },
+    { id: 'premium', nombre: 'Premium', precio: '$79.900', precioMensual: 79900, precioAnual: 799000, comprobantes: '1,000 comprobantes/mes', corto: '1,000/mes', popular: true, Icono: Rocket },
+    { id: 'premium_plus', nombre: 'Premium Plus', precio: '$109.900', precioMensual: 109900, precioAnual: 1099000, comprobantes: '3,000 comprobantes/mes', corto: '3,000/mes', popular: false, Icono: Zap },
   ];
 
   const planActual = planes.find(p => p.id === plan);

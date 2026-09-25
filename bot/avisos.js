@@ -5,7 +5,7 @@ const {
   listarNegocios, verificarTrialActivo,
   obtenerAdminParaAvisos, yaSeAviso, registrarAviso,
 } = require('../db');
-const { enviarAvisoPlan, formatearFecha, NOMBRE_PLAN } = require('../mailer');
+const { enviarAvisoPlan, enviarAvisoLimite, formatearFecha, NOMBRE_PLAN } = require('../mailer');
 const { enviarPlantilla } = require('./openwa');
 
 // Plan anual avisa con más margen que el mensual (uno que pagó hace casi un
@@ -95,4 +95,40 @@ async function revisarVencimientos() {
   return enviados;
 }
 
-module.exports = { revisarVencimientos, decidirAviso, DIAS_AVISO, DIAS_AVISO_ANUAL };
+// ─── Límite de comprobantes del mes ───────────────────────
+// Un aviso por mes y tipo: 'limite_alcanzado' (entró a la cortesía) y
+// 'limite_agotado' (el bot se detuvo).
+function mesActual(fecha = new Date()) {
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+}
+
+async function avisarLimite(negocio, tipo, { limite, tope }) {
+  // Se reclama antes de enviar: dos comprobantes a la vez no mandan dos avisos.
+  if (!(await registrarAviso(negocio.id, tipo, mesActual()))) return false;
+
+  const admin = await obtenerAdminParaAvisos(negocio.id);
+  if (!admin) {
+    console.log(`[Avisos] Negocio ${negocio.id} sin admin al que avisar del límite`);
+    return false;
+  }
+
+  if (admin.email) {
+    try {
+      await enviarAvisoLimite(admin.email, admin.nombre, negocio.nombre, tipo, { limite, tope });
+    } catch (err) {
+      console.error(`[Avisos] Correo de límite falló (negocio ${negocio.id}):`, err.message);
+    }
+  }
+
+  if (admin.whatsapp) {
+    const variables = tipo === 'limite_agotado'
+      ? [admin.nombre, negocio.nombre, tope.toLocaleString('es-CO')]
+      : [admin.nombre, negocio.nombre, limite.toLocaleString('es-CO'), (tope - limite).toLocaleString('es-CO')];
+    await enviarPlantilla(admin.whatsapp, tipo, variables);
+  }
+
+  console.log(`[Avisos] "${tipo}" enviado al admin del negocio ${negocio.id}`);
+  return true;
+}
+
+module.exports = { revisarVencimientos, decidirAviso, avisarLimite, mesActual, DIAS_AVISO, DIAS_AVISO_ANUAL };

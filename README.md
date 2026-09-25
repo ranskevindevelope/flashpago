@@ -25,8 +25,27 @@ logica vive en las carpetas `routes/` y `bot/`.
    al empleado y al administrador para que lo revisen en la app del banco.
 7. El resultado se guarda en la tabla `pagos` y se responde por WhatsApp.
 8. En el cierre de turno (15 minutos despues de la hora de cierre) sale el
-   reporte del dia: pagos que llegaron tarde, pagos no confirmados,
-   transferencias sin comprobante y el resumen del dia.
+   reporte del dia: pagos que llegaron tarde y pagos no confirmados (todos los
+   planes), transferencias sin comprobante y el resumen del dia (desde Premium
+   y en la prueba gratis).
+
+## Planes
+
+Los topes y precios viven en `db.js` (`LIMITES_PLAN`, `PRECIOS_CENTAVOS`,
+`LIMITES_USUARIOS`) y se repiten para mostrar en la landing, el registro y el
+dashboard.
+
+| Plan | Mensual | Anual (2 meses gratis) | Comprobantes/mes | Usuarios |
+|---|---|---|---|---|
+| Básico | $39.900 | $399.000 | 300 | 3 |
+| Premium | $79.900 | $799.000 | 1.000 | 5 |
+| Premium Plus | $109.900 | $1.099.000 | 3.000 | 8 |
+| Empresarial | a la medida | — | sin tope (uso razonable: 10.000/mes por sede) | sin tope |
+
+Al llegar al tope el bot sigue verificando un 10% más de cortesía
+(`topeConMargen`) y le avisa al admin (`limite_alcanzado`); pasado ese margen se
+detiene y vuelve a avisar (`limite_agotado`). Cada aviso sale una vez por mes.
+Un negocio con `plan_ilimitado` no tiene tope de nada.
 
 La comprobacion de Gmail usa el monto exacto.
 
@@ -201,9 +220,10 @@ Para activarlo el día que haga falta:
    registrar el número de teléfono ahí (tiene que estar libre de WhatsApp
    normal y de la app de WhatsApp Business).
 2. Pedir la aprobación de las plantillas que se usan fuera de la ventana de
-   24h: reporte diario, pagos que llegaron tarde, pagos no confirmados y
-   alerta de pago sospechoso (`bot/reportes.js`, `bot/pendientes.js` y la
-   alerta en `routes/webhook.js`). Esto puede tardar
+   24h: reporte diario, pagos que llegaron tarde, pagos no confirmados,
+   avisos de límite del plan y alerta de pago sospechoso (`bot/reportes.js`,
+   `bot/pendientes.js`, `bot/avisos.js` y la alerta en `routes/webhook.js`;
+   el texto exacto de las plantillas está en `bot/plantillas.js`). Esto puede tardar
    días — conviene dejarlo pedido de antemano, no reactivamente tras un ban.
 3. En `.env`, agregar:
 

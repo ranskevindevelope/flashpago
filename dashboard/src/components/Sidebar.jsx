@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { CreditCard, Download, LayoutDashboard, LogOut, Search, TrendingUp, Users, AlertTriangle, Menu, X, ShoppingBag, Settings, Building2, Sun, Moon, Infinity as InfinityIcon, Clock, CheckCircle2 } from 'lucide-react';
-import { getPlanLabel, getPlanColor } from '../utils/bancos';
+import { getPlanColor, nombrePlan, sinTopeComprobantes } from '../utils/bancos';
 
 // Estado del plan resumido en una línea: qué mostrar y de qué color.
 function estadoDelPlan(planInfo) {
@@ -140,7 +140,7 @@ function Sidebar({ activeSection, isOpen, isAdmin, isSuperAdmin, paymentCount, u
                 <div className="plan-card-top">
                   <div>
                     <div className="plan-card-negocio">{negocioNombre}</div>
-                    <div className="plan-card-plan">Plan {getPlanLabel(planInfo.plan)}</div>
+                    <div className="plan-card-plan">{nombrePlan(planInfo)}</div>
                   </div>
                   {estado && (
                     <span className={`plan-card-chip plan-card-chip--${estado.tono}`}>
@@ -152,23 +152,35 @@ function Sidebar({ activeSection, isOpen, isAdmin, isSuperAdmin, paymentCount, u
 
                 {estado?.detalle && <div className="plan-card-detalle">{estado.detalle}</div>}
 
-                <div className="plan-card-uso">
-                  <div className="plan-card-uso-cifras">
-                    <span>Comprobantes del mes</span>
-                    <strong>{planInfo.usados ?? 0} / {planInfo.limite ?? '—'}</strong>
+                {sinTopeComprobantes(planInfo) ? (
+                  <div className="plan-card-uso">
+                    <div className="plan-card-uso-cifras">
+                      <span>Comprobantes del mes</span>
+                      <strong>{planInfo.usados ?? 0}</strong>
+                    </div>
+                    <div className="plan-card-uso-pie">Sin límite de comprobantes</div>
                   </div>
-                  <div className="plan-card-barra">
-                    <div
-                      className="plan-card-barra-relleno"
-                      style={{ width: `${porcentaje}%`, background: getPlanColor(porcentaje) }}
-                    />
+                ) : (
+                  <div className="plan-card-uso">
+                    <div className="plan-card-uso-cifras">
+                      <span>Comprobantes del mes</span>
+                      <strong>{planInfo.usados ?? 0} / {planInfo.limite ?? '—'}</strong>
+                    </div>
+                    <div className="plan-card-barra">
+                      <div
+                        className="plan-card-barra-relleno"
+                        style={{ width: `${porcentaje}%`, background: getPlanColor(porcentaje) }}
+                      />
+                    </div>
+                    <div className="plan-card-uso-pie">
+                      {(planInfo.usados ?? 0) >= planInfo.limite
+                        ? `Usando la cortesía, hasta ${planInfo.tope ?? planInfo.limite}`
+                        : porcentaje >= 90
+                          ? 'Estás por alcanzar el límite de tu plan'
+                          : `${porcentaje}% usado este mes`}
+                    </div>
                   </div>
-                  <div className="plan-card-uso-pie">
-                    {porcentaje >= 90
-                      ? 'Estás por alcanzar el límite de tu plan'
-                      : `${porcentaje}% usado este mes`}
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>

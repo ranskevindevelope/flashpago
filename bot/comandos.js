@@ -1,6 +1,6 @@
 // comandos.js — Manejo de todos los comandos de texto del bot (multi-negocio)
 const { enviarMensaje, enviarImagen } = require('./openwa');
-const { db, totalDelDia, totalUltimos30Dias, obtenerPagosExportables, buscarPorCliente, obtenerNegocio, contarComprobantesDelMes } = require('../db');
+const { db, totalDelDia, totalUltimos30Dias, obtenerPagosExportables, buscarPorCliente, obtenerNegocio, contarComprobantesDelMes, topeConMargen, incluyeReportes } = require('../db');
 const { historialPagos } = require('./state');
 const { enviarReporteDiario } = require('./reportes');
 const { revisarPendientes } = require('./pendientes');
@@ -184,14 +184,25 @@ async function handleTextEvent(from, text, negocio_id = 1) {
         return true;
       }
       const usados = await contarComprobantesDelMes(negocio_id);
-      const porcentaje = Math.round((usados / negocio.limite_comprobantes) * 100);
+      if (negocio.plan_ilimitado) {
+        await enviarMensaje(from, `📊 *Plan ilimitado — ${negocioNombre}*\n\n${usados} comprobantes este mes, sin límite.`);
+        return true;
+      }
+      const limite = negocio.limite_comprobantes;
+      const porcentaje = Math.round((usados / limite) * 100);
       const barra = '█'.repeat(Math.min(Math.floor(porcentaje / 10), 10)) + '░'.repeat(Math.max(10 - Math.floor(porcentaje / 10), 0));
+      let estado = '✅ Todo bien con tu plan.';
+      if (usados >= limite) {
+        estado = `⚠️ Superaste el límite. El bot sigue verificando hasta ${topeConMargen(limite)} comprobantes de cortesía. Mejora tu plan en flashpago.co/panel`;
+      } else if (porcentaje >= 80) {
+        estado = '⚠️ Estás cerca del límite. Considera mejorar tu plan.';
+      }
 
       await enviarMensaje(from,
         `📊 *Plan ${negocio.plan.toUpperCase()} — ${negocioNombre}*\n\n` +
         `${barra} ${porcentaje}%\n` +
-        `${usados} / ${negocio.limite_comprobantes} comprobantes este mes\n\n` +
-        (porcentaje >= 80 ? '⚠️ Estás cerca del límite. Considera mejorar tu plan.' : '✅ Todo bien con tu plan.')
+        `${usados} / ${limite} comprobantes este mes\n\n` +
+        estado
       );
     } catch (err) {
       console.error('[Plan] Error:', err.message);
@@ -226,6 +237,14 @@ async function handleTextEvent(from, text, negocio_id = 1) {
   // ─── Reporte diario (solo admin) ──────────────────────
   if (body === 'reporte') {
     if (!admin) return true;
+    try {
+      if (!incluyeReportes(await obtenerNegocio(negocio_id))) {
+        await enviarMensaje(from, '📊 El reporte diario viene desde el plan Premium. Puedes mejorar tu plan en flashpago.co/panel');
+        return true;
+      }
+    } catch (err) {
+      console.error('[Reporte] Error consultando el plan:', err.message);
+    }
     await enviarReporteDiario(negocio_id);
     return true;
   }

@@ -460,4 +460,53 @@ Actualizar tarjeta: ${DASHBOARD_URL}${PIE_TEXTO}`,
   console.log(`[Mailer] Aviso de cobro automático fallido enviado a ${email}`);
 }
 
-module.exports = { enviarCodigoVerificacion, enviarBienvenida, enviarCodigoRecuperacion, enviarGraciasPago, enviarAvisoPlan, enviarAvisoCobroFallido, formatearFecha, NOMBRE_PLAN };
+// tipo 'limite_alcanzado': entró a la cortesía; 'limite_agotado': el bot se detuvo.
+async function enviarAvisoLimite(email, nombre, negocioNombre, tipo, { limite, tope }) {
+  const agotado = tipo === 'limite_agotado';
+  const extra = tope - limite;
+
+  const titulo = agotado ? 'El bot dejó de verificar pagos' : 'Llegaste al límite de tu plan';
+  const cuerpo = agotado
+    ? `Hola ${nombre}, <strong>${negocioNombre}</strong> usó los ${tope.toLocaleString('es-CO')} comprobantes de su plan y la cortesía de este mes, así que el bot dejó de verificar pagos.`
+    : `Hola ${nombre}, <strong>${negocioNombre}</strong> llegó a los ${limite.toLocaleString('es-CO')} comprobantes de su plan este mes. El bot sigue verificando ${extra.toLocaleString('es-CO')} comprobantes más de cortesía.`;
+  const nota = agotado
+    ? 'Mejora tu plan y el bot vuelve a funcionar al instante. Si no, se reactiva solo el primer día del próximo mes.'
+    : 'Mejora tu plan antes de que se acabe la cortesía para que tus empleados no se queden sin verificación.';
+
+  const contenido = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: ${agotado ? '#FFF1F1' : '#FFF6EC'}; border-left: 3px solid ${agotado ? '#D93025' : COLOR_ACCENT}; border-radius: 8px; margin: 4px 0 18px;">
+      <tr>
+        <td style="padding: 14px 16px;">
+          <p style="margin: 0; font-size: 13px; color: ${agotado ? '#8A1F1B' : '#7A4A00'}; line-height: 1.6;">${nota}</p>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  await transporter.sendMail({
+    from: REMITENTE,
+    replyTo: RESPUESTA_A,
+    to: email,
+    subject: agotado ? `${negocioNombre}: el bot dejó de verificar pagos este mes` : `${negocioNombre} llegó al límite de su plan`,
+    text: `${titulo}
+
+${cuerpo.replace(/<[^>]+>/g, '')}
+
+${nota}
+
+Mejorar plan: ${DASHBOARD_URL}${PIE_TEXTO}`,
+    html: plantilla({
+      preheader: agotado ? 'Mejora tu plan para reactivar el bot' : `Te quedan ${extra} comprobantes de cortesía`,
+      titulo,
+      descripcion: cuerpo,
+      contenido,
+      ctaTexto: 'Mejorar mi plan',
+      ctaUrl: DASHBOARD_URL,
+    }),
+    attachments: ADJUNTOS,
+  });
+
+  console.log(`[Mailer] Aviso de límite (${tipo}) enviado a ${email}`);
+}
+
+module.exports = { enviarCodigoVerificacion, enviarBienvenida, enviarCodigoRecuperacion, enviarGraciasPago, enviarAvisoPlan, enviarAvisoCobroFallido, enviarAvisoLimite, formatearFecha, NOMBRE_PLAN };

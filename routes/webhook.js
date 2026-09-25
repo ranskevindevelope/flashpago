@@ -10,8 +10,9 @@ const { verificarPago } = require('../verificador');
 const {
   db, guardarPago, buscarDuplicadoReciente, correoUsadoPorOtroPago, marcarIntentosAnteriores, contarComprobantesDelMes, obtenerNegocio, verificarTrialActivo,
   marcarNegocioPagado, actualizarPagoPlataforma, obtenerAdminDeNegocio, planBase, asociarWhatsappNegocio,
-  asociarWhatsappUsuario,
+  asociarWhatsappUsuario, topeConMargen,
 } = require('../db');
+const { avisarLimite } = require('../bot/avisos');
 const { enviarMensaje, descargarMediaMeta, resolverLid } = require('../bot/openwa');
 const {
   buscarPorCodigo, marcarConfirmado, buscarPorCodigoUsuario, marcarConfirmadoUsuario,
@@ -407,12 +408,22 @@ router.post('/', async (req, res) => {
   let negocio;
   try {
     negocio = await obtenerNegocio(negocio_id);
-    if (negocio) {
+    // Plan ilimitado = sin tope de comprobantes, sin importar el plan que figure.
+    if (negocio && !negocio.plan_ilimitado) {
       const usados = await contarComprobantesDelMes(negocio_id);
-      if (usados >= negocio.limite_comprobantes) {
+      const limite = negocio.limite_comprobantes;
+      const tope = topeConMargen(limite);
+      if (usados >= tope) {
         await enviarMensaje(from, MENSAJES.limitePlan);
-        console.log(`[Plan] Negocio ${negocio_id} alcanzó límite: ${usados}/${negocio.limite_comprobantes}`);
+        console.log(`[Plan] Negocio ${negocio_id} agotó límite y cortesía: ${usados}/${tope}`);
+        avisarLimite(negocio, 'limite_agotado', { limite, tope })
+          .catch((err) => console.error('[Plan] Error avisando límite agotado:', err.message));
         return;
+      }
+      // En la cortesía se sigue verificando; solo se le avisa al dueño (sin esperar).
+      if (usados >= limite) {
+        avisarLimite(negocio, 'limite_alcanzado', { limite, tope })
+          .catch((err) => console.error('[Plan] Error avisando límite alcanzado:', err.message));
       }
     }
   } catch (err) {

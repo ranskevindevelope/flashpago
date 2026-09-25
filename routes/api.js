@@ -39,6 +39,7 @@ const {
   actualizarHorarioNegocio,
   parsearHoraCierre,
   LIMITES_PLAN,
+  topeConMargen,
   contarComprobantesDelMes,
   tienePagoVerificado,
   verificarTrialActivo,
@@ -786,6 +787,7 @@ router.get('/negocios/uso/plan', verificarToken, async (req, res) => {
       nombre: negocio.nombre,
       plan: negocio.plan,
       limite: negocio.limite_comprobantes,
+      tope: topeConMargen(negocio.limite_comprobantes), // límite + cortesía
       usados,
       porcentaje: Math.round((usados / negocio.limite_comprobantes) * 100),
       horario_configurado: !!negocio.horario_actualizado_en,

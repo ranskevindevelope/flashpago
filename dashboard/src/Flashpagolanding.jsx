@@ -712,18 +712,18 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
 
   const planes = [
     {
-      name: "Básico", precioMensual: 39900, precioAnual: 359000,
-      features: ["Verificación de pagos por WhatsApp", "300 comprobantes/mes", "Hasta 3 usuarios", "Lectura con IA (3 bancos)", "Detección de duplicados", "Registro de pagos", "Dashboard web", "Soporte por WhatsApp"],
-      disabled: ["Reportes automáticos"],
+      name: "Básico", precioMensual: 39900, precioAnual: 399000,
+      features: ["Verificación de pagos por WhatsApp", "300 comprobantes/mes", "Hasta 3 usuarios", "Lectura con IA (3 bancos)", "Detección de duplicados", "Aviso de pagos sin confirmar al cierre", "Registro de pagos", "Dashboard web", "Soporte por WhatsApp"],
+      disabled: ["Reporte diario e ingresos sin comprobante"],
     },
     {
-      name: "Premium", precioMensual: 79900, precioAnual: 669000, popular: true,
-      features: ["Todo lo del plan Básico", "1,000 comprobantes/mes", "Hasta 5 usuarios", "Reportes diarios automáticos", "Búsqueda de clientes", "Fotos de comprobantes", "Estadísticas del negocio", "Soporte prioritario"],
+      name: "Premium", precioMensual: 79900, precioAnual: 799000, popular: true,
+      features: ["Todo lo del plan Básico", "1,000 comprobantes/mes", "Hasta 5 usuarios", "Reporte diario e ingresos sin comprobante", "Búsqueda de clientes", "Fotos de comprobantes", "Estadísticas del negocio", "Soporte prioritario"],
       disabled: [],
     },
     {
-      name: "Premium Plus", precioMensual: 109900, precioAnual: 859000,
-      features: ["Todo lo del plan Premium", "Comprobantes ilimitados", "Hasta 8 usuarios", "Soporte prioritario"],
+      name: "Premium Plus", precioMensual: 109900, precioAnual: 1099000,
+      features: ["Todo lo del plan Premium", "3,000 comprobantes/mes", "Hasta 8 usuarios", "Soporte prioritario"],
       disabled: [],
     },
   ];
@@ -1115,7 +1115,10 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
           <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "0.85rem", fontWeight: 600, color: COLORS.naranja, textTransform: "uppercase", letterSpacing: 2, marginBottom: "1rem" }}>Planes</div>
           <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, marginBottom: "1.5rem", lineHeight: 1.2, marginTop: 0 }}>Elige el plan para tu negocio</h2>
-          <p style={{ fontSize: "1.1rem", color: COLORS.grisTxt, maxWidth: 650, marginBottom: "2rem" }}>Sin contratos largos. Cancela cuando quieras.</p>
+          <p style={{ fontSize: "1.1rem", color: COLORS.grisTxt, maxWidth: 650, marginBottom: "0.75rem" }}>Sin contratos largos. Cancela cuando quieras.</p>
+          <p style={{ fontSize: "1rem", fontWeight: 600, color: COLORS.oscuro, maxWidth: 650, marginBottom: "2rem", display: "flex", alignItems: "center", gap: 8 }}>
+            <ShieldCheck size={18} color={COLORS.naranja} style={{ flexShrink: 0 }} /> Un solo comprobante falso de $40.000 ya paga el mes del plan Básico.
+          </p>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "2.5rem", flexWrap: "wrap", justifyContent: "center" }}>
             <span style={{ fontSize: "0.9rem", fontWeight: !facturacionAnual ? 600 : 400, color: !facturacionAnual ? COLORS.oscuro : COLORS.grisTxt }}>Mensual</span>
@@ -1207,7 +1210,7 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
           <div style={{ marginTop: "2rem", border: "1px solid #e8e8f0", borderRadius: 16, padding: "1.5rem 2rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", background: COLORS.grisClaro }}>
             <div>
               <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.25rem" }}>¿Tienes varias sucursales?</div>
-              <div style={{ fontSize: "0.9rem", color: COLORS.grisTxt }}>El plan Empresarial (multi-sucursal, usuarios ilimitados) se arma a la medida de tu negocio.</div>
+              <div style={{ fontSize: "0.9rem", color: COLORS.grisTxt }}>El plan Empresarial (multi-sucursal, comprobantes y usuarios sin límite) se arma a la medida de tu negocio.</div>
             </div>
             <a href={`https://wa.me/573167064671?text=${encodeURIComponent('Hola, quiero conocer el plan Empresarial de FlashPago')}`} target="_blank" rel="noopener noreferrer" style={{ background: COLORS.naranja, color: "white", padding: "0.8rem 1.5rem", borderRadius: 10, textDecoration: "none", fontWeight: 600, fontSize: "0.9rem", display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
               <MessageCircle size={16} /> Hablar con ventas
