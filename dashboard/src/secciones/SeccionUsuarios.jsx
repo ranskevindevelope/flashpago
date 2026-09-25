@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Users, UserPlus, UserCheck, UserX, Shield, CreditCard, Edit, Save, X, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { FilaSkeleton, TarjetaSkeleton } from '../components/ui/Skeleton';
@@ -14,6 +14,11 @@ const FORM_VACIO = { usuario: '', password: '', nombre: '', rol: 'empleado', wha
 export default function SeccionUsuarios({ api }) {
   const queryClient = useQueryClient();
   const { data: usuarios = [], isLoading: cargandoUsuarios } = useUsuarios(api);
+  // Clave bajo ['usuarios'] para que refrescar() también actualice el cupo.
+  const { data: cupo } = useQuery({
+    queryKey: ['usuarios', 'cupo'],
+    queryFn: () => api.request('/api/usuarios/cupo').then((d) => (d.ok ? d : null)),
+  });
 
   const [mostrarForm, setMostrarForm] = useState(false);
   const [editando, setEditando] = useState(null);
@@ -205,12 +210,30 @@ export default function SeccionUsuarios({ api }) {
       <div className="seccion">
         <div className="seccion-header">
           <h2 className="seccion-titulo"><Users size={18} /> Usuarios del sistema</h2>
-          {!mostrarForm && (
-            <button className="exportar-btn" onClick={() => { setMostrarForm(true); setEditando(null); setForm(FORM_VACIO); }}>
-              <UserPlus size={14} /> Nuevo usuario
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {cupo?.limite != null && (
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: cupo.lleno ? 'var(--tint-red-fg)' : 'var(--dash-text-muted)' }}>
+                {cupo.usados} de {cupo.limite} usuarios
+              </span>
+            )}
+            {!mostrarForm && (
+              <button
+                className="exportar-btn"
+                disabled={!!cupo?.lleno}
+                style={cupo?.lleno ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+                onClick={() => { setMostrarForm(true); setEditando(null); setForm(FORM_VACIO); }}
+              >
+                <UserPlus size={14} /> Nuevo usuario
+              </button>
+            )}
+          </div>
         </div>
+
+        {cupo?.lleno && !mostrarForm && (
+          <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: 'var(--dash-text-muted)' }}>
+            Tu plan permite hasta {cupo.limite} usuarios activos, contando al dueño. Desactiva uno o mejora tu plan para agregar más.
+          </p>
+        )}
 
         {mostrarForm && (
           <div className="usuario-form">

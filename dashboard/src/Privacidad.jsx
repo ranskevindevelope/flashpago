@@ -16,7 +16,7 @@ export default function Privacidad({ onVolver }) {
         <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2rem", color: "#fff", marginBottom: "0.5rem" }}>
           Política de Tratamiento de Datos Personales
         </h1>
-        <p style={{ color: "#8888a8", marginBottom: "2.5rem" }}>Última actualización: Septiembre 2026 · Versión 2</p>
+        <p style={{ color: "#8888a8", marginBottom: "2.5rem" }}>Última actualización: Septiembre 2026 · Versión 3</p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "2rem", lineHeight: 1.8, fontSize: "0.95rem" }}>
 
@@ -134,15 +134,16 @@ export default function Privacidad({ onVolver }) {
               <strong>Wompi (cobro de la suscripción):</strong> pasarela de pagos vigilada en Colombia; procesa el
               pago de tu plan. FlashPago nunca ve ni almacena el número de tu tarjeta — eso lo maneja Wompi
               directamente, bajo sus propias políticas de seguridad (PCI-DSS).<br />
-              <strong>OpenWA (envío y recepción de mensajes):</strong> intermediario técnico autoalojado por
-              FlashPago para enviar y recibir los mensajes del bot de WhatsApp; los datos permanecen en la
-              infraestructura de FlashPago.<br />
+              <strong>Meta (WhatsApp Business):</strong> FlashPago usa la API oficial de WhatsApp Business de Meta
+              para recibir los comprobantes y enviar las respuestas, avisos y reportes del bot. Meta procesa el
+              contenido de esos mensajes (número de WhatsApp, textos e imágenes de comprobantes) en servidores que
+              pueden estar fuera de Colombia, bajo sus términos para empresas de WhatsApp Business.<br />
               <strong>Proveedor de hosting:</strong> almacena la base de datos y las imágenes de comprobantes de
               forma segura en el servidor donde opera FlashPago.
             </p>
             <p style={{ marginTop: "0.75rem" }}>
               Con cada encargado que procesa datos por fuera de la infraestructura propia de FlashPago (Anthropic,
-              Google, Wompi), el tratamiento se sujeta a los términos contractuales de servicio para clientes
+              Google, Meta, Wompi), el tratamiento se sujeta a los términos contractuales de servicio para clientes
               empresariales de dicho proveedor, que incluyen compromisos de confidencialidad y seguridad de la
               información. FlashPago revisa estos términos antes de integrar un proveedor nuevo.
             </p>
@@ -151,8 +152,8 @@ export default function Privacidad({ onVolver }) {
           <section>
             <h2 style={{ color: "#F57C00", fontSize: "1.1rem", marginBottom: "0.5rem" }}>8. Transmisión y transferencia internacional de datos</h2>
             <p>
-              Anthropic y Google procesan información en servidores ubicados fuera de Colombia, actuando en ambos
-              casos como <strong>encargados del tratamiento</strong> por instrucción de FlashPago y para las
+              Anthropic, Google y Meta (WhatsApp) procesan información en servidores ubicados fuera de Colombia,
+              actuando en todos los casos como <strong>encargados del tratamiento</strong> por instrucción de FlashPago y para las
               finalidades descritas en esta Política — esto constituye una <strong>transmisión internacional</strong>{' '}
               (no una transferencia a un responsable distinto), que conforme al artículo 26 de la Ley 1581 de 2012
               no requiere autorización separada del titular cuando existe un contrato de transmisión que garantice

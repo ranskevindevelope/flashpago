@@ -713,17 +713,17 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
   const planes = [
     {
       name: "Básico", precioMensual: 39900, precioAnual: 359000,
-      features: ["Verificación de pagos por WhatsApp", "300 comprobantes/mes", "Lectura con IA (3 bancos)", "Detección de duplicados", "Registro de pagos", "Dashboard web", "Soporte por WhatsApp"],
+      features: ["Verificación de pagos por WhatsApp", "300 comprobantes/mes", "Hasta 3 usuarios", "Lectura con IA (3 bancos)", "Detección de duplicados", "Registro de pagos", "Dashboard web", "Soporte por WhatsApp"],
       disabled: ["Reportes automáticos"],
     },
     {
       name: "Premium", precioMensual: 79900, precioAnual: 669000, popular: true,
-      features: ["Todo lo del plan Básico", "1,000 comprobantes/mes", "Reportes diarios automáticos", "Búsqueda de clientes", "Fotos de comprobantes", "Estadísticas del negocio", "Soporte prioritario"],
+      features: ["Todo lo del plan Básico", "1,000 comprobantes/mes", "Hasta 5 usuarios", "Reportes diarios automáticos", "Búsqueda de clientes", "Fotos de comprobantes", "Estadísticas del negocio", "Soporte prioritario"],
       disabled: [],
     },
     {
       name: "Premium Plus", precioMensual: 109900, precioAnual: 859000,
-      features: ["Todo lo del plan Premium", "Comprobantes ilimitados", "Soporte prioritario"],
+      features: ["Todo lo del plan Premium", "Comprobantes ilimitados", "Hasta 8 usuarios", "Soporte prioritario"],
       disabled: [],
     },
   ];

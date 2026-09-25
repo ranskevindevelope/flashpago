@@ -498,6 +498,29 @@ function planBase(plan) {
   return esAnual(plan) ? plan.slice(0, -'_anual'.length) : plan;
 }
 
+// Usuarios activos por plan, contando al dueño. Empresarial (multi-sucursal)
+// no tiene límite: frena que varias sedes compartan un plan más barato.
+const LIMITES_USUARIOS = { basico: 3, premium: 5, premium_plus: 8 };
+
+// { usados, limite, lleno }. limite null = sin límite (Empresarial, plan_ilimitado
+// o un plan que no está en la tabla, como los negocios viejos).
+function cupoUsuarios(negocio_id) {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT n.plan, n.plan_ilimitado,
+              (SELECT COUNT(*) FROM usuarios u WHERE u.negocio_id = n.id AND u.activo = 1) AS usados
+       FROM negocios n WHERE n.id = ?`,
+      [negocio_id],
+      (err, fila) => {
+        if (err) return reject(err);
+        if (!fila) return resolve({ usados: 0, limite: null, lleno: false });
+        const limite = fila.plan_ilimitado ? null : (LIMITES_USUARIOS[planBase(fila.plan)] ?? null);
+        resolve({ usados: fila.usados, limite, lleno: limite !== null && fila.usados >= limite });
+      }
+    );
+  });
+}
+
 function crearPagoPlataforma({ negocio_id, referencia, plan, monto }) {
   return new Promise((resolve, reject) => {
     db.run(
@@ -1508,6 +1531,8 @@ module.exports = {
   whatsappYaUsoTrial,
   PRECIOS_CENTAVOS,
   LIMITES_PLAN,
+  LIMITES_USUARIOS,
+  cupoUsuarios,
   esAnual,
   planBase,
   guardarMetodoPago,

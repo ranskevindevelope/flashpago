@@ -52,11 +52,13 @@ module.exports = {
   CUENTA_NUMERO: process.env.CUENTA_NUMERO || '',
   CUENTA_TITULAR: process.env.CUENTA_TITULAR || '',
   CUENTA_NIT: process.env.CUENTA_NIT || '',
+  // Número del bot (con Meta, solo lo lee la API): ahí llegan los "confirmar
+  // <código>" y los comprobantes de la suscripción. Se configura en el .env.
   FLASHPAGO_WHATSAPP: process.env.FLASHPAGO_WHATSAPP || '573167064671',
   // negocio_id cuyo Gmail se usa para verificar pagos de suscripción por
   // transferencia manual. Por defecto el negocio 1.
   NEGOCIO_ID_SUSCRIPCION: parseInt(process.env.NEGOCIO_ID_SUSCRIPCION || '1', 10),
-  // A quién le llega la alerta de pago de suscripción sin confirmar (distinto
-  // de FLASHPAGO_WHATSAPP, que es el número público del cliente).
-  ADMIN_SUSCRIPCION_WHATSAPP: process.env.ADMIN_SUSCRIPCION_WHATSAPP || process.env.FLASHPAGO_WHATSAPP || '573167064671',
+  // A quién le llega la alerta de pago de suscripción sin confirmar: una
+  // persona (el contacto de la landing), nunca el número del bot.
+  ADMIN_SUSCRIPCION_WHATSAPP: process.env.ADMIN_SUSCRIPCION_WHATSAPP || '573167064671',
 };

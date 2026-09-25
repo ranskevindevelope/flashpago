@@ -56,6 +56,7 @@ const {
   totalGastosDia,
   gastosPorCategoria,
   eliminarGasto,
+  cupoUsuarios,
 } = require('../db');
 const eventos = require('../eventos');
 const salud = require('../salud');
@@ -1516,14 +1517,32 @@ router.get('/usuarios', verificarToken, soloAdmin, (req, res) => {
   );
 });
 
+// Cuántos usuarios activos lleva el negocio y cuántos permite su plan.
+router.get('/usuarios/cupo', verificarToken, soloAdmin, async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await cupoUsuarios(req.user.negocio_id)) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 const ROLES_ASIGNABLES = ['admin', 'empleado'];
 
-router.post('/usuarios', verificarToken, soloAdmin, (req, res) => {
+const errorCupo = (limite) =>
+  `Tu plan permite hasta ${limite} usuarios activos, contando al dueño. Desactiva uno o mejora tu plan para agregar más.`;
+
+router.post('/usuarios', verificarToken, soloAdmin, async (req, res) => {
   const { usuario, password, nombre, rol, whatsapp, email } = req.body;
   const nid = req.user.negocio_id;
   if (!usuario || !password || !nombre || !whatsapp) return res.status(400).json({ ok: false, error: 'Faltan campos' });
   if (!PASSWORD_VALIDA.test(password)) return res.status(400).json({ ok: false, error: PASSWORD_ERROR });
   if (rol && !ROLES_ASIGNABLES.includes(rol)) return res.status(400).json({ ok: false, error: 'Rol no válido' });
+  try {
+    const cupo = await cupoUsuarios(nid);
+    if (cupo.lleno) return res.status(403).json({ ok: false, error: errorCupo(cupo.limite), codigo: 'LIMITE_USUARIOS' });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
 
   const salt = crypto.randomBytes(32).toString('hex');
   const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
@@ -1542,10 +1561,24 @@ router.post('/usuarios', verificarToken, soloAdmin, (req, res) => {
   );
 });
 
-router.put('/usuarios/:id', verificarToken, soloAdmin, (req, res) => {
+router.put('/usuarios/:id', verificarToken, soloAdmin, async (req, res) => {
   const { nombre, rol, whatsapp, email, activo, password } = req.body;
   const nid = req.user.negocio_id;
   if (rol && !ROLES_ASIGNABLES.includes(rol)) return res.status(400).json({ ok: false, error: 'Rol no válido' });
+  // Reactivar a alguien ocupa un cupo, igual que crearlo.
+  if (activo !== undefined && Number(activo) === 1) {
+    try {
+      const actual = await new Promise((resolve, reject) => {
+        db.get('SELECT activo FROM usuarios WHERE id=? AND negocio_id=?', [req.params.id, nid], (err, fila) => (err ? reject(err) : resolve(fila)));
+      });
+      if (actual && !actual.activo) {
+        const cupo = await cupoUsuarios(nid);
+        if (cupo.lleno) return res.status(403).json({ ok: false, error: errorCupo(cupo.limite), codigo: 'LIMITE_USUARIOS' });
+      }
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  }
   const sets = []; const vals = [];
   if (nombre) { sets.push('nombre=?'); vals.push(nombre); }
   if (rol) { sets.push('rol=?'); vals.push(rol); }
