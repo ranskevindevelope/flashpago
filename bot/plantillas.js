@@ -1,7 +1,9 @@
 // bot/plantillas.js — Plantillas de mensajes proactivos de WhatsApp.
 // Los avisos de vencimiento salen fuera de la ventana de 24h de Meta, que ahi
 // solo acepta plantillas aprobadas (error 131047, manejado en openwa.js).
-// `cuerpo` debe ser EXACTAMENTE el texto registrado en el panel de Meta.
+// `cuerpo` debe ser EXACTAMENTE el texto registrado en el panel de Meta, en la
+// cuenta del número del bot. `ejemplo` son las muestras que Meta pide al crearla
+// (scripts/crear-plantillas-meta.js las crea desde aquí).
 
 // "Spanish (COL)" en Meta. Tiene que coincidir exacto: con otro código Meta
 // responde que la plantilla no existe.
@@ -15,9 +17,10 @@ const PLANTILLAS = {
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del negocio', 'cantidad de pagos', 'total recibido'],
+    ejemplo: ['Vinson Burgers', '25', '850.000'],
     cuerpo:
       'Cierre del día en {{1}}: {{2}} pagos confirmados por un total de ${{3}} COP. ' +
-      'Responde a este mensaje para ver el detalle.',
+      'Puedes ver el detalle en flashpago.co/panel.',
   },
 
   verificacion_nocturna: {
@@ -25,9 +28,10 @@ const PLANTILLAS = {
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del negocio', 'cantidad de pagos', 'total recuperado'],
+    ejemplo: ['Vinson Burgers', '2', '45.000'],
     cuerpo:
       'Verificación automática en {{1}}: se confirmaron {{2}} pago(s) que estaban pendientes, ' +
-      'por un total de ${{3}} COP. Responde a este mensaje para ver el detalle.',
+      'por un total de ${{3}} COP. Puedes ver el detalle en flashpago.co/panel.',
   },
 
   pagos_no_confirmados: {
@@ -35,9 +39,10 @@ const PLANTILLAS = {
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del negocio', 'cantidad de pagos'],
+    ejemplo: ['Vinson Burgers', '2'],
     cuerpo:
       'En {{1}} quedaron {{2}} pago(s) sin confirmar: no aparecieron en las notificaciones del banco. ' +
-      'Revísalos manualmente en la app de tu banco o responde a este mensaje para ver cuáles son.',
+      'Revísalos en la app de tu banco. Puedes ver cuáles son en flashpago.co/panel.',
   },
 
   ingresos_sin_comprobante: {
@@ -45,9 +50,10 @@ const PLANTILLAS = {
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del negocio', 'cantidad de transferencias', 'total sin comprobante'],
+    ejemplo: ['Vinson Burgers', '3', '120.000'],
     cuerpo:
       'En {{1}} entraron {{2}} transferencia(s) por ${{3}} COP sin comprobante registrado. ' +
-      'Pide los comprobantes o responde a este mensaje para ver el detalle.',
+      'Pídele los comprobantes a tu equipo para registrarlos.',
   },
 
   plan_por_vencer: {
@@ -55,6 +61,7 @@ const PLANTILLAS = {
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del admin', 'nombre del plan', 'fecha de vencimiento'],
+    ejemplo: ['Kevin', 'Básico', '28/9/2026'],
     cuerpo:
       'Hola {{1}}, tu plan {{2}} de FlashPago vence el {{3}}. ' +
       'Renueva en flashpago.co/panel para que el bot siga verificando tus pagos sin interrupción.',
@@ -65,6 +72,7 @@ const PLANTILLAS = {
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del admin', 'fecha de vencimiento'],
+    ejemplo: ['Kevin', '28/9/2026'],
     cuerpo:
       'Hola {{1}}, tu plan de FlashPago venció el {{2}} y el bot dejó de verificar comprobantes. ' +
       'Tus empleados no podrán validar pagos hasta que renueves en flashpago.co/panel.',
@@ -77,6 +85,7 @@ const PLANTILLAS = {
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del admin', 'fecha de fin de la prueba'],
+    ejemplo: ['Bryan', '28/9/2026'],
     cuerpo:
       'Hola {{1}}, el periodo de prueba de tu cuenta de FlashPago termina el {{2}}. ' +
       'A partir de esa fecha el bot dejará de verificar comprobantes. ' +
@@ -88,6 +97,7 @@ const PLANTILLAS = {
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del admin', 'fecha de fin de la prueba'],
+    ejemplo: ['Bryan', '28/9/2026'],
     cuerpo:
       'Hola {{1}}, el periodo de prueba de tu cuenta de FlashPago terminó el {{2}} y el bot dejó de verificar comprobantes. ' +
       'Tus datos siguen guardados. Puedes revisar el estado de tu cuenta en flashpago.co/panel.',
@@ -98,6 +108,7 @@ const PLANTILLAS = {
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del admin', 'nombre del negocio', 'límite del plan', 'comprobantes de cortesía'],
+    ejemplo: ['Kevin', 'Vinson Burgers', '300', '30'],
     cuerpo:
       'Hola {{1}}, {{2}} llegó a los {{3}} comprobantes incluidos en su plan este mes. ' +
       'El bot seguirá verificando {{4}} comprobantes adicionales de cortesía y después se detendrá hasta el próximo mes. ' +
@@ -109,6 +120,7 @@ const PLANTILLAS = {
     idioma: IDIOMA,
     categoria: 'UTILITY',
     variables: ['nombre del admin', 'nombre del negocio', 'comprobantes usados'],
+    ejemplo: ['Kevin', 'Vinson Burgers', '330'],
     cuerpo:
       'Hola {{1}}, {{2}} usó los {{3}} comprobantes de su plan de este mes, incluida la cortesía, ' +
       'y el bot dejó de verificar pagos. La verificación se reactiva el primer día del próximo mes ' +

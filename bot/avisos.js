@@ -82,7 +82,20 @@ async function avisarNegocio(negocio) {
   return true;
 }
 
+// Las fechas cambian a medianoche: sin esto el aviso le llegaría al dueño de madrugada.
+const HORA_INICIO_AVISOS = 8;
+const HORA_FIN_AVISOS = 20;
+
+function enHorarioDeAvisos(fecha = new Date()) {
+  const hora = Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Bogota', hour: 'numeric', hourCycle: 'h23',
+  }).format(fecha));
+  return hora >= HORA_INICIO_AVISOS && hora < HORA_FIN_AVISOS;
+}
+
 async function revisarVencimientos() {
+  if (!enHorarioDeAvisos()) return 0;
+
   let negocios;
   try {
     negocios = await listarNegocios();
@@ -140,4 +153,4 @@ async function avisarLimite(negocio, tipo, { limite, tope }) {
   return true;
 }
 
-module.exports = { revisarVencimientos, decidirAviso, plantillaAviso, avisarLimite, mesActual, DIAS_AVISO, DIAS_AVISO_ANUAL };
+module.exports = { revisarVencimientos, decidirAviso, plantillaAviso, enHorarioDeAvisos, avisarLimite, mesActual, DIAS_AVISO, DIAS_AVISO_ANUAL };
