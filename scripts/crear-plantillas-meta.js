@@ -39,6 +39,28 @@ async function cuentaDelBot() {
   throw new Error('No encontré la cuenta del número del bot. Pásala con --waba <id>.');
 }
 
+// Autenticación: Meta pone el texto; solo se elige el aviso de seguridad, la expiración y el botón.
+function cargaCreacion(p) {
+  if (p.categoria === 'AUTHENTICATION') {
+    return {
+      name: p.nombre,
+      language: p.idioma,
+      category: p.categoria,
+      components: [
+        { type: 'BODY', add_security_recommendation: true },
+        { type: 'FOOTER', code_expiration_minutes: p.expiraMinutos },
+        { type: 'BUTTONS', buttons: [{ type: 'OTP', otp_type: 'COPY_CODE', text: 'Copiar código' }] },
+      ],
+    };
+  }
+  return {
+    name: p.nombre,
+    language: p.idioma,
+    category: p.categoria,
+    components: [{ type: 'BODY', text: p.cuerpo, example: { body_text: [p.ejemplo] } }],
+  };
+}
+
 async function main() {
   if (!TOKEN || !NUMERO_ID) throw new Error('Faltan META_ACCESS_TOKEN o META_PHONE_NUMBER_ID en el .env');
   const crear = process.argv.includes('--crear');
@@ -59,14 +81,7 @@ async function main() {
       continue;
     }
     try {
-      const r = await graph(`${waba}/message_templates`, {
-        body: {
-          name: p.nombre,
-          language: p.idioma,
-          category: p.categoria,
-          components: [{ type: 'BODY', text: p.cuerpo, example: { body_text: [p.ejemplo] } }],
-        },
-      });
+      const r = await graph(`${waba}/message_templates`, { body: cargaCreacion(p) });
       const aviso = r.category && r.category !== p.categoria ? `  <- OJO: Meta la pasó a ${r.category}` : '';
       console.log(`+ ${p.nombre}: creada, estado ${r.status}${aviso}`);
     } catch (err) {

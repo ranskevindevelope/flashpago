@@ -588,11 +588,16 @@ router.post('/registro/verificar-whatsapp', limitarLogin, async (req, res) => {
       intentos: 0,
     });
 
-    // Enviar código por WhatsApp usando el bot
-    const { enviarMensaje } = require('../bot/openwa');
-    await enviarMensaje(`${numero}@c.us`,
-      `🔐 *FlashPago — Verificación*\n\nTu código de verificación es:\n\n*${codigo}*\n\nExpira en 5 minutos.`
-    );
+    // Con Meta va como plantilla de autenticación: quien se registra nunca le
+    // ha escrito al bot, y fuera de la ventana de 24 h Meta rechaza el texto libre.
+    const { enviarPlantilla } = require('../bot/openwa');
+    const enviado = await enviarPlantilla(`${numero}@c.us`, 'codigo_verificacion', [codigo], {
+      textoOpenwa: `🔐 *FlashPago — Verificación*\n\nTu código de verificación es:\n\n*${codigo}*\n\nExpira en 5 minutos.`,
+    });
+    if (!enviado) {
+      codigosWhatsapp.delete(numero);
+      return res.status(502).json({ ok: false, error: 'No pudimos enviarte el código por WhatsApp. Revisa el número e intenta de nuevo.' });
+    }
 
     console.log(`[Registro] Código WhatsApp enviado a ${numero}`);
     res.json({ ok: true, mensaje: 'Código enviado por WhatsApp' });

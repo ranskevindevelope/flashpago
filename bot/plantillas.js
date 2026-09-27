@@ -126,6 +126,18 @@ const PLANTILLAS = {
       'y el bot dejó de verificar pagos. La verificación se reactiva el primer día del próximo mes ' +
       'o cuando actualices tu plan en flashpago.co/panel.',
   },
+
+  // Código del registro. Autenticación: el texto lo fija Meta ("<código> es tu
+  // código de verificación…") con botón de copiar; `cuerpo` es solo para openwa.
+  codigo_verificacion: {
+    nombre: 'codigo_verificacion',
+    idioma: 'es',
+    categoria: 'AUTHENTICATION',
+    expiraMinutos: 5,
+    variables: ['código'],
+    ejemplo: ['482913'],
+    cuerpo: '🔐 FlashPago: tu código de verificación es {{1}}. Expira en 5 minutos.',
+  },
 };
 
 // Reglas que Meta aplica al aprobar una plantilla. Se validan en los tests para
@@ -165,6 +177,12 @@ function renderizar(clave, variables = []) {
 function cargaMeta(clave, variables = [], destino) {
   const plantilla = obtener(clave);
   renderizar(clave, variables); // valida el numero de variables antes de armar nada
+  const parametros = variables.map((v) => ({ type: 'text', text: String(v) }));
+  const components = [{ type: 'body', parameters: parametros }];
+  // En autenticación el código va también en el botón de "copiar código".
+  if (plantilla.categoria === 'AUTHENTICATION') {
+    components.push({ type: 'button', sub_type: 'url', index: '0', parameters: parametros });
+  }
   return {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
@@ -173,12 +191,7 @@ function cargaMeta(clave, variables = [], destino) {
     template: {
       name: plantilla.nombre,
       language: { code: plantilla.idioma },
-      components: [
-        {
-          type: 'body',
-          parameters: variables.map((v) => ({ type: 'text', text: String(v) })),
-        },
-      ],
+      components,
     },
   };
 }
