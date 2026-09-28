@@ -1,8 +1,58 @@
-# FlashPago
+<p align="center">
+  <img src="dashboard/public/logo.png" width="128" alt="Logo de FlashPago">
+</p>
+
+<h1 align="center">FlashPago</h1>
+
+<p align="center">
+  <b>Verificación automática de pagos por transferencia, directo en WhatsApp.</b><br>
+  No somos una billetera: no movemos tu plata. Solo confirmamos que el pago sí llegó.
+</p>
+
+<p align="center"><a href="https://flashpago.co">flashpago.co</a></p>
+
+El cliente paga por transferencia y le manda el comprobante al empleado. El
+empleado lo reenvía al bot de FlashPago por WhatsApp, y el bot lee el
+comprobante, lo compara con el correo que manda el banco y en segundos
+responde si la plata sí llegó, si ese comprobante ya se había usado o si
+todavía no aparece. Al cierre del turno, el dueño recibe el resumen del día.
+
+> FlashPago está en uso real en un restaurante en Colombia y se encuentra en desarrollo activo.
+
+## ✨ Así se ve
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/capturas/antes-jefe.png" width="250" alt="El empleado le pregunta al jefe si llegó la transferencia"><br><sub>Antes: preguntarle al jefe</sub></td>
+    <td align="center"><img src="docs/capturas/pago-confirmado.png" width="250" alt="El bot confirma el pago en 6 segundos"><br><sub>Con FlashPago: confirmado en segundos</sub></td>
+    <td align="center"><img src="docs/capturas/duplicado.png" width="250" alt="El bot detecta un comprobante duplicado"><br><sub>Comprobante repetido detectado</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/capturas/reenviar.png" width="250" alt="El empleado reenvía el comprobante al bot"><br><sub>Un toque: reenviar al bot</sub></td>
+    <td align="center"><img src="docs/capturas/te-salvaste.png" width="250" alt="Pantalla de cierre: te acabas de salvar de 85.000 pesos"><br><sub>Plata que no se pierde</sub></td>
+    <td align="center"><img src="docs/capturas/6-segundos.png" width="250" alt="6 minutos contra 6 segundos"><br><sub>6 minutos vs. 6 segundos</sub></td>
+  </tr>
+</table>
+
+<sub>Capturas con datos de ejemplo.</sub>
+
+## Qué hace
+
+- ✅ **Confirma cada transferencia** contra el correo del banco (Bancolombia, Nequi y BBVA / Bre-B).
+- 🚫 **Detecta comprobantes repetidos**: un comprobante ya usado no se confirma dos veces.
+- ⏳ **Espera al banco**: si el correo llega tarde, lo sigue buscando 15 minutos y avisa solo.
+- 📊 **Panel web** con los pagos del día, estadísticas, cierre de caja y gastos.
+- 🔔 **Avisos al dueño por WhatsApp**: cierre del turno, pagos sin confirmar e ingresos sin comprobante.
+
+**Hecho con** Node.js, Express, SQLite, React (Vite), Claude para leer los comprobantes, Gmail API, WhatsApp Cloud API de Meta y Wompi.
+
+---
+
+## 🛠️ Documentación técnica
 
 Sistema de verificacion automatica de pagos. No es un bot: es una plataforma
-de verificacion de pagos que usa WhatsApp (mediante OpenWA) como canal de
-entrada. El proyecto recibe comprobantes por WhatsApp, extrae sus datos con
+de verificacion de pagos que usa WhatsApp (API oficial de Meta, con OpenWA
+como respaldo) como canal de entrada. El proyecto recibe comprobantes por WhatsApp, extrae sus datos con
 Claude, comprueba el pago mediante Gmail y registra el resultado en SQLite.
 Tambien incluye un dashboard web con login, reportes y administracion de
 usuarios. Esta instancia esta configurada para Vinson Burgers, pero la
@@ -15,10 +65,10 @@ logica vive en las carpetas `routes/` y `bot/`.
 ## Flujo principal
 
 1. Un empleado reenvia al bot la imagen del comprobante por WhatsApp.
-2. OpenWA envia el evento a `POST /webhook`.
+2. WhatsApp (la API oficial de Meta, u OpenWA como respaldo) envia el evento a `POST /webhook`.
 3. El servidor valida el secreto del webhook y que el remitente este autorizado.
 4. Claude extrae banco, monto, referencia y fecha del comprobante.
-5. Gmail busca una notificacion reciente de Bancolombia con el mismo monto.
+5. Gmail busca una notificacion reciente del banco (Bancolombia, Nequi o BBVA) con el mismo monto.
 6. Si Gmail no confirma el pago, queda como "no encontrado" y el bot lo sigue
    buscando cada 2 minutos durante 15 (el correo del banco a veces llega
    tarde). Si llega, confirma el pago y le avisa al empleado; si no, les avisa
