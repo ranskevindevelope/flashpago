@@ -8,7 +8,7 @@ const path = require('path');
 
 const config = require('./config');
 const { verificarToken, soloAdmin } = require('./auth');
-const { obtenerPagosExportables, listarNegocios, horaCierreDelDia, incluyeReportes } = require('./db');
+const { obtenerPagosExportables, listarNegocios, horaCierreDelDia, incluyeReportes, verificarTrialActivo } = require('./db');
 const { enviarReportePendientes, enviarReporteDiario, buscarIngresosSinComprobante } = require('./bot/reportes');
 const { revisarPendientes, cerrarPendientes, PLAZO_CORREO_MIN } = require('./bot/pendientes');
 const { revisarVencimientos } = require('./bot/avisos');
@@ -369,6 +369,11 @@ setInterval(async () => {
     const horaCierreTurno = sumarMinutos(horaCierreDelDia(neg.hora_cierre, dia), PLAZO_CORREO_MIN);
     if (horaActual !== horaCierreTurno) continue;
 
+    // Prueba o plan vencido: el bot ya no verifica, así que no hay cierre ni reportes
+    // (ni se revisa su Gmail). Si la consulta falla, se deja pasar para no quitarle el reporte a quien paga.
+    const vigencia = await verificarTrialActivo(neg.id).catch(() => ({ activo: true }));
+    if (!vigencia.activo) continue;
+
     if (verificOk) {
       console.log(`[Pendientes] Cierre de turno — ${neg.nombre}`);
       try {
@@ -388,7 +393,7 @@ setInterval(async () => {
       console.log(`[Reporte] Enviando reporte diario — ${neg.nombre}`);
       try {
         await buscarIngresosSinComprobante(neg.id);
-        await enviarReporteDiario(neg.id);
+        await enviarReporteDiario(neg.id, { omitirSinPagos: true });
       } catch (err) {
         console.error(`[Scheduler] Error en reporte del negocio ${neg.id} (${neg.nombre}):`, err.message);
       }

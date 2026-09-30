@@ -30,3 +30,6 @@ loadtest/
 
 # test pruebas
 test/
+
+# generar token
+generar-token.js/

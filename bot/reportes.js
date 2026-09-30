@@ -28,9 +28,15 @@ function obtenerAdminsNegocio(negocio_id) {
   });
 }
 
-async function enviarReporteDiario(negocio_id = 1) {
+// `omitirSinPagos`: el reporte automático no sale en días sin pagos (la plantilla diría "0 pagos por $0").
+// El comando "reporte" sí responde aunque sea con 0, porque el dueño lo pidió.
+async function enviarReporteDiario(negocio_id = 1, { omitirSinPagos = false } = {}) {
   try {
     const { total, cantidad, pagoMasAlto } = await resumenDelDia(negocio_id);
+    if (cantidad === 0 && omitirSinPagos) {
+      console.log(`[Reporte] Sin pagos hoy; no se envía el reporte automático (negocio ${negocio_id})`);
+      return;
+    }
     const fecha = new Date().toLocaleDateString('es-CO');
 
     let negocioNombre = 'FlashPago';
