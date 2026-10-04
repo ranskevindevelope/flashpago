@@ -134,6 +134,9 @@ function Dashboard({ onLogout }) {
   const [diasOperacion, setDiasOperacion] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [cargandoConfig, setCargandoConfig] = useState(false);
   const [guardandoConfig, setGuardandoConfig] = useState(false);
+  const [modoRegistro, setModoRegistro] = useState('comprobante');
+  const [modoRegistroGuardado, setModoRegistroGuardado] = useState('comprobante');
+  const [guardandoModo, setGuardandoModo] = useState(false);
   const [modalEliminarCuenta, setModalEliminarCuenta] = useState(false);
   const [eliminandoCuenta, setEliminandoCuenta] = useState(false);
   const [holdEliminarProgreso, setHoldEliminarProgreso] = useState(0);
@@ -406,6 +409,8 @@ function Dashboard({ onLogout }) {
       if (data.ok) {
         setHoraCierre(data.hora_cierre);
         setDiasOperacion(data.dias_operacion);
+        setModoRegistro(data.modo_registro || 'comprobante');
+        setModoRegistroGuardado(data.modo_registro || 'comprobante');
       }
     } catch (err) {
       toast.error('Error cargando la configuración');
@@ -479,6 +484,25 @@ function Dashboard({ onLogout }) {
       toast.error('Error de conexión');
     }
     setGuardandoConfig(false);
+  };
+
+  const guardarModoRegistro = async () => {
+    setGuardandoModo(true);
+    try {
+      const data = await api.request('/api/negocio/modo-registro', {
+        method: 'PUT',
+        body: JSON.stringify({ modo: modoRegistro }),
+      });
+      if (data.ok) {
+        setModoRegistroGuardado(modoRegistro);
+        toast.success('Modo de registro guardado');
+      } else {
+        toast.error(data.error || 'Error guardando el modo de registro');
+      }
+    } catch (err) {
+      toast.error('Error de conexión');
+    }
+    setGuardandoModo(false);
   };
 
   // ─── Funciones de método de pago ───────────────────────
@@ -871,6 +895,8 @@ function Dashboard({ onLogout }) {
       const data = await api.request('/api/gmail/desconectar', { method: 'DELETE' });
       if (data.ok) {
         setGmailEstado({ ok: true, conectado: false, email: null });
+        setModoRegistro('comprobante');
+        setModoRegistroGuardado('comprobante');
         toast.success('Gmail desconectado');
       }
     } catch (err) {
@@ -2185,6 +2211,89 @@ function Dashboard({ onLogout }) {
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* ─── Registro de pagos ─────────────── */}
+            <div className="seccion">
+              <div className="seccion-header">
+                <h2 className="seccion-titulo"><Zap size={18} /> Registro de pagos</h2>
+              </div>
+              <p style={{ color: 'var(--dash-text-muted)', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: 1.6, maxWidth: 520 }}>
+                Elige cómo quieres que se registren los pagos de tu negocio. Puedes cambiarlo cuando quieras.
+              </p>
+              <div style={{ display: 'grid', gap: 10, maxWidth: 520, marginBottom: '1rem' }}>
+                {[
+                  {
+                    valor: 'comprobante',
+                    titulo: 'Manual, con comprobante',
+                    desc: 'Tu equipo envía el pantallazo por WhatsApp y recibe la confirmación al instante.',
+                  },
+                  {
+                    valor: 'automatico',
+                    titulo: 'Automático',
+                    desc: 'FlashPago lee las notificaciones de tu banco y registra cada pago solo. Tu equipo no envía nada.',
+                    bloqueado: !gmailEstado?.conectado,
+                    aviso: 'Conecta tu Gmail arriba para poder activarlo.',
+                  },
+                ].map((op) => {
+                  const elegido = modoRegistro === op.valor;
+                  return (
+                    <label
+                      key={op.valor}
+                      style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 12, padding: '0.85rem 1.1rem', borderRadius: 12,
+                        cursor: op.bloqueado ? 'not-allowed' : 'pointer', opacity: op.bloqueado ? 0.6 : 1,
+                        background: elegido ? 'var(--tint-orange-bg)' : 'var(--dash-surface)',
+                        border: `2px solid ${elegido ? '#F57C00' : 'var(--dash-border)'}`,
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="modo-registro"
+                        value={op.valor}
+                        checked={elegido}
+                        disabled={op.bloqueado}
+                        onChange={() => setModoRegistro(op.valor)}
+                        style={{ marginTop: 3, accentColor: '#F57C00' }}
+                      />
+                      <span>
+                        <span style={{ display: 'block', fontWeight: 700, fontSize: '0.92rem', color: 'var(--dash-text)' }}>
+                          {op.titulo}
+                          {modoRegistroGuardado === op.valor && (
+                            <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#F57C00', color: '#fff' }}>
+                              Activo
+                            </span>
+                          )}
+                        </span>
+                        <span style={{ display: 'block', fontSize: '0.84rem', color: 'var(--dash-text-muted)', marginTop: 2, lineHeight: 1.5 }}>
+                          {op.bloqueado ? op.aviso : op.desc}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {modoRegistro === 'automatico' && (
+                <div style={{
+                  display: 'flex', gap: 10, marginBottom: '1rem', maxWidth: 520,
+                  padding: '0.85rem 1.1rem', borderRadius: 10,
+                  background: 'var(--tint-orange-bg)', border: '1px solid var(--tint-orange-fg)',
+                }}>
+                  <AlertTriangle size={16} color="var(--tint-orange-fg)" style={{ flexShrink: 0, marginTop: 1 }} />
+                  <p style={{ fontSize: '0.83rem', color: 'var(--tint-orange-fg)', lineHeight: 1.6, margin: 0 }}>
+                    En modo automático tu equipo no recibe aviso en caja cuando entra un pago.
+                    Lo verás al instante en este dashboard.
+                  </p>
+                </div>
+              )}
+              <Button
+                onClick={guardarModoRegistro}
+                loading={guardandoModo}
+                disabled={modoRegistro === modoRegistroGuardado}
+                icon={<Save size={15} />}
+              >
+                {guardandoModo ? 'Guardando...' : 'Guardar modo de registro'}
+              </Button>
             </div>
 
             {/* ─── Avisos fuera del navegador ───────── */}

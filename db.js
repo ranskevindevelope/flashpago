@@ -109,6 +109,19 @@ db.run(`
         console.error('[DB] Error migrando banco:', err.message);
       }
     });
+    // Cómo se registran los pagos: 'comprobante' (el empleado manda el pantallazo)
+    // o 'automatico' (se leen del correo del banco). auto_desde: epoch en segundos
+    // del momento en que se activó el automático; antes de eso no se importa nada.
+    db.run(`ALTER TABLE negocios ADD COLUMN modo_registro TEXT DEFAULT 'comprobante'`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('[DB] Error migrando modo_registro:', err.message);
+      }
+    });
+    db.run(`ALTER TABLE negocios ADD COLUMN auto_desde INTEGER`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('[DB] Error migrando auto_desde:', err.message);
+      }
+    });
 
     // El CHECK de "plan" quedó grabado sin "premium_plus" en tablas viejas.
     // SQLite no permite alterar un CHECK, así que se reconstruye la tabla
@@ -459,6 +472,24 @@ function obtenerNegocio(id) {
     db.get(`SELECT * FROM negocios WHERE id = ? AND activo = 1`, [id], (err, row) => {
       if (err) reject(err);
       else resolve(row);
+    });
+  });
+}
+
+const MODOS_REGISTRO = ['comprobante', 'automatico'];
+
+// Cambia el modo de registro. Si ya estaba en ese modo no toca nada, para que
+// guardar de nuevo no mueva auto_desde. Devuelve false si el negocio no existe.
+async function actualizarModoRegistro(negocio_id, modo) {
+  if (!MODOS_REGISTRO.includes(modo)) throw new Error(`Modo de registro inválido: ${modo}`);
+  const negocio = await obtenerNegocio(negocio_id);
+  if (!negocio) return false;
+  if ((negocio.modo_registro || 'comprobante') === modo) return true;
+  const desde = modo === 'automatico' ? Math.floor(Date.now() / 1000) : null;
+  return new Promise((resolve, reject) => {
+    db.run('UPDATE negocios SET modo_registro = ?, auto_desde = ? WHERE id = ?', [modo, desde, negocio_id], function (err) {
+      if (err) reject(err);
+      else resolve(this.changes > 0);
     });
   });
 }
@@ -1548,6 +1579,8 @@ module.exports = {
   yaSeAviso,
   registrarAviso,
   actualizarHorarioNegocio,
+  MODOS_REGISTRO,
+  actualizarModoRegistro,
   parsearHoraCierre,
   horaCierreDelDia,
   contarComprobantesDelMes,

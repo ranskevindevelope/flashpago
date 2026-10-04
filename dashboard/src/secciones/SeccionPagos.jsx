@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import {
   DollarSign, CreditCard, Shield, AlertTriangle, BarChart3, Download,
-  ArrowUp, ArrowDown, Moon, Mail, Eye,
+  ArrowUp, ArrowDown, Moon, Mail, Eye, Zap,
 } from 'lucide-react';
 import { formatearMonto } from '../utils/formato';
 import { getBancoBadge } from '../utils/bancos';
@@ -279,8 +279,10 @@ export default function SeccionPagos({
                       <td>{pago.fecha || '-'}</td>
                       <td>{pago.hora || '-'}</td>
                       <td>
-                        <span className={`fuente-badge ${['gmail_nocturna', 'gmail_asincronica'].includes(pago.fuente) ? 'fuente-nocturna' : 'fuente-gmail'}`}>
-                          {['gmail_nocturna', 'gmail_asincronica'].includes(pago.fuente) ? <><Moon size={11} /> asincronica</> : <><Mail size={11} /> Gmail</>}
+                        <span className={`fuente-badge ${['gmail_nocturna', 'gmail_asincronica', 'auto'].includes(pago.fuente) ? 'fuente-nocturna' : 'fuente-gmail'}`}>
+                          {pago.fuente === 'auto'
+                            ? <><Zap size={11} /> Automático</>
+                            : ['gmail_nocturna', 'gmail_asincronica'].includes(pago.fuente) ? <><Moon size={11} /> asincronica</> : <><Mail size={11} /> Gmail</>}
                         </span>
                       </td>
                       <td>

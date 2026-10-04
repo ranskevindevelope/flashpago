@@ -37,6 +37,8 @@ const {
   obtenerNegocio,
   listarNegocios,
   actualizarHorarioNegocio,
+  MODOS_REGISTRO,
+  actualizarModoRegistro,
   parsearHoraCierre,
   LIMITES_PLAN,
   topeConMargen,
@@ -912,9 +914,11 @@ router.get('/gmail/callback', async (req, res) => {
 router.delete('/gmail/desconectar', verificarToken, soloAdmin, async (req, res) => {
   try {
     const nid = req.user.negocio_id;
-    db.run('DELETE FROM tokens_gmail WHERE negocio_id = ?', [nid], function (err) {
+    db.run('DELETE FROM tokens_gmail WHERE negocio_id = ?', [nid], async function (err) {
       if (err) return res.status(500).json({ ok: false, error: err.message });
       console.log(`[Gmail] Desconectado para negocio ${nid}`);
+      // Sin Gmail el registro automático no puede funcionar: vuelve a comprobantes.
+      await actualizarModoRegistro(nid, 'comprobante').catch((e) => console.error('[Gmail] No se pudo volver a modo comprobante:', e.message));
       res.json({ ok: true, mensaje: 'Gmail desconectado' });
     });
   } catch (err) {
@@ -1462,6 +1466,7 @@ router.get('/negocio/configuracion', verificarToken, soloAdmin, async (req, res)
       ok: true,
       hora_cierre,
       dias_operacion,
+      modo_registro: negocio.modo_registro || 'comprobante',
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -1486,6 +1491,24 @@ router.put('/negocio/configuracion', verificarToken, soloAdmin, async (req, res)
 
     await actualizarHorarioNegocio(req.user.negocio_id, { hora_cierre: JSON.stringify(hora_cierre), dias_operacion });
     res.json({ ok: true, mensaje: 'Configuración actualizada' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Cómo se registran los pagos: con comprobante (manual) o automático desde el correo del banco.
+router.put('/negocio/modo-registro', verificarToken, soloAdmin, async (req, res) => {
+  try {
+    const { modo } = req.body;
+    if (!MODOS_REGISTRO.includes(modo)) {
+      return res.status(400).json({ ok: false, error: 'Modo de registro inválido' });
+    }
+    if (modo === 'automatico' && !(await obtenerTokenGmail(req.user.negocio_id))) {
+      return res.status(400).json({ ok: false, error: 'Conecta tu Gmail antes de activar el registro automático' });
+    }
+    const existe = await actualizarModoRegistro(req.user.negocio_id, modo);
+    if (!existe) return res.status(404).json({ ok: false, error: 'Negocio no encontrado' });
+    res.json({ ok: true, modo });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

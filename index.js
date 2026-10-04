@@ -1,5 +1,6 @@
 // index.js — Punto de entrada del servidor (multi-negocio)
 require('dotenv').config();
+const sentry = require('./instrument'); // antes que express, para que alcance a vigilarlo
 const express = require('express');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
@@ -11,6 +12,7 @@ const { verificarToken, soloAdmin } = require('./auth');
 const { obtenerPagosExportables, listarNegocios, horaCierreDelDia, incluyeReportes, verificarTrialActivo } = require('./db');
 const { enviarReportePendientes, enviarReporteDiario, buscarIngresosSinComprobante } = require('./bot/reportes');
 const { revisarPendientes, cerrarPendientes, PLAZO_CORREO_MIN } = require('./bot/pendientes');
+const { registrarIngresosAutomaticos } = require('./bot/auto-registro');
 const { revisarVencimientos } = require('./bot/avisos');
 const { ejecutarCobrosAutomaticos } = require('./bot/cobros-automaticos');
 const { esFestivo, esFinDeSemana } = require('./bot/festivos');
@@ -392,7 +394,8 @@ setInterval(async () => {
     if (reporteOk) {
       console.log(`[Reporte] Enviando reporte diario — ${neg.nombre}`);
       try {
-        await buscarIngresosSinComprobante(neg.id);
+        // En registro automático todo ingreso ya se guarda solo: no hay "sin comprobante".
+        if (neg.modo_registro !== 'automatico') await buscarIngresosSinComprobante(neg.id);
         await enviarReporteDiario(neg.id, { omitirSinPagos: true });
       } catch (err) {
         console.error(`[Scheduler] Error en reporte del negocio ${neg.id} (${neg.nombre}):`, err.message);
@@ -406,6 +409,11 @@ setInterval(async () => {
 // ─── Pagos "no encontrado": se buscan cada 2 min durante su plazo ─
 setInterval(() => {
   revisarPendientes().catch((err) => console.error('[Pendientes] Error:', err.message));
+}, 2 * 60 * 1000);
+
+// ─── Registro automático: ingresos del banco → pagos, cada 2 min ─
+setInterval(() => {
+  registrarIngresosAutomaticos().catch((err) => console.error('[AutoRegistro] Error:', err.message));
 }, 2 * 60 * 1000);
 
 // ─── Avisos de vencimiento de plan ────────────────────────
@@ -429,6 +437,9 @@ app.use((req, res) => {
   }
   res.status(404).send(paginaError(404, 'Página no encontrada', 'La página que buscas no existe o fue movida.', { mascota: 'imagen' }));
 });
+
+// ─── Errores de las rutas → Sentry (va después de todas las rutas) ──
+if (sentry.activo) sentry.Sentry.setupExpressErrorHandler(app);
 
 // ─── Iniciar servidor ─────────────────────────────────────
 const PORT = process.env.PORT || 3000;

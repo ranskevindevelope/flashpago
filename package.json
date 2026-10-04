@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "FlashPago: verificacion automatica de pagos por WhatsApp",
   "dependencies": {
+    "@sentry/node": "^11.4.0",
     "axios": "^1.16.1",
     "cookie-parser": "^1.4.7",
     "dayjs": "^1.11.20",

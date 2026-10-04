@@ -89,6 +89,10 @@ function esIngreso(snippet, cuerpo) {
   if (/retiraste|retiró|retiro|debitaste|pagaste|descont|cajero|de tu t\.deb|de tu t deb|de su t\.deb|compra|compraste|folios?|avance|retiro en/i.test(texto)) {
     return false;
   }
+  // Transferencias enviadas y nómina recibida no son ventas. Solo en el snippet: el pie de BBVA puede traer "realizaste".
+  if (/transferiste|enviaste|realizaste|pago de n[oó]mina/i.test(snippet)) {
+    return false;
+  }
 
   // ✅ Requerir señales claras de INGRESO (transferencias recibidas)
   return /recibiste|recibido|recibida|recibimos|consignaci|abono|un pago de|una transferencia|transferencia de|te hicieron|te realizaron|a tu cuenta|a su cuenta|ingresó|ingreso de|depósito|deposito/i.test(texto);
@@ -336,4 +340,70 @@ async function listarIngresosDelDia(negocio_id = 1) {
   }
 }
 
-module.exports = { verificarPorGmail, listarIngresosDelDia, extraerMontoYNombre, esIngreso };
+// ─── Ingresos nuevos desde un momento (registro automático) ───
+//  A diferencia de listarIngresosDelDia, no exige correos sin leer ni se queda en 20:
+//  recorre todas las páginas de la ventana. `desde` son segundos desde 1970.
+//  `filtrarIds(ids)` devuelve cuáles correos vale la pena leer (así no se vuelven a
+//  pedir los que ya se evaluaron). Resuelve null si el negocio no tiene Gmail conectado;
+//  un error de Gmail se propaga. `evaluados` son los correos que sí se pudieron leer.
+const MAX_CORREOS_AUTOMATICO = 500;
+
+// BBVA solo escribe de Bre-B; así los etiqueta el OCR en el flujo con comprobante.
+function bancoDelRemitente(remitente) {
+  if (/bbva\.com/i.test(remitente || '')) return 'breb';
+  if (/nequi\.com\.co/i.test(remitente || '')) return 'nequi';
+  return 'bancolombia';
+}
+
+async function listarIngresosDesde(negocio_id, desde, filtrarIds = async (ids) => ids) {
+  const auth = await getAuth(negocio_id);
+  if (!auth) return null;
+
+  const gmail = google.gmail({ version: 'v1', auth });
+  const ids = [];
+  let pageToken;
+  do {
+    const res = await gmail.users.messages.list({
+      userId: 'me',
+      q: `${QUERY_REMITENTES} after:${desde}`,
+      maxResults: 100,
+      pageToken,
+    });
+    for (const m of res.data.messages || []) ids.push(m.id);
+    pageToken = res.data.nextPageToken;
+  } while (pageToken && ids.length < MAX_CORREOS_AUTOMATICO);
+
+  const ingresos = [];
+  const evaluados = [];
+  for (const id of await filtrarIds(ids)) {
+    let detalle;
+    try {
+      detalle = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
+    } catch (err) {
+      console.error(`[Gmail] No se pudo leer el correo ${id} (se reintenta):`, err.message);
+      continue;
+    }
+    evaluados.push(id);
+    if (!llegoEnVentana(detalle, { desde })) continue;
+
+    const snippet = detalle.data.snippet || '';
+    const remitente = obtenerRemitente(detalle);
+    const cuerpo = cuerpoSiHaceFalta(detalle, remitente);
+    if (!esIngreso(snippet, cuerpo)) continue;
+    const extraido = extraerMontoYNombre(snippet, remitente, cuerpo);
+    if (!extraido) continue;
+
+    ingresos.push({
+      gmail_id: id,
+      monto: extraido.monto,
+      nombre: extraido.nombre,
+      banco: bancoDelRemitente(remitente),
+      llegada: Number(detalle.data.internalDate) / 1000 || null,
+    });
+  }
+  // Gmail entrega primero los más nuevos; se registran en el orden en que llegaron.
+  ingresos.sort((a, b) => (a.llegada || 0) - (b.llegada || 0));
+  return { ingresos, evaluados };
+}
+
+module.exports = { verificarPorGmail, listarIngresosDelDia, listarIngresosDesde, extraerMontoYNombre, esIngreso };

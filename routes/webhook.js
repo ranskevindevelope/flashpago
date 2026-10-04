@@ -10,7 +10,7 @@ const { verificarPago } = require('../verificador');
 const {
   db, guardarPago, buscarDuplicadoReciente, correoUsadoPorOtroPago, marcarIntentosAnteriores, contarComprobantesDelMes, obtenerNegocio, verificarTrialActivo,
   marcarNegocioPagado, actualizarPagoPlataforma, obtenerAdminDeNegocio, planBase, asociarWhatsappNegocio,
-  asociarWhatsappUsuario, topeConMargen,
+  asociarWhatsappUsuario, topeConMargen, obtenerTokenGmail,
 } = require('../db');
 const { avisarLimite } = require('../bot/avisos');
 const { enviarMensaje, descargarMediaMeta, resolverLid } = require('../bot/openwa');
@@ -108,6 +108,7 @@ const MENSAJES = {
   errorLectura: `No pude leer bien ese comprobante. Asegúrate de que la imagen sea clara y completa.`,
   limitePlan: `⚠️ Este negocio alcanzó el límite de comprobantes del mes. Contacta al administrador para mejorar el plan.`,
   limiteRafaga: `⚠️ Estás enviando comprobantes muy rápido. Espera un minuto e intenta de nuevo.`,
+  registroAutomatico: `ℹ️ Este negocio registra los pagos automáticamente. Ya no hace falta enviar comprobantes: cada pago aparece solo en el dashboard.`,
 };
 
 // Límite de ráfaga por remitente: el límite mensual del plan no frena un
@@ -408,6 +409,12 @@ router.post('/', async (req, res) => {
   let negocio;
   try {
     negocio = await obtenerNegocio(negocio_id);
+    // Registro automático: los pagos entran solos. Sin Gmail conectado no hay quién los
+    // registre, así que ahí se sigue procesando el comprobante como siempre.
+    if (negocio?.modo_registro === 'automatico' && await obtenerTokenGmail(negocio_id)) {
+      await enviarMensaje(from, MENSAJES.registroAutomatico);
+      return;
+    }
     // Plan ilimitado = sin tope de comprobantes, sin importar el plan que figure.
     if (negocio && !negocio.plan_ilimitado) {
       const usados = await contarComprobantesDelMes(negocio_id);

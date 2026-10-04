@@ -4,6 +4,8 @@
 // Vive en memoria a propósito: interesa el estado de ahora, arranca
 // limpio en cada despliegue.
 
+const { Sentry, activo: sentryActivo } = require('./instrument');
+
 const VENTANA_MS = 15 * 60 * 1000; // se considera "reciente" lo de 15 minutos
 const MAX_GUARDADOS = 40;
 
@@ -18,6 +20,7 @@ const ETIQUETAS = {
   sesion: 'la sesión de WhatsApp (puede necesitar reconectarse)',
   envio: 'envío de mensajes por WhatsApp',
   webhook: 'procesamiento de comprobantes',
+  registro_auto: 'el registro automático de pagos (revisa la conexión de Gmail)',
 };
 
 // Nunca lanza: registrar una falla jamás debe provocar otra.
@@ -30,6 +33,8 @@ function registrar(tipo, detalle, negocio_id) {
       en: Date.now(),
     });
     if (incidentes.length > MAX_GUARDADOS) incidentes.splice(0, incidentes.length - MAX_GUARDADOS);
+    // También a Sentry, solo con el tipo y el negocio: el detalle puede traer datos personales.
+    if (sentryActivo) Sentry.captureMessage(`Falla: ${tipo}`, { level: 'warning', tags: { tipo, negocio_id: String(negocio_id || '') } });
   } catch {
     // sin ruido
   }
