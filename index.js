@@ -411,10 +411,10 @@ setInterval(() => {
   revisarPendientes().catch((err) => console.error('[Pendientes] Error:', err.message));
 }, 2 * 60 * 1000);
 
-// ─── Registro automático: ingresos del banco → pagos, cada 2 min ─
+// ─── Registro automático: ingresos del banco → pagos, cada 30 s ─
 setInterval(() => {
   registrarIngresosAutomaticos().catch((err) => console.error('[AutoRegistro] Error:', err.message));
-}, 2 * 60 * 1000);
+}, 30 * 1000);
 
 // ─── Avisos de vencimiento de plan ────────────────────────
 // Cada hora, no una vez al día: si el proceso se reinicia justo al chequeo,

@@ -17,7 +17,7 @@ let registrando = false;
 // negocio_id -> correos ya evaluados que no hace falta volver a pedir a Gmail.
 const vistos = new Map();
 
-// Corre cada 2 minutos (index.js). Con negocio_id revisa solo ese negocio.
+// Corre cada 30 segundos (index.js). Con negocio_id revisa solo ese negocio.
 // Devuelve la cantidad de pagos registrados, o null si ya había otra revisión en curso.
 async function registrarIngresosAutomaticos({ negocio_id } = {}) {
   if (registrando) return null;
