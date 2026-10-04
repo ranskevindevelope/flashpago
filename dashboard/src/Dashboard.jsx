@@ -9,6 +9,7 @@ import IndicadorActualizacion from './components/IndicadorActualizacion';
 import Button from './components/ui/Button';
 import ModalConfirmacion from './components/ModalConfirmacion';
 import ModalConfirmarWhatsapp from './components/ModalConfirmarWhatsapp';
+import VerificacionAutomatico from './components/VerificacionAutomatico';
 import { FilaSkeleton, TarjetaSkeleton } from './components/ui/Skeleton';
 import SeccionBuscar from './secciones/SeccionBuscar';
 import SeccionUsuarios from './secciones/SeccionUsuarios';
@@ -59,6 +60,16 @@ const PLANES_PRECIOS = [
 
 // Plan al que se sube desde el actual; Premium Plus pasa a Empresarial (ventas).
 const PLAN_SIGUIENTE = { basico: 'premium', premium: 'premium_plus' };
+
+// Pasos de la verificación al activar el registro automático. Las claves deben coincidir
+// con las de bot/preparacion-automatico.js (el texto final de cada paso lo manda el servidor).
+const PASOS_ACTIVACION = [
+  { clave: 'conexion', titulo: 'Verificando conexión con Gmail…' },
+  { clave: 'notificaciones', titulo: 'Buscando los avisos de tu banco…' },
+  { clave: 'velocidad', titulo: 'Verificando velocidad…' },
+  { clave: 'plan', titulo: 'Verificando tu plan…' },
+  { clave: 'pendientes', titulo: 'Revisando pagos pendientes…' },
+];
 
 function Dashboard({ onLogout }) {
   const getInitialSection = () => {
@@ -137,6 +148,8 @@ function Dashboard({ onLogout }) {
   const [modoRegistro, setModoRegistro] = useState('comprobante');
   const [modoRegistroGuardado, setModoRegistroGuardado] = useState('comprobante');
   const [guardandoModo, setGuardandoModo] = useState(false);
+  const [activacion, setActivacion] = useState(null); // panel del rayo al activar el automático
+  const activacionRef = useRef(0); // sube al cancelar o reiniciar, para que un intento viejo no pise al nuevo
   const [modalEliminarCuenta, setModalEliminarCuenta] = useState(false);
   const [eliminandoCuenta, setEliminandoCuenta] = useState(false);
   const [holdEliminarProgreso, setHoldEliminarProgreso] = useState(0);
@@ -486,7 +499,89 @@ function Dashboard({ onLogout }) {
     setGuardandoConfig(false);
   };
 
+  const cerrarActivacion = () => {
+    activacionRef.current += 1;
+    setActivacion(null);
+    setGuardandoModo(false);
+  };
+
+  // El servidor activa solo si el cliente lo confirma, o si todas las comprobaciones salen bien.
+  const confirmarActivacion = async () => {
+    const turno = activacionRef.current;
+    setGuardandoModo(true);
+    try {
+      const data = await api.request('/api/negocio/modo-registro', {
+        method: 'PUT',
+        body: JSON.stringify({ modo: 'automatico' }),
+      });
+      if (turno !== activacionRef.current) return;
+      if (data.ok) {
+        setModoRegistroGuardado('automatico');
+        setActivacion((prev) => prev && { ...prev, fase: 'listo', progreso: 100, mensaje: null });
+        toast.success('Registro automático activado');
+      } else {
+        setActivacion((prev) => prev && { ...prev, fase: 'error', mensaje: data.error || 'No se pudo activar el registro automático' });
+      }
+    } catch (err) {
+      if (turno === activacionRef.current) {
+        setActivacion((prev) => prev && { ...prev, fase: 'error', mensaje: 'Error de conexión' });
+      }
+    }
+    if (turno === activacionRef.current) setGuardandoModo(false);
+  };
+
+  // Comprobaciones reales en el servidor, mostradas paso a paso con el rayo.
+  const activarModoAutomatico = async () => {
+    const turno = ++activacionRef.current;
+    const pausa = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 550;
+    const inicial = PASOS_ACTIVACION.map((p, i) => ({ ...p, estado: i === 0 ? 'corriendo' : 'pendiente' }));
+    setGuardandoModo(true);
+    setActivacion({ fase: 'corriendo', pasos: inicial, progreso: 5, mensaje: null });
+
+    let resultado = null;
+    try {
+      resultado = await api.request('/api/negocio/modo-registro/verificar', { method: 'POST' });
+    } catch (err) {
+      resultado = null;
+    }
+    if (turno !== activacionRef.current) return;
+    if (!resultado?.ok) {
+      setActivacion({
+        fase: 'error',
+        pasos: inicial.map((p) => ({ ...p, estado: 'pendiente' })),
+        progreso: 0,
+        mensaje: resultado?.error || 'No se pudo comprobar. Revisa tu conexión e intenta de nuevo.',
+      });
+      setGuardandoModo(false);
+      return;
+    }
+
+    // Los pasos se revelan de a uno, con una pausa corta, para que se alcance a leer qué se comprobó.
+    const pasos = inicial.map((p) => ({ ...p }));
+    for (let i = 0; i < resultado.pasos.length; i++) {
+      const r = resultado.pasos[i];
+      const idx = pasos.findIndex((p) => p.clave === r.clave);
+      if (idx === -1) continue;
+      pasos[idx] = { ...pasos[idx], estado: r.estado, detalle: r.detalle };
+      if (pasos[idx + 1] && pasos[idx + 1].estado === 'pendiente') pasos[idx + 1] = { ...pasos[idx + 1], estado: 'corriendo' };
+      const progreso = Math.round(((i + 1) / resultado.pasos.length) * 100);
+      setActivacion((prev) => prev && { ...prev, pasos: pasos.map((p) => ({ ...p })), progreso });
+      await new Promise((resolver) => setTimeout(resolver, pausa));
+      if (turno !== activacionRef.current) return;
+    }
+    setGuardandoModo(false);
+
+    if (!resultado.listo) {
+      setActivacion((prev) => prev && { ...prev, fase: 'error' });
+    } else if (resultado.hayAvisos) {
+      setActivacion((prev) => prev && { ...prev, fase: 'aviso' });
+    } else {
+      await confirmarActivacion();
+    }
+  };
+
   const guardarModoRegistro = async () => {
+    if (modoRegistro === 'automatico') return activarModoAutomatico();
     setGuardandoModo(true);
     try {
       const data = await api.request('/api/negocio/modo-registro', {
@@ -897,6 +992,7 @@ function Dashboard({ onLogout }) {
         setGmailEstado({ ok: true, conectado: false, email: null });
         setModoRegistro('comprobante');
         setModoRegistroGuardado('comprobante');
+        setActivacion(null);
         toast.success('Gmail desconectado');
       }
     } catch (err) {
@@ -2253,7 +2349,7 @@ function Dashboard({ onLogout }) {
                         value={op.valor}
                         checked={elegido}
                         disabled={op.bloqueado}
-                        onChange={() => setModoRegistro(op.valor)}
+                        onChange={() => { cerrarActivacion(); setModoRegistro(op.valor); }}
                         style={{ marginTop: 3, accentColor: '#F57C00' }}
                       />
                       <span>
@@ -2273,7 +2369,7 @@ function Dashboard({ onLogout }) {
                   );
                 })}
               </div>
-              {modoRegistro === 'automatico' && (
+              {modoRegistro === 'automatico' && !activacion && (
                 <div style={{
                   display: 'flex', gap: 10, marginBottom: '1rem', maxWidth: 520,
                   padding: '0.85rem 1.1rem', borderRadius: 10,
@@ -2286,13 +2382,21 @@ function Dashboard({ onLogout }) {
                   </p>
                 </div>
               )}
+              {activacion && (
+                <VerificacionAutomatico
+                  {...activacion}
+                  onActivar={confirmarActivacion}
+                  onCancelar={cerrarActivacion}
+                  onReintentar={activarModoAutomatico}
+                />
+              )}
               <Button
                 onClick={guardarModoRegistro}
                 loading={guardandoModo}
-                disabled={modoRegistro === modoRegistroGuardado}
+                disabled={modoRegistro === modoRegistroGuardado || (activacion && activacion.fase !== 'error')}
                 icon={<Save size={15} />}
               >
-                {guardandoModo ? 'Guardando...' : 'Guardar modo de registro'}
+                {guardandoModo ? (activacion ? 'Comprobando…' : 'Guardando...') : 'Guardar modo de registro'}
               </Button>
             </div>
 

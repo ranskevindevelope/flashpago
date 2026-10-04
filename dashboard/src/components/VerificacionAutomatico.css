@@ -1,0 +1,37 @@
+.verif-auto {
+  max-width: 520px; margin-bottom: 1rem; padding: 1rem 1.1rem; border-radius: 12px;
+  border: 1px solid var(--dash-border); background: var(--dash-surface-2);
+}
+.verif-auto--listo { border-color: var(--tint-green-fg); background: var(--tint-green-bg); }
+.verif-auto--aviso { border-color: var(--tint-orange-fg); background: var(--tint-orange-bg); }
+.verif-auto--error { border-color: var(--tint-red-fg); background: var(--tint-red-bg); }
+
+.verif-auto__titulo { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: var(--dash-text); margin-bottom: 0.8rem; }
+
+.verif-barra { position: relative; height: 8px; border-radius: 999px; background: var(--dash-border); margin: 0.3rem 0 1rem; }
+.verif-barra__relleno { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFB74D, #F57C00); transition: width 0.45s ease; }
+.verif-barra__rayo { position: absolute; top: 50%; transform: translate(-50%, -50%); transition: left 0.45s ease; }
+
+.verif-pasos { list-style: none; margin: 0; padding: 0; }
+.verif-paso { display: flex; align-items: flex-start; gap: 10px; padding: 0.28rem 0; font-size: 0.86rem; line-height: 1.45; color: var(--dash-text-muted); }
+.verif-paso svg { flex-shrink: 0; margin-top: 1px; }
+.verif-paso--ok, .verif-paso--aviso, .verif-paso--error, .verif-paso--corriendo { color: var(--dash-text); }
+.verif-paso--omitido { color: var(--dash-text-faint); }
+
+.verif-auto__nota { margin: 0.7rem 0 0; font-size: 0.83rem; line-height: 1.55; color: var(--dash-text-muted); }
+.verif-auto__nota--error { color: var(--tint-red-fg); font-weight: 600; }
+.verif-auto__acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0.9rem; }
+.verif-auto__acciones:empty { display: none; }
+
+.verif-giro { animation: verif-giro 0.9s linear infinite; }
+.verif-rayo { animation: verif-pulso 0.9s ease-in-out infinite; }
+.verif-brillo { animation: verif-brillo 0.9s ease-in-out infinite; }
+
+@keyframes verif-giro { to { transform: rotate(360deg); } }
+@keyframes verif-pulso { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+@keyframes verif-brillo { 0%, 100% { filter: drop-shadow(0 0 1px #F57C00); } 50% { filter: drop-shadow(0 0 7px #F57C00); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .verif-giro, .verif-rayo, .verif-brillo { animation: none; }
+  .verif-barra__relleno, .verif-barra__rayo { transition: none; }
+}

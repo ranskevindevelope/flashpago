@@ -347,6 +347,7 @@ async function listarIngresosDelDia(negocio_id = 1) {
 //  pedir los que ya se evaluaron). Resuelve null si el negocio no tiene Gmail conectado;
 //  un error de Gmail se propaga. `evaluados` son los correos que sí se pudieron leer.
 const MAX_CORREOS_AUTOMATICO = 500;
+const TIMEOUT_GMAIL_MS = 20 * 1000; // una petición colgada no debe frenar al resto de negocios
 
 // BBVA solo escribe de Bre-B; así los etiqueta el OCR en el flujo con comprobante.
 function bancoDelRemitente(remitente) {
@@ -368,7 +369,7 @@ async function listarIngresosDesde(negocio_id, desde, filtrarIds = async (ids) =
       q: `${QUERY_REMITENTES} after:${desde}`,
       maxResults: 100,
       pageToken,
-    });
+    }, { timeout: TIMEOUT_GMAIL_MS });
     for (const m of res.data.messages || []) ids.push(m.id);
     pageToken = res.data.nextPageToken;
   } while (pageToken && ids.length < MAX_CORREOS_AUTOMATICO);
@@ -378,7 +379,7 @@ async function listarIngresosDesde(negocio_id, desde, filtrarIds = async (ids) =
   for (const id of await filtrarIds(ids)) {
     let detalle;
     try {
-      detalle = await gmail.users.messages.get({ userId: 'me', id, format: 'full' });
+      detalle = await gmail.users.messages.get({ userId: 'me', id, format: 'full' }, { timeout: TIMEOUT_GMAIL_MS });
     } catch (err) {
       console.error(`[Gmail] No se pudo leer el correo ${id} (se reintenta):`, err.message);
       continue;
@@ -406,4 +407,30 @@ async function listarIngresosDesde(negocio_id, desde, filtrarIds = async (ids) =
   return { ingresos, evaluados };
 }
 
-module.exports = { verificarPorGmail, listarIngresosDelDia, listarIngresosDesde, extraerMontoYNombre, esIngreso };
+// ─── Comprobaciones para activar el registro automático ───
+//  Una consulta por banco, en paralelo: prueban la conexión, dicen qué bancos escriben a esta
+//  cuenta (últimos 30 días) y miden la velocidad de Gmail. Resuelve null sin Gmail conectado.
+function nombreDelBanco(remitente) {
+  if (/bbva\.com/i.test(remitente)) return 'BBVA';
+  if (/nequi\.com\.co/i.test(remitente)) return 'Nequi';
+  return 'Bancolombia';
+}
+
+async function probarGmailAutomatico(negocio_id) {
+  const auth = await getAuth(negocio_id);
+  if (!auth) return null;
+
+  const gmail = google.gmail({ version: 'v1', auth });
+  const inicio = Date.now();
+  const consultas = await Promise.all(REMITENTES_BANCOS.map(async (remitente) => {
+    const res = await gmail.users.messages.list({
+      userId: 'me',
+      q: `from:${remitente} newer_than:30d`,
+      maxResults: 1,
+    }, { timeout: TIMEOUT_GMAIL_MS });
+    return { banco: nombreDelBanco(remitente), hay: (res.data.messages || []).length > 0 };
+  }));
+  return { ms: Date.now() - inicio, bancos: consultas.filter((c) => c.hay).map((c) => c.banco) };
+}
+
+module.exports = { verificarPorGmail, listarIngresosDelDia, listarIngresosDesde, probarGmailAutomatico, extraerMontoYNombre, esIngreso };

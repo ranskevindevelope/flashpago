@@ -12,27 +12,67 @@ const salud = require('../salud');
 
 const VENTANA_MAX_S = 2 * 24 * 60 * 60; // nunca se mira más atrás de 2 días
 const MAX_VISTOS = 5000;
+const CONCURRENCIA = 5; // negocios que se revisan a la vez
+const TIEMPO_MAX_NEGOCIO_MS = 60 * 1000; // pasado esto se sigue con los demás
+const VUELTA_LENTA_S = 20;
 
 let registrando = false;
 // negocio_id -> correos ya evaluados que no hace falta volver a pedir a Gmail.
 const vistos = new Map();
+// Negocios cuya revisión anterior sigue sin terminar: no se lanza otra encima.
+const enCurso = new Set();
 
-// Corre cada 30 segundos (index.js). Con negocio_id revisa solo ese negocio.
+// Rechaza si la promesa no termina a tiempo. El trabajo no se cancela, pero la vuelta sigue sin él.
+async function conTiempoLimite(promesa, ms) {
+  let temporizador;
+  const limite = new Promise((_, rechazar) => {
+    temporizador = setTimeout(() => rechazar(new Error('La revisión tardó demasiado')), ms);
+  });
+  try {
+    return await Promise.race([promesa, limite]);
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
+// Corre cada 30 segundos (index.js). Con negocio_ids revisa solo esos negocios.
 // Devuelve la cantidad de pagos registrados, o null si ya había otra revisión en curso.
-async function registrarIngresosAutomaticos({ negocio_id } = {}) {
+async function registrarIngresosAutomaticos({ negocio_ids, tiempoMaxNegocioMs = TIEMPO_MAX_NEGOCIO_MS } = {}) {
   if (registrando) return null;
   registrando = true;
+  const inicio = Date.now();
   let total = 0;
   try {
     const negocios = (await listarNegocios())
-      .filter((n) => n.modo_registro === 'automatico' && (!negocio_id || n.id === negocio_id));
-    for (const negocio of negocios) {
-      try {
-        total += await registrarDeNegocio(negocio);
-      } catch (err) {
-        console.error(`[AutoRegistro] Error en el negocio ${negocio.id}:`, err.message);
-        salud.registrar('registro_auto', err.message, negocio.id);
+      .filter((n) => n.modo_registro === 'automatico' && (!negocio_ids || negocio_ids.includes(n.id)));
+    // Un negocio que sale del modo automático no necesita seguir ocupando memoria.
+    const activos = new Set(negocios.map((n) => n.id));
+    for (const id of vistos.keys()) if (!activos.has(id)) vistos.delete(id);
+
+    // Varios negocios a la vez: uno lento o caído no frena a los demás.
+    const cola = [...negocios];
+    const trabajador = async () => {
+      while (cola.length) {
+        const negocio = cola.shift();
+        if (enCurso.has(negocio.id)) continue;
+        enCurso.add(negocio.id);
+        const trabajo = registrarDeNegocio(negocio);
+        // Se libera cuando termina de verdad, aunque la vuelta ya no lo espere.
+        trabajo.then(() => enCurso.delete(negocio.id), () => enCurso.delete(negocio.id));
+        try {
+          const registrados = await conTiempoLimite(trabajo, tiempoMaxNegocioMs);
+          total += registrados;
+        } catch (err) {
+          console.error(`[AutoRegistro] Error en el negocio ${negocio.id}:`, err.message);
+          salud.registrar('registro_auto', err.message, negocio.id);
+        }
       }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCIA, cola.length) }, trabajador));
+
+    const segundos = (Date.now() - inicio) / 1000;
+    if (segundos > VUELTA_LENTA_S) {
+      console.warn(`[AutoRegistro] Vuelta lenta: ${segundos.toFixed(1)} s para ${negocios.length} negocio(s)`);
     }
   } catch (err) {
     console.error('[AutoRegistro] Error listando negocios:', err.message);

@@ -63,6 +63,7 @@ const {
 } = require('../db');
 const eventos = require('../eventos');
 const salud = require('../salud');
+const { verificarPreparacion } = require('../bot/preparacion-automatico');
 
 // ─── Google OAuth config ────────────────────────────────
 const CREDENTIALS_PATH = path.join(__dirname, '..', 'credentials.json');
@@ -1491,6 +1492,15 @@ router.put('/negocio/configuracion', verificarToken, soloAdmin, async (req, res)
 
     await actualizarHorarioNegocio(req.user.negocio_id, { hora_cierre: JSON.stringify(hora_cierre), dias_operacion });
     res.json({ ok: true, mensaje: 'Configuración actualizada' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Comprobaciones reales antes de activar el registro automático (las muestra el dashboard paso a paso).
+router.post('/negocio/modo-registro/verificar', verificarToken, soloAdmin, async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await verificarPreparacion(req.user.negocio_id)) });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
