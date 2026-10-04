@@ -1,14 +1,21 @@
-import { Zap, CheckCircle, AlertTriangle, X, Circle, RefreshCw } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { CheckCircle, AlertTriangle, X, Circle, RefreshCw } from 'lucide-react';
 import Button from './ui/Button';
 import './VerificacionAutomatico.css';
 
-// Panel con el rayo que se muestra al activar el registro automático: cada paso es una
-// comprobación real que hace el servidor (ver bot/preparacion-automatico.js).
-const TITULOS = {
-  corriendo: 'Realizando ajustes…',
-  listo: '¡Todo listo!',
-  aviso: 'Casi listo: revisa estos avisos',
-  error: 'No se pudo activar',
+// Pantalla completa que se muestra al activar el registro automático: el rayo se dibuja y
+// brilla mientras corren las comprobaciones reales del servidor (bot/preparacion-automatico.js).
+const RAYO = 'M13 2 3 14h9l-1 8 10-12h-9l1-8z';
+
+const FASES = {
+  corriendo: { sub: 'Estamos comprobando que tu negocio esté listo para registrar los pagos solo.' },
+  listo: {
+    titulo: '¡Todo listo!',
+    sub: 'Tus pagos se registrarán solos y los verás aparecer en este dashboard. Revisamos los avisos de tu banco cada 30 segundos.',
+  },
+  aviso: { titulo: 'Casi listo', sub: 'Revisa estos avisos antes de activarlo.' },
+  error: { titulo: 'No se pudo activar', sub: 'Esto fue lo que encontramos.' },
 };
 
 function IconoPaso({ estado }) {
@@ -19,57 +26,88 @@ function IconoPaso({ estado }) {
   return <Circle size={17} color="var(--dash-text-faint)" />;
 }
 
-export default function VerificacionAutomatico({ fase, pasos, progreso, mensaje, onActivar, onCancelar, onReintentar }) {
+// Mientras corre, el título grande es el de la comprobación en curso.
+function tituloGrande(fase, pasos, progreso) {
+  if (fase !== 'corriendo') return FASES[fase].titulo;
+  if (progreso <= 5) return 'Realizando ajustes…';
+  return pasos.find((p) => p.estado === 'corriendo')?.titulo || 'Terminando…';
+}
+
+export function PantallaVerificacion({ fase, pasos, progreso, mensaje, onActivar, onCancelar, onReintentar }) {
   const corriendo = fase === 'corriendo';
+  const titulo = tituloGrande(fase, pasos, progreso);
+
+  // Bloquea el scroll de la página de fondo mientras la pantalla está abierta.
+  useEffect(() => {
+    const previo = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previo; };
+  }, []);
+
+  // El dashboard se vuelve a dibujar seguido: la función se guarda en una referencia para que
+  // eso no reinicie el temporizador del cierre.
+  const cancelar = useRef(onCancelar);
+  cancelar.current = onCancelar;
+
+  // Escape cierra cuando ya no hay nada corriendo; al terminar bien se cierra sola.
+  useEffect(() => {
+    if (corriendo) return undefined;
+    const alTeclear = (e) => { if (e.key === 'Escape') cancelar.current(); };
+    window.addEventListener('keydown', alTeclear);
+    const cierre = fase === 'listo' ? setTimeout(() => cancelar.current(), 4500) : null;
+    return () => {
+      window.removeEventListener('keydown', alTeclear);
+      if (cierre) clearTimeout(cierre);
+    };
+  }, [corriendo, fase]);
+
   return (
-    <div className={`verif-auto verif-auto--${fase}`} role="status" aria-live="polite">
-      <div className="verif-auto__titulo">
-        <Zap size={18} color="#F57C00" fill="#FFD180" className={corriendo ? 'verif-rayo' : ''} />
-        <strong>{TITULOS[fase]}</strong>
-      </div>
+    <div className={`verif-pantalla verif-pantalla--${fase}`} role="dialog" aria-modal="true" aria-label="Activando el registro automático" aria-live="polite">
+      <div className="verif-pantalla__centro">
+        <svg className="verif-rayo-svg" viewBox="0 0 24 24" aria-hidden="true">
+          <path className="verif-rayo-relleno" d={RAYO} />
+          <path className="verif-rayo-trazo" d={RAYO} pathLength="100" />
+        </svg>
 
-      <div className="verif-barra" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progreso}>
-        <div className="verif-barra__relleno" style={{ width: `${progreso}%` }} />
-        <Zap
-          size={16}
-          color="#F57C00"
-          fill="#FFD180"
-          className={`verif-barra__rayo${corriendo ? ' verif-brillo' : ''}`}
-          style={{ left: `${progreso}%` }}
-        />
-      </div>
+        <h2 key={titulo} className="verif-pantalla__titulo verif-aparece">{titulo}</h2>
+        <p className="verif-pantalla__sub">{FASES[fase].sub}</p>
 
-      <ul className="verif-pasos">
-        {pasos.map((p) => (
-          <li key={p.clave} className={`verif-paso verif-paso--${p.estado}`}>
-            <IconoPaso estado={p.estado} />
-            <span>{p.estado === 'pendiente' || p.estado === 'corriendo' ? p.titulo : p.detalle}</span>
-          </li>
-        ))}
-      </ul>
+        <div className="verif-barra" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progreso}>
+          <div className="verif-barra__relleno" style={{ width: `${progreso}%` }} />
+        </div>
 
-      {fase === 'listo' && (
-        <p className="verif-auto__nota">
-          Tus pagos se registrarán solos y los verás aparecer en este dashboard. Revisamos tu correo cada 30 segundos.
-        </p>
-      )}
-      {mensaje && <p className="verif-auto__nota verif-auto__nota--error">{mensaje}</p>}
+        <ul className="verif-pasos">
+          {pasos.map((p) => (
+            <li key={p.clave} className={`verif-paso verif-paso--${p.estado}`}>
+              <IconoPaso estado={p.estado} />
+              <span>{p.estado === 'pendiente' || p.estado === 'corriendo' ? p.titulo : p.detalle}</span>
+            </li>
+          ))}
+        </ul>
 
-      <div className="verif-auto__acciones">
-        {fase === 'aviso' && (
-          <>
-            <Button onClick={onActivar}>Activar de todos modos</Button>
-            <Button variant="secondary" onClick={onCancelar}>Cancelar</Button>
-          </>
-        )}
-        {fase === 'error' && (
-          <>
-            <Button onClick={onReintentar} icon={<RefreshCw size={15} />}>Reintentar</Button>
-            <Button variant="secondary" onClick={onCancelar}>Cerrar</Button>
-          </>
-        )}
-        {fase === 'listo' && <Button variant="secondary" onClick={onCancelar}>Cerrar</Button>}
+        {mensaje && <p className="verif-pantalla__mensaje">{mensaje}</p>}
+
+        <div className="verif-pantalla__acciones">
+          {fase === 'aviso' && (
+            <>
+              <Button onClick={onActivar}>Activar de todos modos</Button>
+              <Button variant="secondary" onClick={onCancelar}>Cancelar</Button>
+            </>
+          )}
+          {fase === 'error' && (
+            <>
+              <Button onClick={onReintentar} icon={<RefreshCw size={15} />}>Reintentar</Button>
+              <Button variant="secondary" onClick={onCancelar}>Cerrar</Button>
+            </>
+          )}
+          {fase === 'listo' && <Button onClick={onCancelar}>Continuar</Button>}
+        </div>
       </div>
     </div>
   );
+}
+
+// Va en el body para que ocupe toda la pantalla aunque algún contenedor tenga transformaciones.
+export default function VerificacionAutomatico(props) {
+  return createPortal(<PantallaVerificacion {...props} />, document.body);
 }

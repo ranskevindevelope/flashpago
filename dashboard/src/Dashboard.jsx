@@ -64,7 +64,7 @@ const PLAN_SIGUIENTE = { basico: 'premium', premium: 'premium_plus' };
 // Pasos de la verificación al activar el registro automático. Las claves deben coincidir
 // con las de bot/preparacion-automatico.js (el texto final de cada paso lo manda el servidor).
 const PASOS_ACTIVACION = [
-  { clave: 'conexion', titulo: 'Verificando conexión con Gmail…' },
+  { clave: 'conexion', titulo: 'Verificando conexión con tus avisos del banco…' },
   { clave: 'notificaciones', titulo: 'Buscando los avisos de tu banco…' },
   { clave: 'velocidad', titulo: 'Verificando velocidad…' },
   { clave: 'plan', titulo: 'Verificando tu plan…' },
@@ -524,7 +524,7 @@ function Dashboard({ onLogout }) {
       }
     } catch (err) {
       if (turno === activacionRef.current) {
-        setActivacion((prev) => prev && { ...prev, fase: 'error', mensaje: 'Error de conexión' });
+        setActivacion((prev) => prev && { ...prev, fase: 'error', mensaje: err?.status ? err.message : 'Error de conexión' });
       }
     }
     if (turno === activacionRef.current) setGuardandoModo(false);
@@ -533,7 +533,7 @@ function Dashboard({ onLogout }) {
   // Comprobaciones reales en el servidor, mostradas paso a paso con el rayo.
   const activarModoAutomatico = async () => {
     const turno = ++activacionRef.current;
-    const pausa = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 550;
+    const pausa = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 750;
     const inicial = PASOS_ACTIVACION.map((p, i) => ({ ...p, estado: i === 0 ? 'corriendo' : 'pendiente' }));
     setGuardandoModo(true);
     setActivacion({ fase: 'corriendo', pasos: inicial, progreso: 5, mensaje: null });
@@ -542,7 +542,8 @@ function Dashboard({ onLogout }) {
     try {
       resultado = await api.request('/api/negocio/modo-registro/verificar', { method: 'POST' });
     } catch (err) {
-      resultado = null;
+      // Con un error del servidor, request lanza ApiError: se muestra su motivo en vez de uno genérico.
+      resultado = { ok: false, error: err?.status ? `${err.message} (${err.status})` : null };
     }
     if (turno !== activacionRef.current) return;
     if (!resultado?.ok) {
@@ -2329,7 +2330,7 @@ function Dashboard({ onLogout }) {
                     titulo: 'Automático',
                     desc: 'FlashPago lee las notificaciones de tu banco y registra cada pago solo. Tu equipo no envía nada.',
                     bloqueado: !gmailEstado?.conectado,
-                    aviso: 'Conecta tu Gmail arriba para poder activarlo.',
+                    aviso: 'Activa la verificación de arriba para poder usarlo.',
                   },
                 ].map((op) => {
                   const elegido = modoRegistro === op.valor;

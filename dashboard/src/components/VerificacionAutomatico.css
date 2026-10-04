@@ -1,37 +1,65 @@
-.verif-auto {
-  max-width: 520px; margin-bottom: 1rem; padding: 1rem 1.1rem; border-radius: 12px;
-  border: 1px solid var(--dash-border); background: var(--dash-surface-2);
+.verif-pantalla {
+  position: fixed; inset: 0; z-index: 3000; overflow-y: auto;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: radial-gradient(circle at 50% 36%, var(--tint-orange-bg) 0%, var(--dash-surface) 58%);
+  animation: verif-entrada 0.25s ease-out;
 }
-.verif-auto--listo { border-color: var(--tint-green-fg); background: var(--tint-green-bg); }
-.verif-auto--aviso { border-color: var(--tint-orange-fg); background: var(--tint-orange-bg); }
-.verif-auto--error { border-color: var(--tint-red-fg); background: var(--tint-red-bg); }
+.verif-pantalla--listo { background: radial-gradient(circle at 50% 36%, var(--tint-green-bg) 0%, var(--dash-surface) 58%); }
+.verif-pantalla--error { background: radial-gradient(circle at 50% 36%, var(--tint-red-bg) 0%, var(--dash-surface) 58%); }
 
-.verif-auto__titulo { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: var(--dash-text); margin-bottom: 0.8rem; }
+.verif-pantalla__centro { width: 100%; max-width: 440px; display: flex; flex-direction: column; align-items: center; text-align: center; margin: auto; }
 
-.verif-barra { position: relative; height: 8px; border-radius: 999px; background: var(--dash-border); margin: 0.3rem 0 1rem; }
+/* El rayo se dibuja y se borra mientras corre; al terminar queda fijo y toma el color del resultado. */
+.verif-rayo-svg { width: 112px; height: 112px; margin-bottom: 1.4rem; overflow: visible; animation: verif-brillo 1.6s ease-in-out infinite; }
+.verif-rayo-relleno { fill: #FFD180; opacity: 0.2; animation: verif-relleno 1.6s ease-in-out infinite; }
+.verif-rayo-trazo {
+  fill: none; stroke: #F57C00; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round;
+  stroke-dasharray: 100; stroke-dashoffset: 100; animation: verif-dibujar 1.6s ease-in-out infinite;
+}
+.verif-pantalla--listo .verif-rayo-svg, .verif-pantalla--aviso .verif-rayo-svg, .verif-pantalla--error .verif-rayo-svg { animation: none; }
+.verif-pantalla--listo .verif-rayo-relleno, .verif-pantalla--aviso .verif-rayo-relleno, .verif-pantalla--error .verif-rayo-relleno { animation: none; opacity: 0.45; }
+.verif-pantalla--listo .verif-rayo-trazo, .verif-pantalla--aviso .verif-rayo-trazo, .verif-pantalla--error .verif-rayo-trazo { animation: none; stroke-dashoffset: 0; }
+.verif-pantalla--listo .verif-rayo-trazo { stroke: var(--tint-green-fg); }
+.verif-pantalla--listo .verif-rayo-relleno { fill: var(--tint-green-fg); }
+.verif-pantalla--error .verif-rayo-trazo { stroke: var(--tint-red-fg); }
+.verif-pantalla--error .verif-rayo-relleno { fill: var(--tint-red-fg); }
+
+.verif-pantalla__titulo { margin: 0 0 0.45rem; font-size: 1.35rem; font-weight: 700; color: var(--dash-text); letter-spacing: -0.01em; }
+.verif-pantalla__sub { margin: 0 0 1.4rem; font-size: 0.9rem; line-height: 1.55; color: var(--dash-text-muted); max-width: 380px; }
+
+.verif-barra { width: 100%; max-width: 300px; height: 6px; border-radius: 999px; background: var(--dash-border); margin-bottom: 1.5rem; overflow: hidden; }
 .verif-barra__relleno { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFB74D, #F57C00); transition: width 0.45s ease; }
-.verif-barra__rayo { position: absolute; top: 50%; transform: translate(-50%, -50%); transition: left 0.45s ease; }
+.verif-pantalla--listo .verif-barra__relleno { background: var(--tint-green-fg); }
+.verif-pantalla--error .verif-barra__relleno { background: var(--tint-red-fg); }
 
-.verif-pasos { list-style: none; margin: 0; padding: 0; }
-.verif-paso { display: flex; align-items: flex-start; gap: 10px; padding: 0.28rem 0; font-size: 0.86rem; line-height: 1.45; color: var(--dash-text-muted); }
+.verif-pasos { list-style: none; margin: 0; padding: 0; width: 100%; text-align: left; }
+.verif-paso { display: flex; align-items: flex-start; gap: 10px; padding: 0.3rem 0; font-size: 0.86rem; line-height: 1.45; color: var(--dash-text-muted); }
 .verif-paso svg { flex-shrink: 0; margin-top: 1px; }
 .verif-paso--ok, .verif-paso--aviso, .verif-paso--error, .verif-paso--corriendo { color: var(--dash-text); }
 .verif-paso--omitido { color: var(--dash-text-faint); }
 
-.verif-auto__nota { margin: 0.7rem 0 0; font-size: 0.83rem; line-height: 1.55; color: var(--dash-text-muted); }
-.verif-auto__nota--error { color: var(--tint-red-fg); font-weight: 600; }
-.verif-auto__acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0.9rem; }
-.verif-auto__acciones:empty { display: none; }
+.verif-pantalla__mensaje { margin: 0.9rem 0 0; font-size: 0.86rem; line-height: 1.5; color: var(--tint-red-fg); font-weight: 600; }
+.verif-pantalla__acciones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 1.4rem; }
+.verif-pantalla__acciones:empty { display: none; }
 
 .verif-giro { animation: verif-giro 0.9s linear infinite; }
-.verif-rayo { animation: verif-pulso 0.9s ease-in-out infinite; }
-.verif-brillo { animation: verif-brillo 0.9s ease-in-out infinite; }
+.verif-aparece { animation: verif-aparece 0.35s ease-out; }
 
+@keyframes verif-dibujar { 0% { stroke-dashoffset: 100; } 55% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -100; } }
+@keyframes verif-relleno { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.5; } }
+@keyframes verif-brillo { 0%, 100% { filter: drop-shadow(0 0 5px rgba(245, 124, 0, 0.2)); } 50% { filter: drop-shadow(0 0 18px rgba(245, 124, 0, 0.55)); } }
+@keyframes verif-entrada { from { opacity: 0; } to { opacity: 1; } }
+@keyframes verif-aparece { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes verif-giro { to { transform: rotate(360deg); } }
-@keyframes verif-pulso { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
-@keyframes verif-brillo { 0%, 100% { filter: drop-shadow(0 0 1px #F57C00); } 50% { filter: drop-shadow(0 0 7px #F57C00); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .verif-giro, .verif-rayo, .verif-brillo { animation: none; }
-  .verif-barra__relleno, .verif-barra__rayo { transition: none; }
+  .verif-rayo-svg, .verif-rayo-relleno, .verif-rayo-trazo, .verif-giro, .verif-aparece, .verif-pantalla { animation: none; }
+  .verif-rayo-trazo { stroke-dashoffset: 0; }
+  .verif-rayo-relleno { opacity: 0.35; }
+  .verif-barra__relleno { transition: none; }
+}
+
+@media (max-width: 480px) {
+  .verif-pantalla__titulo { font-size: 1.15rem; }
+  .verif-rayo-svg { width: 92px; height: 92px; }
 }

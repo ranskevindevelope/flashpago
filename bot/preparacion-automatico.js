@@ -11,12 +11,12 @@ const UMBRAL_LENTO_MS = 4000;
 function textoErrorGmail(err) {
   const texto = `${(err && err.message) || ''} ${(err && err.code) || ''}`;
   if (/invalid_grant|invalid_token|unauthorized|revoked|\b401\b/i.test(texto)) {
-    return 'Google rechazó la conexión (venció o se revocó el permiso). Desconecta Gmail y vuelve a conectarlo.';
+    return 'El permiso de tu cuenta venció o se revocó. Desconecta la verificación en la tarjeta de arriba y vuelve a conectarla.';
   }
   if (/timeout|timed out|ETIMEDOUT|ECONNRESET|ENOTFOUND/i.test(texto)) {
-    return 'Gmail no respondió a tiempo. Intenta de nuevo en un momento.';
+    return 'No hubo respuesta a tiempo. Intenta de nuevo en un momento.';
   }
-  return 'No se pudo consultar Gmail. Intenta de nuevo; si sigue, reconecta Gmail.';
+  return 'No se pudieron consultar tus avisos del banco. Intenta de nuevo; si sigue, reconecta la verificación.';
 }
 
 function listaDeBancos(bancos) {
@@ -43,20 +43,20 @@ async function verificarPreparacion(negocio_id, { umbralLentoMs = UMBRAL_LENTO_M
     fallo = err;
   }
   if (fallo || !gmail) {
-    paso('conexion', 'error', fallo ? textoErrorGmail(fallo) : 'Gmail no está conectado. Conéctalo en la tarjeta de arriba.');
-    paso('notificaciones', 'omitido', 'Primero hace falta la conexión con Gmail.');
-    paso('velocidad', 'omitido', 'Primero hace falta la conexión con Gmail.');
+    paso('conexion', 'error', fallo ? textoErrorGmail(fallo) : 'La verificación de tus avisos del banco no está conectada. Actívala en la tarjeta de arriba.');
+    paso('notificaciones', 'omitido', 'Primero hace falta la conexión.');
+    paso('velocidad', 'omitido', 'Primero hace falta la conexión.');
   } else {
-    paso('conexion', 'ok', 'Gmail respondió correctamente.');
+    paso('conexion', 'ok', 'Conexión con tus avisos del banco lista.');
     if (gmail.bancos.length) {
       paso('notificaciones', 'ok', `Encontré avisos de ${listaDeBancos(gmail.bancos)} en los últimos 30 días.`);
     } else {
-      paso('notificaciones', 'aviso', 'No encontré avisos de Nequi, Bancolombia ni BBVA en los últimos 30 días. ¿Conectaste el correo que recibe los avisos del banco?');
+      paso('notificaciones', 'aviso', 'No encontré avisos de Nequi, Bancolombia ni BBVA en los últimos 30 días. ¿Conectaste la cuenta que recibe los avisos de tu banco?');
     }
     if (gmail.ms >= umbralLentoMs) {
-      paso('velocidad', 'aviso', `Gmail responde lento (${tiempoLegible(gmail.ms)}). Funcionará, pero los pagos pueden tardar más en aparecer.`);
+      paso('velocidad', 'aviso', `La lectura de tus avisos es lenta (${tiempoLegible(gmail.ms)}). Funcionará, pero los pagos pueden tardar más en aparecer.`);
     } else {
-      paso('velocidad', 'ok', `Gmail responde en ${tiempoLegible(gmail.ms)}.`);
+      paso('velocidad', 'ok', `Tus avisos del banco se leen en ${tiempoLegible(gmail.ms)}.`);
     }
   }
 

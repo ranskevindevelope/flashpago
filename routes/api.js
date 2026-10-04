@@ -1502,6 +1502,7 @@ router.post('/negocio/modo-registro/verificar', verificarToken, soloAdmin, async
   try {
     res.json({ ok: true, ...(await verificarPreparacion(req.user.negocio_id)) });
   } catch (err) {
+    console.error('[ModoRegistro] Error en las comprobaciones:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -1514,7 +1515,7 @@ router.put('/negocio/modo-registro', verificarToken, soloAdmin, async (req, res)
       return res.status(400).json({ ok: false, error: 'Modo de registro inválido' });
     }
     if (modo === 'automatico' && !(await obtenerTokenGmail(req.user.negocio_id))) {
-      return res.status(400).json({ ok: false, error: 'Conecta tu Gmail antes de activar el registro automático' });
+      return res.status(400).json({ ok: false, error: 'Activa la verificación de tus avisos del banco antes de usar el registro automático' });
     }
     const existe = await actualizarModoRegistro(req.user.negocio_id, modo);
     if (!existe) return res.status(404).json({ ok: false, error: 'Negocio no encontrado' });
