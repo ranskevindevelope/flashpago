@@ -300,7 +300,8 @@ app.get('/', (req, res, next) => {
   // (bots/escaners) — sin el default, tumbaba esta ruta con 500.
   if ((req.hostname || '').startsWith('app.')) return next();
   res.sendFile(path.join(__dirname, 'dashboard/build', 'landing.html'), (err) => {
-    if (err) next();
+    // Si el visitante cortó la carga ya se empezó a responder: no pasar a la ruta siguiente.
+    if (err && !res.headersSent) next();
   });
 });
 
