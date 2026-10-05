@@ -245,6 +245,40 @@ Bancolombia. Cuando encuentra una coincidencia, marca el correo como leido.
 `credentials.json` y `token.json` contienen material sensible y estan
 excluidos por `.gitignore`.
 
+## Registro automático y aviso inmediato de Gmail
+
+Cada negocio elige en **Configuración → Registro de pagos** entre *Manual, con comprobante*
+(por defecto) y *Automático*. En automático, `bot/auto-registro.js` lee los correos de
+Bancolombia, Nequi y BBVA y guarda cada ingreso como pago (`fuente = 'auto'`), con el mismo
+filtro de `esIngreso` (no cuentan retiros, compras, envíos ni nómina). Al activarlo, el
+dashboard corre las comprobaciones de `bot/preparacion-automatico.js` (conexión, avisos del
+banco, velocidad, plan y pantallazos pendientes).
+
+Por defecto la revisión corre cada 10 segundos. Para **registrar en el momento en que llega el
+correo** (sin esperar la revisión) se usa el aviso inmediato de Gmail por Pub/Sub; es opcional:
+
+1. En Google Cloud (el mismo proyecto de las credenciales OAuth), habilita **Cloud Pub/Sub API**.
+   Puede exigir que el proyecto tenga facturación activa; el uso es mínimo.
+2. Crea un **tema** (por ejemplo `gmail-avisos`).
+3. En los permisos del tema, da el rol **Publicador de Pub/Sub** a
+   `gmail-api-push@system.gserviceaccount.com`.
+4. Crea una **suscripción de tipo Push** al tema, con la URL
+   `https://app.flashpago.co/api/gmail/push?token=EL_SECRETO` (HTTPS obligatorio).
+5. En el `.env` del servidor:
+
+   ```
+   GMAIL_PUSH_TOPIC=projects/ID_DEL_PROYECTO/topics/gmail-avisos
+   GMAIL_PUSH_SECRET=un-secreto-largo-y-aleatorio
+   ```
+
+   El secreto debe ser el mismo de la URL de la suscripción. Reinicia el servidor.
+
+Al arrancar y cada hora, el servidor activa o renueva el aviso de los negocios automáticos
+(`users.watch` dura 7 días). Cuando llega un aviso, solo se revisa ese negocio. La revisión
+periódica queda de respaldo: con el aviso vigente corre 1 de cada 12 vueltas (cada ~2 min).
+Sin esas dos variables no pasa nada y todo sigue con la revisión cada 10 segundos. Si falla
+activar el aviso de un negocio, ese negocio sigue con la revisión cada 10 segundos.
+
 ## Configurar Wompi
 
 Se usa para cobrar automáticamente la suscripción de cada negocio a FlashPago (no los pagos de los clientes de cada negocio, eso sigue siendo por Gmail).

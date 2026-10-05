@@ -12,7 +12,7 @@ const FASES = {
   corriendo: { sub: 'Estamos comprobando que tu negocio esté listo para registrar los pagos solo.' },
   listo: {
     titulo: '¡Todo listo!',
-    sub: 'Tus pagos se registrarán solos y los verás aparecer en este dashboard. Revisamos los avisos de tu banco cada 30 segundos.',
+    sub: 'Tus pagos se registrarán solos y los verás aparecer en este dashboard apenas llegue el aviso de tu banco.',
   },
   aviso: { titulo: 'Casi listo', sub: 'Revisa estos avisos antes de activarlo.' },
   error: { titulo: 'No se pudo activar', sub: 'Esto fue lo que encontramos.' },

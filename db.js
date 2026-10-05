@@ -971,6 +971,19 @@ function obtenerTokenGmail(negocio_id) {
   });
 }
 
+// Negocios activos conectados con esa cuenta de Gmail (el aviso inmediato llega con el correo de la cuenta).
+function negociosPorCorreoGmail(correo) {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT t.negocio_id FROM tokens_gmail t
+       JOIN negocios n ON n.id = t.negocio_id AND n.activo = 1
+       WHERE lower(t.email) = lower(?)`,
+      [correo],
+      (err, filas) => (err ? reject(err) : resolve(filas.map((f) => f.negocio_id)))
+    );
+  });
+}
+
 // ═══════════════════════════════════════════════════════════
 //  FUNCIONES — PAGOS (filtradas por negocio_id)
 // ═══════════════════════════════════════════════════════════
@@ -1617,6 +1630,7 @@ module.exports = {
   // Gmail tokens
   guardarTokenGmail,
   obtenerTokenGmail,
+  negociosPorCorreoGmail,
   // Pagos
   guardarPago,
   buscarPorReferencia,

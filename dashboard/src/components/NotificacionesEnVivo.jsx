@@ -38,10 +38,11 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
   }, []);
 
   // Anunciar el pago en voz alta (como una caja registradora con voz)
-  const anunciarPagoEnVoz = useCallback((monto, nombreCliente) => {
+  const anunciarPagoEnVoz = useCallback((monto) => {
     try {
       if (!('speechSynthesis' in window)) return;
-      const texto = `Pago confirmado${nombreCliente ? ' de ' + nombreCliente : ''}. ${monto} pesos.`;
+      // Sin nombre del cliente: en voz alta, en caja, no hace falta y se oye en todo el local.
+      const texto = `Pago confirmado. ${monto} pesos.`;
       const utterance = new SpeechSynthesisUtterance(texto);
       const nombreVozGuardada = localStorage.getItem('fp_voz_notificacion');
       const voz = nombreVozGuardada
@@ -59,16 +60,18 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
   // Con la pestaña oculta se avisa por notificación del sistema, y el audio/voz
   // igual suena (el navegador no lo bloquea por estar oculta, solo exige una
   // interacción previa del usuario con la página).
-  const mostrarNotificacion = useCallback(({ tipo, titulo, detalle, monto, nombreCliente }) => {
+  // `detalleSistema`: texto de la notificación del sistema (la de la esquina), sin el nombre
+  // del cliente. Dentro del dashboard sí se ve quién pagó.
+  const mostrarNotificacion = useCallback(({ tipo, titulo, detalle, detalleSistema, monto }) => {
     // Se guarda en el historial de la campana pase lo que pase con el toast
     // (pestaña oculta o no) — antes esto solo vivía 5s y desaparecía.
     onNotificacion?.({ tipo, titulo, detalle });
 
     if (document.hidden) {
-      notificarSistema({ titulo, cuerpo: detalle, tag: `flashpago-${tipo}` });
+      notificarSistema({ titulo, cuerpo: detalleSistema ?? detalle, tag: `flashpago-${tipo}` });
       if (tipo === 'real') {
         reproducirSonido();
-        if (monto) anunciarPagoEnVoz(monto, nombreCliente);
+        if (monto) anunciarPagoEnVoz(monto);
       }
       return;
     }
@@ -77,7 +80,7 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
     setNotificaciones((prev) => [...prev, { id, tipo, titulo, detalle }]);
     if (tipo === 'real') {
       reproducirSonido();
-      if (monto) anunciarPagoEnVoz(monto, nombreCliente);
+      if (monto) anunciarPagoEnVoz(monto);
     }
     // auto-ocultar después de 5s
     setTimeout(() => {
@@ -114,8 +117,8 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
                 tipo: 'real',
                 titulo: 'Nuevo pago verificado',
                 detalle: `${p.nombre_cliente || 'Cliente'} pagó ${formatearMonto(p.monto)} · ${p.banco || ''}`,
+                detalleSistema: `${formatearMonto(p.monto)} · ${p.banco || ''}`,
                 monto: p.monto,
-                nombreCliente: p.nombre_cliente,
               });
             });
           }
@@ -146,6 +149,7 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
               tipo: 'duplicado',
               titulo: 'Posible duplicado detectado',
               detalle: `${d.nombre_cliente || 'Cliente'} · ${formatearMonto(d.monto)} · Ref ${d.referencia || '—'}`,
+              detalleSistema: `${formatearMonto(d.monto)} · abre el dashboard para revisarlo`,
             });
           }
           ultimasDupIds.current.add(d.id);
@@ -218,8 +222,8 @@ function NotificacionesEnVivo({ onLogout, onNotificacion }) {
           tipo: 'real',
           titulo: 'Nuevo pago verificado',
           detalle: `${pago.nombre_cliente || 'Cliente'} pagó ${formatearMonto(pago.monto)} · ${pago.banco || ''}`,
+          detalleSistema: `${formatearMonto(pago.monto)} · ${pago.banco || ''}`,
           monto: pago.monto,
-          nombreCliente: pago.nombre_cliente,
         });
         // Se adelanta el marcador para que el ciclo de respaldo no lo tome
         // como nuevo y lo anuncie una segunda vez.

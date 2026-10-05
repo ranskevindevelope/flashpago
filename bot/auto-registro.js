@@ -3,7 +3,7 @@
 // Usa el mismo filtro de ingresos que la verificación (retiros, compras, envíos y
 // nómina no cuentan). Un correo registra un solo pago: gmail_id es único en pagos.
 const {
-  listarNegocios, verificarTrialActivo, correosYaUsados, guardarPago, contarComprobantesDelMes, topeConMargen,
+  listarNegocios, obtenerNegocio, verificarTrialActivo, correosYaUsados, guardarPago, contarComprobantesDelMes, topeConMargen,
 } = require('../db');
 const { listarIngresosDesde } = require('../gmail');
 const { avisarLimite } = require('./avisos');
@@ -15,12 +15,23 @@ const MAX_VISTOS = 5000;
 const CONCURRENCIA = 5; // negocios que se revisan a la vez
 const TIEMPO_MAX_NEGOCIO_MS = 60 * 1000; // pasado esto se sigue con los demás
 const VUELTA_LENTA_S = 20;
+const VUELTAS_RESPALDO = 12; // con aviso inmediato vigente, la revisión periódica solo corre 1 de cada 12 vueltas
 
 let registrando = false;
+let vuelta = 0;
 // negocio_id -> correos ya evaluados que no hace falta volver a pedir a Gmail.
 const vistos = new Map();
 // Negocios cuya revisión anterior sigue sin terminar: no se lanza otra encima.
 const enCurso = new Set();
+// Negocios que recibieron otro aviso mientras se revisaban: se repite la revisión al terminar.
+const rehacer = new Set();
+// negocio_id -> hasta cuándo (ms) vale su aviso inmediato de Gmail (ver gmail-push.js).
+const avisos = new Map();
+
+const marcarAvisoInmediato = (negocio_id, expiraMs) => avisos.set(negocio_id, expiraMs);
+const quitarAvisoInmediato = (negocio_id) => avisos.delete(negocio_id);
+const vencimientoDelAviso = (negocio_id) => avisos.get(negocio_id) || 0;
+const avisoVigente = (negocio_id) => vencimientoDelAviso(negocio_id) > Date.now();
 
 // Rechaza si la promesa no termina a tiempo. El trabajo no se cancela, pero la vuelta sigue sin él.
 async function conTiempoLimite(promesa, ms) {
@@ -35,11 +46,47 @@ async function conTiempoLimite(promesa, ms) {
   }
 }
 
-// Corre cada 30 segundos (index.js). Con negocio_ids revisa solo esos negocios.
+// Revisa un negocio sin solaparse consigo mismo. Si ya hay una revisión en curso, pide repetirla
+// al terminar y devuelve null.
+async function revisarSinSolapar(negocio, tiempoMaxMs, origen) {
+  if (enCurso.has(negocio.id)) {
+    rehacer.add(negocio.id);
+    return null;
+  }
+  enCurso.add(negocio.id);
+  const trabajo = registrarDeNegocio(negocio, origen);
+  // Se libera cuando termina de verdad, aunque quien llamó ya no lo espere.
+  const terminar = () => {
+    enCurso.delete(negocio.id);
+    if (rehacer.delete(negocio.id)) revisarNegocioYa(negocio.id).catch(() => {});
+  };
+  trabajo.then(terminar, terminar);
+  return conTiempoLimite(trabajo, tiempoMaxMs);
+}
+
+// Revisión inmediata de un negocio, en segundo plano (la dispara el aviso de Gmail).
+// Devuelve true si el negocio está en modo automático.
+async function revisarNegocioYa(negocio_id) {
+  try {
+    const negocio = await obtenerNegocio(negocio_id);
+    if (!negocio || negocio.modo_registro !== 'automatico') return false;
+    revisarSinSolapar(negocio, TIEMPO_MAX_NEGOCIO_MS, 'aviso').catch((err) => {
+      console.error(`[AutoRegistro] Error en el negocio ${negocio_id}:`, err.message);
+      salud.registrar('registro_auto', err.message, negocio_id);
+    });
+    return true;
+  } catch (err) {
+    console.error('[AutoRegistro] Error en la revisión inmediata:', err.message);
+    return false;
+  }
+}
+
+// Corre cada 10 segundos (index.js). Con negocio_ids revisa solo esos negocios.
 // Devuelve la cantidad de pagos registrados, o null si ya había otra revisión en curso.
 async function registrarIngresosAutomaticos({ negocio_ids, tiempoMaxNegocioMs = TIEMPO_MAX_NEGOCIO_MS } = {}) {
   if (registrando) return null;
   registrando = true;
+  vuelta += 1;
   const inicio = Date.now();
   let total = 0;
   try {
@@ -54,14 +101,11 @@ async function registrarIngresosAutomaticos({ negocio_ids, tiempoMaxNegocioMs = 
     const trabajador = async () => {
       while (cola.length) {
         const negocio = cola.shift();
-        if (enCurso.has(negocio.id)) continue;
-        enCurso.add(negocio.id);
-        const trabajo = registrarDeNegocio(negocio);
-        // Se libera cuando termina de verdad, aunque la vuelta ya no lo espere.
-        trabajo.then(() => enCurso.delete(negocio.id), () => enCurso.delete(negocio.id));
+        // Con aviso inmediato vigente esta vuelta es solo un respaldo: no se hace en todas.
+        if (avisoVigente(negocio.id) && vuelta % VUELTAS_RESPALDO !== 0) continue;
         try {
-          const registrados = await conTiempoLimite(trabajo, tiempoMaxNegocioMs);
-          total += registrados;
+          const registrados = await revisarSinSolapar(negocio, tiempoMaxNegocioMs, 'periodica');
+          if (registrados) total += registrados;
         } catch (err) {
           console.error(`[AutoRegistro] Error en el negocio ${negocio.id}:`, err.message);
           salud.registrar('registro_auto', err.message, negocio.id);
@@ -82,7 +126,8 @@ async function registrarIngresosAutomaticos({ negocio_ids, tiempoMaxNegocioMs = 
   return total;
 }
 
-async function registrarDeNegocio(negocio) {
+// `origen` solo sirve para el log: 'aviso' (aviso inmediato de Gmail) o 'periodica' (la revisión de respaldo).
+async function registrarDeNegocio(negocio, origen = 'periodica') {
   // Prueba o plan vencido: igual que con comprobantes, no se registra nada.
   const vigencia = await verificarTrialActivo(negocio.id).catch(() => ({ activo: true }));
   if (!vigencia.activo) return 0;
@@ -112,7 +157,7 @@ async function registrarDeNegocio(negocio) {
   let registrados = 0;
   for (const ingreso of resultado.ingresos) {
     if (!(await hayCupo(negocio))) break;
-    if (await guardarIngreso(negocio, ingreso)) registrados++;
+    if (await guardarIngreso(negocio, ingreso, origen)) registrados++;
     yaVistos.add(ingreso.gmail_id);
   }
   if (registrados) console.log(`[AutoRegistro] ${registrados} pago(s) registrado(s) (negocio ${negocio.id})`);
@@ -137,7 +182,7 @@ async function hayCupo(negocio) {
   return true;
 }
 
-async function guardarIngreso(negocio, ingreso) {
+async function guardarIngreso(negocio, ingreso, origen) {
   const cuando = new Date((ingreso.llegada || Date.now() / 1000) * 1000);
   try {
     const id = await guardarPago({
@@ -156,6 +201,11 @@ async function guardarIngreso(negocio, ingreso) {
     });
     // Aviso inmediato a los dashboards abiertos, el mismo que el flujo con comprobante.
     eventos.emitir(negocio.id, 'pago', { id, monto: ingreso.monto, banco: ingreso.banco, nombre_cliente: ingreso.nombre || null });
+    // Para medir la velocidad real: segundos desde que llegó el correo hasta que quedó registrado (sin datos del cliente).
+    if (ingreso.llegada) {
+      const segundos = Math.max(0, Date.now() / 1000 - ingreso.llegada);
+      console.log(`[AutoRegistro] Pago registrado ${segundos.toFixed(1)} s después de llegar el correo (negocio ${negocio.id}, ${origen})`);
+    }
     return true;
   } catch (err) {
     // Otro ciclo (o un comprobante) ya usó ese correo: no es un error.
@@ -169,4 +219,7 @@ function olvidarVistos() {
   vistos.clear();
 }
 
-module.exports = { registrarIngresosAutomaticos, olvidarVistos };
+module.exports = {
+  registrarIngresosAutomaticos, revisarNegocioYa, olvidarVistos,
+  marcarAvisoInmediato, quitarAvisoInmediato, vencimientoDelAviso, avisoVigente,
+};

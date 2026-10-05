@@ -64,6 +64,9 @@ const {
 const eventos = require('../eventos');
 const salud = require('../salud');
 const { verificarPreparacion } = require('../bot/preparacion-automatico');
+const {
+  habilitado: avisoInmediatoHabilitado, secretoValido, procesarNotificacion, activarAvisoNegocio, desactivarAvisoNegocio,
+} = require('../bot/gmail-push');
 
 // ─── Google OAuth config ────────────────────────────────
 const CREDENTIALS_PATH = path.join(__dirname, '..', 'credentials.json');
@@ -830,6 +833,15 @@ router.get('/gmail/estado', verificarToken, async (req, res) => {
 });
 
 // Paso 1: Generar URL de autorización de Google
+// Pub/Sub avisa aquí cuando llega un correo a una cuenta con aviso inmediato. No lleva sesión:
+// se protege con un secreto en la URL. Se responde ya, porque Pub/Sub reintenta si tarda.
+router.post('/gmail/push', (req, res) => {
+  if (!avisoInmediatoHabilitado()) return res.sendStatus(404);
+  if (!secretoValido(req.query.token)) return res.sendStatus(401);
+  res.sendStatus(204);
+  procesarNotificacion(req.body).catch((err) => console.error('[GmailPush] Error procesando el aviso:', err.message));
+});
+
 router.get('/gmail/auth-url', verificarToken, soloAdmin, (req, res) => {
   try {
     const redirectUri = `${req.protocol}://${req.get('host')}/api/gmail/callback`;
@@ -915,6 +927,7 @@ router.get('/gmail/callback', async (req, res) => {
 router.delete('/gmail/desconectar', verificarToken, soloAdmin, async (req, res) => {
   try {
     const nid = req.user.negocio_id;
+    await desactivarAvisoNegocio(nid); // antes de borrar el token: después ya no se podría detener
     db.run('DELETE FROM tokens_gmail WHERE negocio_id = ?', [nid], async function (err) {
       if (err) return res.status(500).json({ ok: false, error: err.message });
       console.log(`[Gmail] Desconectado para negocio ${nid}`);
@@ -1519,6 +1532,8 @@ router.put('/negocio/modo-registro', verificarToken, soloAdmin, async (req, res)
     }
     const existe = await actualizarModoRegistro(req.user.negocio_id, modo);
     if (!existe) return res.status(404).json({ ok: false, error: 'Negocio no encontrado' });
+    // Aviso inmediato de Gmail: se activa o se detiene en segundo plano (solo si está configurado).
+    (modo === 'automatico' ? activarAvisoNegocio : desactivarAvisoNegocio)(req.user.negocio_id).catch(() => {});
     res.json({ ok: true, modo });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });

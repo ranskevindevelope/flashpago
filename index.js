@@ -13,6 +13,7 @@ const { obtenerPagosExportables, listarNegocios, horaCierreDelDia, incluyeReport
 const { enviarReportePendientes, enviarReporteDiario, buscarIngresosSinComprobante } = require('./bot/reportes');
 const { revisarPendientes, cerrarPendientes, PLAZO_CORREO_MIN } = require('./bot/pendientes');
 const { registrarIngresosAutomaticos } = require('./bot/auto-registro');
+const { renovarAvisos } = require('./bot/gmail-push');
 const { revisarVencimientos } = require('./bot/avisos');
 const { ejecutarCobrosAutomaticos } = require('./bot/cobros-automaticos');
 const { esFestivo, esFinDeSemana } = require('./bot/festivos');
@@ -411,10 +412,17 @@ setInterval(() => {
   revisarPendientes().catch((err) => console.error('[Pendientes] Error:', err.message));
 }, 2 * 60 * 1000);
 
-// ─── Registro automático: ingresos del banco → pagos, cada 30 s ─
+// ─── Registro automático: ingresos del banco → pagos, cada 10 s ─
 setInterval(() => {
   registrarIngresosAutomaticos().catch((err) => console.error('[AutoRegistro] Error:', err.message));
-}, 30 * 1000);
+}, 10 * 1000);
+
+// ─── Aviso inmediato de Gmail: se activa al arrancar y se renueva cada hora ─
+// Sin GMAIL_PUSH_TOPIC y GMAIL_PUSH_SECRET no hace nada. Con él, la revisión de arriba pasa a ser respaldo.
+setTimeout(() => renovarAvisos().catch((err) => console.error('[GmailPush] Error:', err.message)), 5000);
+setInterval(() => {
+  renovarAvisos().catch((err) => console.error('[GmailPush] Error:', err.message));
+}, 60 * 60 * 1000);
 
 // ─── Avisos de vencimiento de plan ────────────────────────
 // Cada hora, no una vez al día: si el proceso se reinicia justo al chequeo,

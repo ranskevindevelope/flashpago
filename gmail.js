@@ -433,4 +433,25 @@ async function probarGmailAutomatico(negocio_id) {
   return { ms: Date.now() - inicio, bancos: consultas.filter((c) => c.hay).map((c) => c.banco) };
 }
 
-module.exports = { verificarPorGmail, listarIngresosDelDia, listarIngresosDesde, probarGmailAutomatico, extraerMontoYNombre, esIngreso };
+// ─── Aviso inmediato (Pub/Sub) ───
+//  watch hace que Gmail publique en el tema cada vez que cambia el buzón; dura 7 días y llamarlo
+//  de nuevo lo renueva. Resuelve { expira } en ms, o null sin Gmail conectado. Un error se propaga.
+async function activarAvisoGmail(negocio_id, topicName) {
+  const auth = await getAuth(negocio_id);
+  if (!auth) return null;
+  const gmail = google.gmail({ version: 'v1', auth });
+  const res = await gmail.users.watch({ userId: 'me', requestBody: { topicName } }, { timeout: TIMEOUT_GMAIL_MS });
+  return { expira: Number(res.data.expiration) || null };
+}
+
+async function detenerAvisoGmail(negocio_id) {
+  const auth = await getAuth(negocio_id);
+  if (!auth) return false;
+  await google.gmail({ version: 'v1', auth }).users.stop({ userId: 'me' }, { timeout: TIMEOUT_GMAIL_MS });
+  return true;
+}
+
+module.exports = {
+  verificarPorGmail, listarIngresosDelDia, listarIngresosDesde, probarGmailAutomatico,
+  activarAvisoGmail, detenerAvisoGmail, extraerMontoYNombre, esIngreso,
+};
