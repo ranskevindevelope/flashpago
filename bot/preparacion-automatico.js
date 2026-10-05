@@ -83,12 +83,12 @@ async function verificarPreparacion(negocio_id, { umbralLentoMs = UMBRAL_LENTO_M
     }
   }
 
-  // 5. Pantallazos que todavía esperan su correo: si se activa ahora, podrían salir como "no encontrado".
+  // 5. Pagos (pantallazos) que todavía esperan su correo: si se activa ahora, podrían salir como "no encontrado".
   const pendientes = await pagosEsperandoCorreo({ negocio_id, minutos: PLAZO_CORREO_MIN });
   if (pendientes.length) {
-    paso('pendientes', 'aviso', `Hay ${pendientes.length} pantallazo(s) esperando su correo del banco. Espera unos minutos a que terminen, o actívalo igual.`);
+    paso('pendientes', 'ok', `Hay ${pendientes.length} pago(s) pendiente(s): se confirmarán solos cuando llegue su aviso del banco.`);
   } else {
-    paso('pendientes', 'ok', 'No hay pantallazos pendientes.');
+    paso('pendientes', 'ok', 'No hay pagos pendientes.');
   }
 
   return {

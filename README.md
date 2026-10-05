@@ -252,7 +252,15 @@ Cada negocio elige en **Configuración → Registro de pagos** entre *Manual, co
 Bancolombia, Nequi y BBVA y guarda cada ingreso como pago (`fuente = 'auto'`), con el mismo
 filtro de `esIngreso` (no cuentan retiros, compras, envíos ni nómina). Al activarlo, el
 dashboard corre las comprobaciones de `bot/preparacion-automatico.js` (conexión, avisos del
-banco, velocidad, plan y pantallazos pendientes).
+banco, velocidad, plan y pantallazos pendientes). Si al activarlo hay pantallazos esperando su
+correo, el primer correo del mismo monto que llegue dentro de su plazo (15 min) los confirma y
+avisa al cajero, en vez de crear un pago nuevo.
+
+Al activar el automático se agregan también los ingresos **de hoy** (desde las 00:00, hora de
+Colombia) que todavía no estén registrados, por ejemplo los de un cajero que olvidó mandar el
+pantallazo; los de días anteriores no se importan. Un pago de hoy que el administrador confirmó
+a mano (`fuente = 'manual_admin'`) y sin correo se vincula al correo del mismo monto en vez de
+contarse otra vez.
 
 Por defecto la revisión corre cada 10 segundos. Para **registrar en el momento en que llega el
 correo** (sin esperar la revisión) se usa el aviso inmediato de Gmail por Pub/Sub; es opcional:

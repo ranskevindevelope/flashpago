@@ -127,7 +127,8 @@ function getCredentials() {
 }
 
 // ─── Obtener auth OAuth2 por negocio ────────────────────
-async function getAuth(negocio_id) {
+// `silencioso`: la tarea automática la llama cada pocos segundos y no debe llenar el log.
+async function getAuth(negocio_id, { silencioso = false } = {}) {
   const credentials = getCredentials();
   const { client_secret, client_id, redirect_uris } = credentials.installed || credentials.web;
   const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris?.[0]);
@@ -157,7 +158,7 @@ async function getAuth(negocio_id) {
       }
     });
 
-    console.log(`[Gmail] Usando token de BD para negocio ${negocio_id} (${tokenDB.email})`);
+    if (!silencioso) console.log(`[Gmail] Usando token de BD para negocio ${negocio_id} (${tokenDB.email})`);
     return oAuth2Client;
   }
 
@@ -165,7 +166,7 @@ async function getAuth(negocio_id) {
   if (negocio_id === 1 && fs.existsSync(TOKEN_PATH)) {
     const token = JSON.parse(fs.readFileSync(TOKEN_PATH));
     oAuth2Client.setCredentials(token);
-    console.log('[Gmail] Usando token.json (fallback negocio 1)');
+    if (!silencioso) console.log('[Gmail] Usando token.json (fallback negocio 1)');
     return oAuth2Client;
   }
 
@@ -357,7 +358,7 @@ function bancoDelRemitente(remitente) {
 }
 
 async function listarIngresosDesde(negocio_id, desde, filtrarIds = async (ids) => ids) {
-  const auth = await getAuth(negocio_id);
+  const auth = await getAuth(negocio_id, { silencioso: true });
   if (!auth) return null;
 
   const gmail = google.gmail({ version: 'v1', auth });
@@ -417,7 +418,7 @@ function nombreDelBanco(remitente) {
 }
 
 async function probarGmailAutomatico(negocio_id) {
-  const auth = await getAuth(negocio_id);
+  const auth = await getAuth(negocio_id, { silencioso: true });
   if (!auth) return null;
 
   const gmail = google.gmail({ version: 'v1', auth });
@@ -437,7 +438,7 @@ async function probarGmailAutomatico(negocio_id) {
 //  watch hace que Gmail publique en el tema cada vez que cambia el buzón; dura 7 días y llamarlo
 //  de nuevo lo renueva. Resuelve { expira } en ms, o null sin Gmail conectado. Un error se propaga.
 async function activarAvisoGmail(negocio_id, topicName) {
-  const auth = await getAuth(negocio_id);
+  const auth = await getAuth(negocio_id, { silencioso: true });
   if (!auth) return null;
   const gmail = google.gmail({ version: 'v1', auth });
   const res = await gmail.users.watch({ userId: 'me', requestBody: { topicName } }, { timeout: TIMEOUT_GMAIL_MS });
@@ -445,7 +446,7 @@ async function activarAvisoGmail(negocio_id, topicName) {
 }
 
 async function detenerAvisoGmail(negocio_id) {
-  const auth = await getAuth(negocio_id);
+  const auth = await getAuth(negocio_id, { silencioso: true });
   if (!auth) return false;
   await google.gmail({ version: 'v1', auth }).users.stop({ userId: 'me' }, { timeout: TIMEOUT_GMAIL_MS });
   return true;

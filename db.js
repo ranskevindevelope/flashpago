@@ -110,8 +110,9 @@ db.run(`
       }
     });
     // Cómo se registran los pagos: 'comprobante' (el empleado manda el pantallazo)
-    // o 'automatico' (se leen del correo del banco). auto_desde: epoch en segundos
-    // del momento en que se activó el automático; antes de eso no se importa nada.
+    // o 'automatico' (se leen del correo del banco). auto_desde: epoch en segundos del
+    // inicio del día (Colombia) en que se activó el automático: los ingresos de ese día que
+    // aún no estén registrados se agregan; antes de eso no se importa nada.
     db.run(`ALTER TABLE negocios ADD COLUMN modo_registro TEXT DEFAULT 'comprobante'`, (err) => {
       if (err && !err.message.includes('duplicate column')) {
         console.error('[DB] Error migrando modo_registro:', err.message);
@@ -478,6 +479,25 @@ function obtenerNegocio(id) {
 
 const MODOS_REGISTRO = ['comprobante', 'automatico'];
 
+// Un pago de hoy que el administrador confirmó a mano (sin correo): si llega su correo, se le pega
+// (gmail_id) en vez de registrarlo otra vez. Uno por correo, el más antiguo primero.
+function vincularCorreoAPagoManual(negocio_id, monto, gmail_id, nombre) {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `UPDATE pagos SET gmail_id = ?, nombre_cliente = COALESCE(nombre_cliente, ?)
+       WHERE id = (SELECT id FROM pagos
+                   WHERE negocio_id = ? AND estado = 'REAL' AND fuente = 'manual_admin' AND gmail_id IS NULL
+                     AND monto = ? AND date(creado_en) = date('now', 'localtime')
+                   ORDER BY id LIMIT 1)`,
+      [gmail_id, nombre || null, negocio_id, monto],
+      function (err) {
+        if (err) reject(err);
+        else resolve(this.changes > 0);
+      }
+    );
+  });
+}
+
 // Cambia el modo de registro. Si ya estaba en ese modo no toca nada, para que
 // guardar de nuevo no mueva auto_desde. Devuelve false si el negocio no existe.
 async function actualizarModoRegistro(negocio_id, modo) {
@@ -485,7 +505,7 @@ async function actualizarModoRegistro(negocio_id, modo) {
   const negocio = await obtenerNegocio(negocio_id);
   if (!negocio) return false;
   if ((negocio.modo_registro || 'comprobante') === modo) return true;
-  const desde = modo === 'automatico' ? Math.floor(Date.now() / 1000) : null;
+  const desde = modo === 'automatico' ? Math.floor(Date.parse(`${fechaColombia()}T00:00:00-05:00`) / 1000) : null;
   return new Promise((resolve, reject) => {
     db.run('UPDATE negocios SET modo_registro = ?, auto_desde = ? WHERE id = ?', [modo, desde, negocio_id], function (err) {
       if (err) reject(err);
@@ -1594,6 +1614,7 @@ module.exports = {
   actualizarHorarioNegocio,
   MODOS_REGISTRO,
   actualizarModoRegistro,
+  vincularCorreoAPagoManual,
   parsearHoraCierre,
   horaCierreDelDia,
   contarComprobantesDelMes,

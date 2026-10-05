@@ -61,7 +61,17 @@ async function buscarYConfirmar(pago) {
     hasta: vencimiento(pago),
   });
   if (!correo) return false;
+  return confirmarConCorreo(pago, correo);
+}
 
+// ¿Este correo, que llegó en `llegada` (segundos), pudo ser el que respalda el pago pendiente?
+function correoRespaldaPendiente(pago, llegada) {
+  return llegada >= pago.creado_epoch - MARGEN_ANTES_S && llegada <= vencimiento(pago);
+}
+
+// Confirma el pago pendiente con el correo del banco que lo respalda (`correo`: { gmail_id, nombre }),
+// avisa al dashboard y al cajero que lo envió. Lo usan la búsqueda de pendientes y el registro automático.
+async function confirmarConCorreo(pago, correo) {
   try {
     const cambios = await confirmarPagoTardio(pago.id, { gmail_id: correo.gmail_id, nombre_cliente: correo.nombre });
     if (!cambios) return false; // otro proceso ya lo resolvió
@@ -132,4 +142,4 @@ function referencia(pago) {
   return pago.referencia ? ` (Ref: ${pago.referencia})` : '';
 }
 
-module.exports = { revisarPendientes, cerrarPendientes, PLAZO_CORREO_MIN };
+module.exports = { revisarPendientes, cerrarPendientes, confirmarConCorreo, correoRespaldaPendiente, PLAZO_CORREO_MIN };

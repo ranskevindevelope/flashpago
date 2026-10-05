@@ -64,6 +64,7 @@ const {
 const eventos = require('../eventos');
 const salud = require('../salud');
 const { verificarPreparacion } = require('../bot/preparacion-automatico');
+const { revisarNegocioYa } = require('../bot/auto-registro');
 const {
   habilitado: avisoInmediatoHabilitado, secretoValido, procesarNotificacion, activarAvisoNegocio, desactivarAvisoNegocio,
 } = require('../bot/gmail-push');
@@ -1534,6 +1535,8 @@ router.put('/negocio/modo-registro', verificarToken, soloAdmin, async (req, res)
     if (!existe) return res.status(404).json({ ok: false, error: 'Negocio no encontrado' });
     // Aviso inmediato de Gmail: se activa o se detiene en segundo plano (solo si está configurado).
     (modo === 'automatico' ? activarAvisoNegocio : desactivarAvisoNegocio)(req.user.negocio_id).catch(() => {});
+    // Al activar, se registran enseguida los ingresos de hoy que falten, sin esperar la revisión periódica.
+    if (modo === 'automatico') revisarNegocioYa(req.user.negocio_id).catch(() => {});
     res.json({ ok: true, modo });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });

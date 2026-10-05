@@ -4,7 +4,9 @@
 // nómina no cuentan). Un correo registra un solo pago: gmail_id es único en pagos.
 const {
   listarNegocios, obtenerNegocio, verificarTrialActivo, correosYaUsados, guardarPago, contarComprobantesDelMes, topeConMargen,
+  pagosEsperandoCorreo, vincularCorreoAPagoManual,
 } = require('../db');
+const { confirmarConCorreo, correoRespaldaPendiente, PLAZO_CORREO_MIN } = require('./pendientes');
 const { listarIngresosDesde } = require('../gmail');
 const { avisarLimite } = require('./avisos');
 const eventos = require('../eventos');
@@ -182,7 +184,29 @@ async function hayCupo(negocio) {
   return true;
 }
 
+// Si un pantallazo estaba esperando justo este correo (mismo monto y dentro de su plazo), el correo lo
+// confirma: el cajero recibe su "pago confirmado" y no sale la alerta de "no se encontró".
+async function confirmarPendiente(negocio, ingreso) {
+  const pendientes = await pagosEsperandoCorreo({ negocio_id: negocio.id, minutos: PLAZO_CORREO_MIN + 5 });
+  const llegada = ingreso.llegada || Date.now() / 1000;
+  const pago = pendientes.find((p) => p.monto === ingreso.monto && correoRespaldaPendiente(p, llegada));
+  if (!pago) return false;
+  return confirmarConCorreo(pago, { gmail_id: ingreso.gmail_id, nombre: ingreso.nombre });
+}
+
+// Si el administrador ya confirmó a mano un pago de hoy del mismo monto, el correo se le pega a ese pago.
+async function vincularPagoManual(negocio, ingreso) {
+  try {
+    return await vincularCorreoAPagoManual(negocio.id, ingreso.monto, ingreso.gmail_id, ingreso.nombre);
+  } catch (err) {
+    if (err.message && err.message.includes('UNIQUE constraint failed: pagos.gmail_id')) return false;
+    throw err;
+  }
+}
+
 async function guardarIngreso(negocio, ingreso, origen) {
+  if (await confirmarPendiente(negocio, ingreso)) return true;
+  if (await vincularPagoManual(negocio, ingreso)) return true;
   const cuando = new Date((ingreso.llegada || Date.now() / 1000) * 1000);
   try {
     const id = await guardarPago({
