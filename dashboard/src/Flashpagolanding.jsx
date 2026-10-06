@@ -25,6 +25,9 @@ const COLORS = {
 
 const APP_URL = "https://app.flashpago.co/";
 
+// Eventos de Google Analytics. window.gtag solo existe en flashpago.co (ver public/analytics.js); en el resto no hace nada.
+const medir = (evento, datos) => { if (typeof window.gtag === "function") window.gtag("event", evento, datos); };
+
 function IconBadge({ icon: Icon, bg, color, size = 22, boxSize = 44 }) {
   return (
     <div style={{
@@ -1209,7 +1212,7 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
                       </li>
                     ))}
                   </ul>
-                  <button onClick={onRegistro} style={{ display: "block", width: "100%", padding: "0.9rem", borderRadius: 12, fontWeight: 600, fontSize: "1rem", textAlign: "center", textDecoration: "none", cursor: "pointer", boxSizing: "border-box", fontFamily: "'Inter',sans-serif", border: "none", ...(plan.popular ? { background: COLORS.naranja, color: "white" } : { background: "transparent", color: COLORS.naranja, border: `2px solid ${COLORS.naranja}` }) }}>
+                  <button onClick={() => { medir("registro_inicio", { plan: plan.name }); onRegistro(); }} style={{ display: "block", width: "100%", padding: "0.9rem", borderRadius: 12, fontWeight: 600, fontSize: "1rem", textAlign: "center", textDecoration: "none", cursor: "pointer", boxSizing: "border-box", fontFamily: "'Inter',sans-serif", border: "none", ...(plan.popular ? { background: COLORS.naranja, color: "white" } : { background: "transparent", color: COLORS.naranja, border: `2px solid ${COLORS.naranja}` }) }}>
                     Empezar
                   </button>
                 </div>
@@ -1222,7 +1225,7 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
               <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "1.05rem", fontWeight: 700, marginBottom: "0.25rem" }}>¿Tienes varias sucursales?</div>
               <div style={{ fontSize: "0.9rem", color: COLORS.grisTxt }}>El plan Empresarial (multi-sucursal, comprobantes y usuarios sin límite) se arma a la medida de tu negocio.</div>
             </div>
-            <a href={`https://wa.me/573167064671?text=${encodeURIComponent('Hola, quiero conocer el plan Empresarial de FlashPago')}`} target="_blank" rel="noopener noreferrer" style={{ background: COLORS.naranja, color: "white", padding: "0.8rem 1.5rem", borderRadius: 10, textDecoration: "none", fontWeight: 600, fontSize: "0.9rem", display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+            <a href={`https://wa.me/573167064671?text=${encodeURIComponent('Hola, quiero conocer el plan Empresarial de FlashPago')}`} target="_blank" rel="noopener noreferrer" onClick={() => medir("generate_lead", { metodo: "whatsapp", lugar: "plan_empresarial" })} style={{ background: COLORS.naranja, color: "white", padding: "0.8rem 1.5rem", borderRadius: 10, textDecoration: "none", fontWeight: 600, fontSize: "0.9rem", display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
               <MessageCircle size={16} /> Hablar con ventas
             </a>
           </div>
@@ -1268,7 +1271,7 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
           <h2 className="cta-h2" style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, color: COLORS.blanco, marginBottom: "1rem", marginTop: 0 }}>¿Listo para proteger tu negocio?</h2>
           <p style={{ fontSize: "1.1rem", color: "#b0b0c8", marginBottom: "2rem", maxWidth: 550, marginLeft: "auto", marginRight: "auto" }}>Escríbenos por WhatsApp y te activamos FlashPago en menos de 24 horas. Sin contratos, sin complicaciones.</p>
           <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <a href={`https://wa.me/573167064671?text=${encodeURIComponent('Hola, quiero conocer más sobre FlashPago')}`} target="_blank" rel="noopener noreferrer" style={{ background: COLORS.naranja, color: "white", padding: "1rem 2rem", borderRadius: 12, textDecoration: "none", fontWeight: 600, fontSize: "1.05rem", display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <a href={`https://wa.me/573167064671?text=${encodeURIComponent('Hola, quiero conocer más sobre FlashPago')}`} target="_blank" rel="noopener noreferrer" onClick={() => medir("generate_lead", { metodo: "whatsapp", lugar: "cta_final" })} style={{ background: COLORS.naranja, color: "white", padding: "1rem 2rem", borderRadius: 12, textDecoration: "none", fontWeight: 600, fontSize: "1.05rem", display: "inline-flex", alignItems: "center", gap: 8 }}>
               <MessageCircle size={18} /> Escribir por WhatsApp
             </a>
             <button onClick={() => { window.location.href = APP_URL; }} style={{ background: "transparent", color: COLORS.blanco, padding: "1rem 2rem", borderRadius: 12, fontWeight: 600, fontSize: "1.05rem", border: "2px solid rgba(255,255,255,0.2)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "'Inter',sans-serif" }}>

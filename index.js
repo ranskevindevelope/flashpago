@@ -59,11 +59,11 @@ app.use(
   helmet.contentSecurityPolicy({
     directives: {
       defaultSrc: ["'self'"],
-      // Sin scripts inline; externos son Wompi, Turnstile (routes/wompi.js)
-      // y el botón de Google del login/registro.
-      scriptSrc: ["'self'", 'https://checkout.wompi.co', 'https://challenges.cloudflare.com', 'https://accounts.google.com'],
+      // Sin scripts inline; externos son Wompi, Turnstile (routes/wompi.js),
+      // el botón de Google del login/registro y Google Analytics de la landing.
+      scriptSrc: ["'self'", 'https://checkout.wompi.co', 'https://challenges.cloudflare.com', 'https://accounts.google.com', 'https://*.googletagmanager.com'],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'blob:'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://*.google-analytics.com', 'https://*.googletagmanager.com'],
       fontSrc: ["'self'", 'data:'],
       connectSrc: [
         "'self'",
@@ -72,6 +72,9 @@ app.use(
         'https://sandbox.wompi.co',
         'https://challenges.cloudflare.com',
         'https://accounts.google.com',
+        'https://*.google-analytics.com',
+        'https://*.analytics.google.com',
+        'https://*.googletagmanager.com',
       ],
       frameSrc: ['https://checkout.wompi.co', 'https://challenges.cloudflare.com', 'https://accounts.google.com'],
       objectSrc: ["'none'"],
