@@ -5,8 +5,9 @@ import {
   FileText, Landmark, Smartphone, TrendingUp, Users, FileSpreadsheet,
   Headphones, Star, Check, Minus, Hourglass, Volume2, Rocket,
   // Nuevos íconos para las secciones agregadas
-  ShieldX, ImageOff, Copy, Brain, ShieldCheck
+  ShieldX, ImageOff, Copy, Brain, ShieldCheck, ChevronDown
 } from "lucide-react";
+import { PREGUNTAS } from "./preguntasFrecuentes.js";
 
 const COLORS = {
   naranja: "#F57C00",
@@ -71,7 +72,7 @@ function Nav({ onLogin }) {
         gap: "1.5rem", listStyle: "none", alignItems: "center", margin: 0, padding: 0,
         ...(menuOpen ? { display: "flex", flexDirection: "column", position: "absolute", top: "100%", left: 0, right: 0, background: "rgba(26,26,46,0.98)", padding: "1.5rem 2rem", zIndex: 200 } : {}),
       }}>
-        {[["#como-funciona", "Cómo funciona"], ["#beneficios", "Beneficios"], ["#planes", "Planes"]].map(([href, label]) => (
+        {[["#como-funciona", "Cómo funciona"], ["#beneficios", "Beneficios"], ["#planes", "Planes"], ["#preguntas", "Preguntas"]].map(([href, label]) => (
           <li key={href}>
             <a href={href} onClick={() => setMenuOpen(false)} style={{ color: "#b0b0c8", textDecoration: "none", fontSize: "0.9rem", fontWeight: 500 }}>{label}</a>
           </li>
@@ -861,6 +862,12 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         .live-grid { grid-template-columns: 1fr 1fr; }
         .live-stats-grid { grid-template-columns: 1fr 1fr; }
 
+        /* Preguntas frecuentes: sin la flecha del navegador; la propia gira al abrir. */
+        .faq-item summary::-webkit-details-marker { display: none; }
+        .faq-chevron { transition: transform 0.2s; }
+        .faq-item[open] .faq-chevron { transform: rotate(180deg); }
+        .faq-item[open] { border-color: ${COLORS.naranjaSuave}; }
+
         @media(max-width:1024px) {
           .hero-grid { gap:2rem !important; }
           .grid-3 { grid-template-columns:repeat(2,1fr) !important; }
@@ -926,6 +933,9 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
                 ¿Cómo funciona?
               </a>
             </div>
+            <p style={{ margin: "1rem 0 0", fontSize: "0.9rem", color: "#b0b0c8", display: "flex", alignItems: "center", gap: 8 }}>
+              <Check size={16} color={COLORS.verde} style={{ flexShrink: 0 }} /> Prueba gratis por 15 días. Sin contratos.
+            </p>
             <div className="hero-stats-wrap" style={{ display: "flex", gap: "2rem", marginTop: "2.5rem" }}>
               {stats.map(([num, label]) => (
                 <div key={label}>
@@ -1115,7 +1125,7 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
           <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "0.85rem", fontWeight: 600, color: COLORS.naranja, textTransform: "uppercase", letterSpacing: 2, marginBottom: "1rem" }}>Planes</div>
           <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, marginBottom: "1.5rem", lineHeight: 1.2, marginTop: 0 }}>Elige el plan para tu negocio</h2>
-          <p style={{ fontSize: "1.1rem", color: COLORS.grisTxt, maxWidth: 650, marginBottom: "0.75rem" }}>Sin contratos largos. Cancela cuando quieras.</p>
+          <p style={{ fontSize: "1.1rem", color: COLORS.grisTxt, maxWidth: 650, marginBottom: "0.75rem" }}>Prueba gratis por 15 días. Sin contratos largos. Cancela cuando quieras.</p>
           <p style={{ fontSize: "1rem", fontWeight: 600, color: COLORS.oscuro, maxWidth: 650, marginBottom: "2rem", display: "flex", alignItems: "center", gap: 8 }}>
             <ShieldCheck size={18} color={COLORS.naranja} style={{ flexShrink: 0 }} /> Un solo comprobante falso de $40.000 ya paga el mes del plan Básico.
           </p>
@@ -1215,6 +1225,26 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
             <a href={`https://wa.me/573167064671?text=${encodeURIComponent('Hola, quiero conocer el plan Empresarial de FlashPago')}`} target="_blank" rel="noopener noreferrer" style={{ background: COLORS.naranja, color: "white", padding: "0.8rem 1.5rem", borderRadius: 10, textDecoration: "none", fontWeight: 600, fontSize: "0.9rem", display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
               <MessageCircle size={16} /> Hablar con ventas
             </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── PREGUNTAS FRECUENTES ─── */}
+      {/* <details> nativo: las respuestas quedan en el HTML aunque estén cerradas, así las leen también los bots que no ejecutan JavaScript. */}
+      <section id="preguntas" style={{ padding: "6rem 2rem", background: COLORS.grisClaro, boxSizing: "border-box" }}>
+        <div style={{ maxWidth: 800, margin: "0 auto" }}>
+          <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "0.85rem", fontWeight: 600, color: COLORS.naranja, textTransform: "uppercase", letterSpacing: 2, marginBottom: "1rem" }}>Preguntas frecuentes</div>
+          <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, marginBottom: "2rem", lineHeight: 1.2, marginTop: 0 }}>Lo que más nos preguntan</h2>
+          <div style={{ display: "grid", gap: "0.75rem" }}>
+            {PREGUNTAS.map(({ p, r }) => (
+              <details key={p} className="faq-item" style={{ background: COLORS.blanco, border: "1px solid #e8e8f0", borderRadius: 14, padding: "0 1.25rem" }}>
+                <summary style={{ cursor: "pointer", listStyle: "none", padding: "1.1rem 0", fontWeight: 600, fontSize: "1.05rem", color: COLORS.oscuro, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <h3 style={{ margin: 0, fontSize: "inherit", fontWeight: "inherit", fontFamily: "inherit" }}>{p}</h3>
+                  <ChevronDown className="faq-chevron" size={20} color={COLORS.naranja} style={{ flexShrink: 0 }} />
+                </summary>
+                <p style={{ margin: 0, padding: "0 0 1.25rem", fontSize: "1rem", color: COLORS.grisTxt }}>{r}</p>
+              </details>
+            ))}
           </div>
         </div>
       </section>

@@ -424,6 +424,7 @@ La landing (flashpago.co) se sirve ya pre-renderizada (`dashboard/scripts/preren
 - `dashboard/public/robots.txt`: permite todo salvo `/api/`, `/webhook` y `/panel`, y nombra a los rastreadores de IA (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc.). Apunta al sitemap.
 - `dashboard/public/sitemap.xml` y `dashboard/public/llms.txt`: el mapa del sitio y un resumen del servicio en texto plano para modelos de lenguaje.
 - Datos estructurados (JSON-LD: Organization, WebSite y SoftwareApplication con sus planes), `canonical` y `lang="es"` salen de `prerender.mjs` e `index.html`.
+- Las preguntas frecuentes de la landing viven en `dashboard/src/preguntasFrecuentes.js`: una sola fuente para la sección de la página y para el JSON-LD (FAQPage). Si cambian precios o límites, revisar también las respuestas de ahí.
 - **Si cambian los precios o los planes**, actualizar los tres sitios: `planes` en `src/Flashpagolanding.jsx`, `PLANES` en `scripts/prerender.mjs` y `public/llms.txt`.
 - Para aparecer en Google, Bing (que alimenta a varios asistentes de IA) y otros: verificar `flashpago.co` en Google Search Console y en Bing Webmaster Tools y enviar `https://flashpago.co/sitemap.xml`.
 

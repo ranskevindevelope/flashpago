@@ -8,6 +8,7 @@ import { createServer } from 'http';
 import { readFile, writeFile } from 'fs/promises';
 import { extname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { PREGUNTAS } from '../src/preguntasFrecuentes.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const buildDir = join(__dirname, '..', 'build');
@@ -61,6 +62,10 @@ const DATOS_ESTRUCTURADOS = {
       contactPoint: { '@type': 'ContactPoint', contactType: 'ventas', telephone: '+57 316 706 4671', availableLanguage: 'es', areaServed: 'CO' },
     },
     { '@type': 'WebSite', '@id': `${URL_BASE}#sitio`, url: URL_BASE, name: 'FlashPago', inLanguage: 'es-CO', publisher: { '@id': `${URL_BASE}#organizacion` } },
+    {
+      '@type': 'FAQPage', '@id': `${URL_BASE}#preguntas`, inLanguage: 'es-CO',
+      mainEntity: PREGUNTAS.map(({ p, r }) => ({ '@type': 'Question', name: p, acceptedAnswer: { '@type': 'Answer', text: r } })),
+    },
     {
       '@type': 'SoftwareApplication', name: 'FlashPago', url: URL_BASE, inLanguage: 'es-CO', description: DESCRIPCION,
       applicationCategory: 'BusinessApplication', operatingSystem: 'Web, WhatsApp', publisher: { '@id': `${URL_BASE}#organizacion` },
