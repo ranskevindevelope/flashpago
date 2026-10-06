@@ -417,6 +417,16 @@ Rutas principales:
 
 Las rutas protegidas reciben el token como `Authorization: Bearer <token>`.
 
+## Visibilidad para buscadores y agentes de IA
+
+La landing (flashpago.co) se sirve ya pre-renderizada (`dashboard/scripts/prerender.mjs`, corre solo después de `npm run build`), así que los rastreadores que no ejecutan JavaScript leen el contenido real. Para que buscadores y agentes de IA la encuentren y la entiendan:
+
+- `dashboard/public/robots.txt`: permite todo salvo `/api/`, `/webhook` y `/panel`, y nombra a los rastreadores de IA (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, etc.). Apunta al sitemap.
+- `dashboard/public/sitemap.xml` y `dashboard/public/llms.txt`: el mapa del sitio y un resumen del servicio en texto plano para modelos de lenguaje.
+- Datos estructurados (JSON-LD: Organization, WebSite y SoftwareApplication con sus planes), `canonical` y `lang="es"` salen de `prerender.mjs` e `index.html`.
+- **Si cambian los precios o los planes**, actualizar los tres sitios: `planes` en `src/Flashpagolanding.jsx`, `PLANES` en `scripts/prerender.mjs` y `public/llms.txt`.
+- Para aparecer en Google, Bing (que alimenta a varios asistentes de IA) y otros: verificar `flashpago.co` en Google Search Console y en Bing Webmaster Tools y enviar `https://flashpago.co/sitemap.xml`.
+
 ## Base de datos
 
 La aplicacion crea automaticamente `vinsonbot.db` y las tablas:

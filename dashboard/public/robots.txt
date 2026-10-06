@@ -1,3 +1,33 @@
 # https://www.robotstxt.org/robotstxt.html
+# flashpago.co es público: buscadores y agentes de IA pueden leerlo. Solo se excluye lo privado (API, webhook y panel).
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /api/
+Disallow: /webhook
+Disallow: /panel
+
+# Rastreadores y agentes de IA (permitidos de forma explícita)
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: anthropic-ai
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: GoogleOther
+User-agent: Applebot-Extended
+User-agent: Bingbot
+User-agent: Meta-ExternalAgent
+User-agent: Amazonbot
+User-agent: DuckAssistBot
+User-agent: MistralAI-User
+User-agent: CCBot
+Allow: /
+Disallow: /api/
+Disallow: /webhook
+Disallow: /panel
+
+Sitemap: https://flashpago.co/sitemap.xml
