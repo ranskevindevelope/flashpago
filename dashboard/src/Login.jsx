@@ -179,8 +179,6 @@ function Login({ onLogin , onRegistro, onRecuperar }) {
       <PanelMarca />
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
-
         /* ─── Formulario izquierdo ─── */
         .login-form-anim {
           animation: slideUp 0.8s ease both;

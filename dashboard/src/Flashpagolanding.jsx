@@ -8,6 +8,7 @@ import {
   ShieldX, ImageOff, Copy, Brain, ShieldCheck, ChevronDown
 } from "lucide-react";
 import { PREGUNTAS } from "./preguntasFrecuentes.js";
+import Marca from "./components/Marca";
 
 const COLORS = {
   naranja: "#F57C00",
@@ -65,9 +66,8 @@ function Nav({ onLogin }) {
           <span style={{ width: 22, height: 2.5, background: COLORS.blanco, borderRadius: 2, display: "block" }} />
           <span style={{ width: 22, height: 2.5, background: COLORS.blanco, borderRadius: 2, display: "block" }} />
         </button>
-        <a href="#" style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: "1.5rem", color: COLORS.naranja, textDecoration: "none", display: "flex", alignItems: "center", gap: 2 }}>
-          <Zap size={24} fill={COLORS.naranja} />
-          Flash<span style={{ color: COLORS.blanco }}>Pago</span>
+        <a href="#" style={{ textDecoration: "none" }}>
+          <Marca tam={24} pago={COLORS.blanco} />
         </a>
       </div>
 
@@ -746,7 +746,6 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
   return (
     <div style={{ fontFamily: "'Inter',sans-serif", color: COLORS.oscuro, lineHeight: 1.6, overflowX: "hidden" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
         html { scroll-behavior: smooth; }
         body { margin: 0; }
         .nav-links-list { display: flex; flex-direction: row; }
@@ -1303,9 +1302,8 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
 
       {/* ─── FOOTER ─── */}
       <footer style={{ background: "#0d0d1a", padding: "2.5rem 2rem", textAlign: "center", boxSizing: "border-box" }}>
-        <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: "1.2rem", color: COLORS.naranja, marginBottom: "0.5rem", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-          <Zap size={18} fill={COLORS.naranja} />
-          Flash<span style={{ color: COLORS.blanco }}>Pago</span>
+        <div style={{ marginBottom: "0.5rem", display: "flex", justifyContent: "center" }}>
+          <Marca tam={19} pago={COLORS.blanco} />
         </div>
         <p style={{ color: "#6868a0", fontSize: "0.85rem", margin: "0 0 0.75rem 0" }}>Verificación de pagos con inteligencia artificial — Hecho en Colombia 🇨🇴</p>
         <p style={{ color: "#6868a0", fontSize: "0.75rem", marginTop: "0.75rem" }}>

@@ -283,8 +283,6 @@ function RecuperarPassword({ onVolver }) {
       <PanelMarca />
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
-
         .recuperar-form-anim {
           animation: recSlideUp 0.6s ease both;
         }
