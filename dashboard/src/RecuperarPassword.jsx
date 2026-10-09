@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Zap, Mail, KeyRound, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, ShieldCheck, Clock, BarChart3 } from 'lucide-react';
+import { Zap, Mail, KeyRound, Lock, Eye, EyeOff, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 import { PASSWORD_VALIDA, PASSWORD_ERROR } from './utils/password';
 import './components/ui/ui.css';
+import PanelMarca, { MarcaMovil } from './components/PanelMarca';
 
 function RecuperarPassword({ onVolver }) {
   const [paso, setPaso] = useState(1); // 1: email, 2: código + nueva contraseña, 3: éxito
@@ -80,15 +81,18 @@ function RecuperarPassword({ onVolver }) {
   const blur = (e) => e.target.style.borderColor = '#e8e8f0';
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Inter',sans-serif" }}>
+    <div className="recuperar-root" style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Inter',sans-serif" }}>
+      {/* Franja de marca (solo celular) */}
+      <MarcaMovil />
+
       {/* IZQUIERDA - FORMULARIO */}
-      <div style={{
+      <div className="recuperar-form-col" style={{
         flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center',
         alignItems: 'center', padding: '2rem', background: '#fff',
       }}>
         <div className="recuperar-form-anim" style={{ width: '100%', maxWidth: 400 }}>
           <div style={{ marginBottom: '2.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.5rem' }}>
+            <div className="recuperar-marca-fila" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.5rem' }}>
               <Zap size={28} color="#F57C00" fill="#F57C00" />
               <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: '1.8rem' }}>
                 <span style={{ color: '#F57C00' }}>Flash</span><span style={{ color: '#1A1A2E' }}>Pago</span>
@@ -276,49 +280,7 @@ function RecuperarPassword({ onVolver }) {
       </div>
 
       {/* DERECHA - PANEL DE MARCA */}
-      <div className="recuperar-visual" style={{
-        flex: 1, background: 'linear-gradient(135deg, #1A1A2E 0%, #16213E 100%)',
-        display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
-        padding: '2.5rem', position: 'relative', overflow: 'hidden',
-      }}>
-        <div style={{ position: 'absolute', top: '-15%', right: '-15%', width: 300, height: 300, borderRadius: '50%', border: '1px solid rgba(245,124,0,0.08)' }} />
-        <div style={{ position: 'absolute', bottom: '-20%', left: '-10%', width: 350, height: 350, borderRadius: '50%', border: '1px solid rgba(245,124,0,0.06)' }} />
-
-        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
-          <div style={{
-            width: 140, height: 140, borderRadius: 30, background: '#F57C00', margin: '0 auto 1.5rem',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-            boxShadow: '0 0 80px rgba(245,124,0,0.25), 0 0 30px rgba(245,124,0,0.15)',
-          }}>
-            <img src="/logo.png" alt="FlashPago" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          </div>
-
-          <h2 style={{
-            fontFamily: "'Space Grotesk',sans-serif", fontSize: '1.8rem', fontWeight: 700,
-            color: '#fff', margin: '0 0 0.5rem', letterSpacing: '-0.5px',
-          }}>
-            <span style={{ color: '#F57C00' }}>Flash</span>Pago
-          </h2>
-          <p style={{ color: '#8888a8', fontSize: '0.9rem', margin: '0 0 2.5rem', lineHeight: 1.6 }}>
-            Verificación de pagos<br />con inteligencia artificial
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '8px 18px', borderRadius: 50 }}>
-              <ShieldCheck size={16} color="#2ecc71" />
-              <span style={{ color: '#b0b0c8', fontSize: '0.85rem' }}>Anti-fraude con IA</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '8px 18px', borderRadius: 50 }}>
-              <Clock size={16} color="#F57C00" />
-              <span style={{ color: '#b0b0c8', fontSize: '0.85rem' }}>Verificación en segundos</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', padding: '8px 18px', borderRadius: 50 }}>
-              <BarChart3 size={16} color="#3498db" />
-              <span style={{ color: '#b0b0c8', fontSize: '0.85rem' }}>Dashboard en tiempo real</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PanelMarca />
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
@@ -342,8 +304,11 @@ function RecuperarPassword({ onVolver }) {
           transform: translateY(0);
         }
 
+        /* Celular: franja de marca arriba y formulario como hoja blanca que sube sobre ella */
         @media (max-width: 768px) {
-          .recuperar-visual { display: none !important; }
+          .recuperar-root { flex-direction: column; }
+          .recuperar-form-col { margin-top: -26px; border-radius: 26px 26px 0 0; position: relative; z-index: 2; justify-content: flex-start !important; padding-top: 2rem !important; }
+          .recuperar-marca-fila { display: none !important; }
         }
       `}</style>
     </div>

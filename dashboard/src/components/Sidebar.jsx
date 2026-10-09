@@ -98,7 +98,7 @@ function Sidebar({ activeSection, isOpen, isAdmin, isSuperAdmin, paymentCount, u
             <>
               <div className="sidebar-logo-icon-box" onMouseEnter={activarMascota}>
                 <img
-                  src="/logo.png" alt="FlashPago"
+                  src="/logo-96.webp" alt="FlashPago"
                   style={{
                     position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10,
                     opacity: mostrarMascota ? 0 : 1, transition: 'opacity 0.4s ease',

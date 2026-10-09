@@ -106,80 +106,91 @@ function Nav({ onLogin }) {
   );
 }
 
-// ─── ANIMACION DE CHAT ────────────────
-function PhoneMockup() {
-  const [step, setStep] = useState(0);
+// ─── VIDEO DEL HERO ──────────────────────
+// Loop de ~1 MB: un celular en 3D con el chat de WhatsApp. Solo se reproduce mientras se ve en pantalla; con
+// "reducir movimiento" o ahorro de datos nunca arranca y se queda el póster, que es el fondo de la tarjeta.
+const DESCRIPCION_VIDEO = "Demostración: el cajero reenvía un comprobante por WhatsApp y FlashPago confirma el pago; si el comprobante se repite, lo marca como duplicado.";
+
+// Con mouse, el celular gira un poco hacia donde esté el cursor (la imagen se inclina; el modelo no gira de verdad).
+// No se activa con pantalla táctil ni con "reducir movimiento". La ampliación leve evita que asomen los bordes al inclinar.
+const GIRO_MAX = 8;
+const ALCANCE_MOUSE = 450;
+
+function useInclinacion(figuraRef) {
+  useEffect(() => {
+    const figura = figuraRef.current;
+    if (!figura) return undefined;
+    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+    const seccion = figura.closest("section") || figura;
+    const videos = figura.querySelectorAll(".hero-video");
+    let objetivo = 0, actual = 0, cuadro = 0;
+
+    const aplica = () => {
+      actual += (objetivo - actual) * 0.1;
+      if (Math.abs(objetivo - actual) < 0.002) actual = objetivo;
+      const transform = actual === 0 ? "" : `perspective(900px) rotateY(${actual * GIRO_MAX}deg) scale(${1 + 0.05 * Math.abs(actual)})`;
+      videos.forEach((v) => { v.style.transform = transform; });
+      cuadro = actual === objetivo ? 0 : requestAnimationFrame(aplica);
+    };
+    const mueve = (e) => {
+      const r = figura.getBoundingClientRect();
+      if (r.width === 0) return;
+      objetivo = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / ALCANCE_MOUSE));
+      if (!cuadro) cuadro = requestAnimationFrame(aplica);
+    };
+    const sale = () => {
+      objetivo = 0;
+      if (!cuadro) cuadro = requestAnimationFrame(aplica);
+    };
+
+    seccion.addEventListener("pointermove", mueve);
+    seccion.addEventListener("pointerleave", sale);
+    return () => {
+      seccion.removeEventListener("pointermove", mueve);
+      seccion.removeEventListener("pointerleave", sale);
+      cancelAnimationFrame(cuadro);
+      videos.forEach((v) => { v.style.transform = ""; });
+    };
+  }, [figuraRef]);
+}
+
+function VideoLoop({ src }) {
+  const ref = useRef(null);
+  const [reproduciendo, setReproduciendo] = useState(false);
 
   useEffect(() => {
-    const timers = [];
-    function run() {
-      setStep(0);
-      timers.push(setTimeout(() => setStep(1), 500));
-      timers.push(setTimeout(() => setStep(2), 1500));
-      timers.push(setTimeout(() => setStep(3), 4000));
-      timers.push(setTimeout(() => setStep(4), 5000));
-      timers.push(setTimeout(() => run(), 10000));
-    }
-    run();
-    return () => timers.forEach(clearTimeout);
+    const video = ref.current;
+    if (!video) return undefined;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || navigator.connection?.saveData) return undefined;
+    video.muted = true;
+    const observador = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) video.play().catch(() => {});
+      else video.pause();
+    }, { threshold: 0.25 });
+    observador.observe(video);
+    return () => observador.disconnect();
   }, []);
 
-  const bubbleBase = { padding: "0.75rem 1rem", borderRadius: 12, marginBottom: "0.75rem", fontSize: "0.85rem", maxWidth: "85%", transition: "all 0.4s ease-out" };
-  const hidden = { opacity: 0, transform: "translateY(15px)" };
-  const visible = { opacity: 1, transform: "translateY(0)" };
-
   return (
-    <div style={{ background: COLORS.oscuro, border: "2px solid rgba(255,255,255,0.1)", borderRadius: 32, padding: "1.5rem", width: "100%", maxWidth: 320, boxShadow: "0 20px 60px rgba(0,0,0,0.4)", boxSizing: "border-box" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(255,255,255,0.08)", marginBottom: "1rem" }}>
-        <div style={{ width: 40, height: 40, background: COLORS.naranja, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Zap size={20} color="white" fill="white" />
-        </div>
-        <div>
-          <div style={{ color: COLORS.blanco, fontWeight: 600, fontSize: "0.95rem" }}>FlashPago</div>
-          <div style={{ color: COLORS.verde, fontSize: "0.75rem" }}>● en línea</div>
-        </div>
-      </div>
+    <video
+      ref={ref} className="hero-video" src={src} muted loop playsInline preload="none"
+      onPlaying={() => setReproduciendo(true)} style={{ opacity: reproduciendo ? 1 : 0 }}
+      aria-label={DESCRIPCION_VIDEO}
+    />
+  );
+}
 
-      <div style={{ minHeight: 280 }}>
-        <div style={{ ...bubbleBase, background: "#005c4b", color: "white", marginLeft: "auto", borderBottomRightRadius: 4, display: "flex", alignItems: "center", gap: 6, ...(step >= 1 ? visible : hidden) }}>
-          <Camera size={16} /> [Comprobante de pago]
-        </div>
-
-        <div style={{ ...bubbleBase, background: "rgba(255,255,255,0.08)", color: "#e0e0e0", borderBottomLeftRadius: 4, ...(step >= 2 ? visible : hidden) }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Hourglass size={14} /> Verificando el pago...</span>
-          {step === 2 && (
-            <div style={{ display: "inline-flex", gap: 4, paddingTop: 6 }}>
-              {[0, 1, 2].map(i => (
-                <span key={i} style={{ width: 7, height: 7, background: "#b0b0c8", borderRadius: "50%", display: "inline-block", animation: `typingDot 1.4s infinite ${i * 0.2}s` }} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {step >= 3 && (
-          <div style={{ ...bubbleBase, background: "rgba(255,255,255,0.08)", color: "#e0e0e0", borderBottomLeftRadius: 4, ...visible }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <span style={{ display: "inline-flex", animation: "popIn 0.5s cubic-bezier(0.175,0.885,0.32,1.275)" }}>
-                <CheckCircle2 size={18} color={COLORS.verde} />
-              </span>
-              <strong>PAGO VERIFICADO</strong>
-            </div>
-            <div style={{ lineHeight: 1.8 }}>
-              Monto: <strong>$53.300</strong><br />
-              Banco: Nequi<br />
-              Cliente: María López<br />
-              Fecha: 22/07/2026
-            </div>
-          </div>
-        )}
-
-        {step >= 4 && (
-          <div style={{ background: "rgba(46,204,113,0.15)", border: "1px solid rgba(46,204,113,0.3)", color: COLORS.verde, padding: "0.5rem 1rem", borderRadius: 8, fontSize: "0.75rem", fontWeight: 600, textAlign: "center", marginTop: "0.75rem", animation: "fadeIn 0.5s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-            <Zap size={14} /> Verificado en 6 segundos — Ahorra 3 min por pago
-          </div>
-        )}
-      </div>
-    </div>
+// Dos versiones: 2:3 en escritorio y 1:2 en celular (el celular llena el ancho para que el chat se lea).
+// La que no se ve queda en display:none y no descarga nada.
+function HeroVideo() {
+  const figura = useRef(null);
+  useInclinacion(figura);
+  return (
+    <figure ref={figura} className="hero-video-fig">
+      <div className="hero-video-card hero-video-card--escritorio"><VideoLoop src="/hero-celular.mp4" /></div>
+      <div className="hero-video-card hero-video-card--movil"><VideoLoop src="/hero-celular-movil.mp4" /></div>
+      <figcaption className="hero-video-nota"><Zap size={14} /> Verificado en 6 segundos — Ahorra 3 min por pago</figcaption>
+    </figure>
   );
 }
 
@@ -814,6 +825,13 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
         .money--8  { top: 62%; font-size: 38px; animation-duration: 92s,  92s;  animation-delay: -148s,  -148s; }
         .money--9  { top: 72%; font-size: 18px; animation-duration: 144s, 144s; animation-delay: -166.5s,-166.5s; }
         .money--10 { top: 82%; font-size: 19px; animation-duration: 136s, 136s; animation-delay: -185s,  -185s; }
+        /* Video del hero: celular 3D con el chat de WhatsApp. La proporción de cada tarjeta es fija para que la página no salte al cargar. */
+        .hero-video-fig { margin:0; width:100%; max-width:440px; display:flex; flex-direction:column; align-items:center; gap:0.9rem; }
+        .hero-video-card { width:100%; border-radius:32px; overflow:hidden; background-color:${COLORS.oscuro}; background-size:cover; background-position:center; border:2px solid rgba(255,255,255,0.1); box-shadow:0 20px 60px rgba(0,0,0,0.4); box-sizing:border-box; }
+        .hero-video-card--escritorio { aspect-ratio:2/3; background-image:url(/hero-celular.jpg); }
+        .hero-video-card--movil { display:none; aspect-ratio:1/2; background-image:url(/hero-celular-movil.jpg); }
+        .hero-video { width:100%; height:100%; display:block; object-fit:cover; transition:opacity 0.4s; }
+        .hero-video-nota { display:flex; align-items:center; justify-content:center; gap:6px; background:rgba(46,204,113,0.15); border:1px solid rgba(46,204,113,0.3); color:${COLORS.verde}; padding:0.5rem 1rem; border-radius:8px; font-size:0.75rem; font-weight:600; text-align:center; text-wrap:balance; }
         /* ═══ Glow ambiental del Hero — de CodePen, con el navy/naranja de ═══
            marca en vez de azul/naranja genérico. */
         .hero-glow {
@@ -883,7 +901,9 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
           .nav-login-mobile-item { display:list-item !important; }
           .nav-login-btn { display:none !important; }
           .hero-grid { grid-template-columns:1fr !important; text-align:center; }
-          .hero-visual-wrap { order:-1; }
+          .hero-video-card--escritorio { display:none; }
+          .hero-video-card--movil { display:block; }
+          .hero-video-fig { max-width:340px; }
           .hero-h1 { font-size:2.2rem !important; }
           .hero-buttons-wrap { justify-content:center; }
           .hero-stats-wrap { justify-content:center; }
@@ -949,7 +969,7 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
             </div>
           </div>
           <div className="hero-visual-wrap" style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
-            <PhoneMockup />
+            <HeroVideo />
           </div>
         </div>
       </section>

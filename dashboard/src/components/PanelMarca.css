@@ -1,0 +1,222 @@
+/* ═══ Panel de marca: rayo, logo, red y mascota ═══
+   La base de cada elemento es su estado FINAL. Con la clase .pm-anima se parte de oculto y se anima;
+   con .pm-fijo (segunda visita o "reducir movimiento") todo aparece ya terminado. */
+
+.pm {
+  position: relative; overflow: hidden; font-family: 'Inter', sans-serif;
+  background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
+}
+.pm-panel { flex: 1; min-height: 100vh; }
+.pm-movil { display: none; }
+
+.pm-escena {
+  position: absolute; inset: 0; padding: 2.5rem;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+}
+.pm-contenido {
+  position: relative; z-index: 2; text-align: center;
+  display: flex; flex-direction: column; align-items: center;
+}
+
+/* ─── Decoración de fondo ─── */
+.pm-circulo { position: absolute; border-radius: 50%; border: 1px solid; pointer-events: none; }
+.pm-punto { position: absolute; border-radius: 50%; animation: pmPunto 4s ease-in-out infinite alternate; will-change: transform; }
+@keyframes pmPunto { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(6px, -8px, 0); } }
+
+/* ─── Nubes de tormenta ─── */
+.pm-nubes {
+  position: absolute; left: 0; right: 0; top: -25%; height: 60%; pointer-events: none; opacity: 0.55; filter: blur(12px);
+  background:
+    radial-gradient(60% 70% at 28% 25%, rgba(140, 150, 220, 0.26), transparent 70%),
+    radial-gradient(55% 65% at 76% 12%, rgba(120, 130, 200, 0.2), transparent 70%);
+}
+.pm-anima .pm-nubes { opacity: 0; animation: pmNubes 1.4s ease-out 0.2s forwards, pmTrueno 0.7s linear 0.85s; }
+@keyframes pmNubes { to { opacity: 0.55; } }
+@keyframes pmTrueno {
+  0%, 100% { filter: blur(12px) brightness(1); }
+  12% { filter: blur(12px) brightness(2.8); }
+  30% { filter: blur(12px) brightness(1.3); }
+  45% { filter: blur(12px) brightness(2.3); }
+}
+
+/* ─── Destello de todo el panel y temblor al impactar ─── */
+.pm-destello {
+  position: absolute; inset: 0; z-index: 6; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 42%, rgba(255, 226, 180, 0.62), rgba(245, 124, 0, 0.2) 45%, transparent 75%);
+  animation: pmDestello 0.55s ease-out 0.85s forwards;
+}
+@keyframes pmDestello { 0% { opacity: 0; } 6% { opacity: 1; } 20% { opacity: 0.2; } 30% { opacity: 0.85; } 100% { opacity: 0; } }
+
+.pm-anima .pm-contenido { animation: pmEntra 0.6s ease 0.25s both, pmTemblor 0.34s linear 0.88s; }
+@keyframes pmEntra { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes pmTemblor {
+  0%, 100% { transform: translate(0, 0); } 15% { transform: translate(-4px, 2px); } 30% { transform: translate(3px, -3px); }
+  45% { transform: translate(-3px, -1px); } 60% { transform: translate(2px, 3px); } 80% { transform: translate(-1px, -1px); }
+}
+
+/* ─── Logo ─── */
+.pm-logo-wrap { position: relative; width: var(--t); height: var(--t); margin: 0 auto calc(var(--t) * 0.16); }
+.pm-logo {
+  position: absolute; inset: 0; padding: 0; border: 0; cursor: pointer; overflow: hidden; background: #F57C00;
+  border-radius: calc(var(--t) * 0.215);
+  box-shadow: 0 0 80px rgba(245, 124, 0, 0.25), 0 0 30px rgba(245, 124, 0, 0.15);
+  animation: pmRespira 4.2s ease-in-out infinite alternate;
+}
+.pm-logo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pm-logo:hover { filter: brightness(1.07); }
+.pm-logo:focus-visible { outline: 3px solid #FFB74D; outline-offset: 4px; }
+@keyframes pmRespira {
+  from { box-shadow: 0 0 60px rgba(245, 124, 0, 0.2), 0 0 24px rgba(245, 124, 0, 0.12); }
+  to { box-shadow: 0 0 110px rgba(245, 124, 0, 0.4), 0 0 40px rgba(245, 124, 0, 0.22); }
+}
+.pm-anima .pm-logo {
+  opacity: 0; transform: scale(0.2);
+  animation: pmGolpe 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.9s forwards, pmRespira 4.2s ease-in-out 1.6s infinite alternate;
+}
+@keyframes pmGolpe {
+  0% { opacity: 0; transform: scale(0.2) rotate(-8deg); }
+  50% { opacity: 1; transform: scale(1.14) rotate(2deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+/* Anillo que se cierra sobre el punto donde va a caer el rayo */
+.pm-anima .pm-logo-wrap::before {
+  content: ''; position: absolute; inset: -14%; border-radius: 30%; border: 2px solid rgba(255, 183, 77, 0.85);
+  opacity: 0; pointer-events: none; animation: pmCarga 0.6s ease-in 0.25s forwards;
+}
+@keyframes pmCarga { 0% { opacity: 0; transform: scale(1.6); } 70% { opacity: 0.9; transform: scale(1.05); } 100% { opacity: 0; transform: scale(0.95); } }
+
+/* ─── Rayo ─── */
+.pm-rayo {
+  position: absolute; left: 50%; bottom: 50%; z-index: 5; transform: translateX(-50%); overflow: visible; pointer-events: none; opacity: 0;
+  width: calc(var(--t) * 1.43); height: calc(var(--t) * 5);
+  filter: drop-shadow(0 0 10px rgba(245, 124, 0, 0.9)) drop-shadow(0 0 28px rgba(245, 124, 0, 0.55));
+  animation: pmParpadeo 0.6s linear 0.85s forwards;
+}
+.pm-rayo path { fill: none; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: pmTrazo 0.14s linear forwards; }
+.pm-r-tronco { animation-delay: 0.85s; }
+.pm-r-rama { animation-delay: calc(0.9s + var(--i) * 0.03s); }
+.pm-r-brillo path { stroke: #F57C00; stroke-width: 13; opacity: 0.55; }
+.pm-r-medio path { stroke: #FFB74D; stroke-width: 5.5; }
+.pm-r-nucleo path { stroke: #fff; stroke-width: 2.4; }
+@keyframes pmTrazo { to { stroke-dashoffset: 0; } }
+@keyframes pmParpadeo { 0% { opacity: 1; } 22% { opacity: 0.3; } 38% { opacity: 1; } 58% { opacity: 0.18; } 74% { opacity: 0.75; } 100% { opacity: 0; } }
+
+/* ─── Impacto: resplandor, ondas y chispas ─── */
+.pm-impacto {
+  position: absolute; left: 50%; top: 50%; z-index: 1; width: calc(var(--t) * 1.8); height: calc(var(--t) * 1.8); border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 214, 150, 0.85) 0%, rgba(245, 124, 0, 0.45) 35%, transparent 70%);
+  opacity: 0; transform: translate(-50%, -50%) scale(0.3); animation: pmImpacto 0.6s ease-out 0.88s forwards;
+}
+@keyframes pmImpacto {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); } 25% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(2.1); }
+}
+.pm-onda {
+  position: absolute; left: 50%; top: 50%; z-index: 1; width: var(--t); height: var(--t); border-radius: 30%;
+  border: 2px solid rgba(255, 183, 77, 0.7); opacity: 0; animation: pmOnda 0.7s ease-out forwards;
+}
+.pm-onda-1 { animation-delay: 0.92s; }
+.pm-onda-2 { animation-delay: 1.08s; border-color: rgba(245, 124, 0, 0.5); }
+@keyframes pmOnda { 0% { opacity: 0.9; transform: translate(-50%, -50%) scale(0.7); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(3.2); } }
+.pm-chispa {
+  position: absolute; left: 50%; top: 50%; z-index: 4; width: 5px; height: 5px; margin: -2.5px; border-radius: 50%;
+  background: #F57C00; opacity: 0; animation: pmChispa 0.6s ease-out forwards; animation-delay: calc(0.9s + var(--i) * 0.02s);
+}
+.pm-chispa-clara { background: #FFB74D; }
+@keyframes pmChispa { 0% { opacity: 1; transform: translate(0, 0) scale(1.2); } 100% { opacity: 0; transform: translate(var(--sx), var(--sy)) scale(0); } }
+
+/* ─── Red: la energía se reparte hacia banco, WhatsApp, panel e IA y luego se desvanece ───
+   Solo existe durante la intro (y al repetirla con un clic): en el estado final no se ve. */
+.pm-red { position: absolute; left: 50%; top: 50%; z-index: 0; width: 520px; height: 300px; transform: translate(-50%, -50%); pointer-events: none; }
+.pm-fijo .pm-red { display: none; }
+.pm-red-lineas { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; opacity: 0; animation: pmLineasEntran 0.4s ease-out 0.95s forwards, pmRedSale 1.6s ease-in 4.4s forwards; }
+@keyframes pmLineasEntran { to { opacity: 1; } }
+@keyframes pmRedSale { from { opacity: 1; visibility: visible; } to { opacity: 0; visibility: hidden; } }
+.pm-linea { stroke: rgba(245, 124, 0, 0.22); stroke-width: 1; stroke-dasharray: 4 5; }
+.pm-pulso {
+  stroke: #FFB74D; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 0.16 1.2; stroke-dashoffset: 0.16; opacity: 0;
+  filter: drop-shadow(0 0 4px rgba(245, 124, 0, 0.9)); animation: pmPulso 2.4s ease-out 2 forwards; animation-delay: calc(1.05s + var(--i) * 0.1s);
+}
+@keyframes pmPulso { 0% { opacity: 1; stroke-dashoffset: 0.16; } 35% { opacity: 1; stroke-dashoffset: -1.05; } 36%, 100% { opacity: 0; stroke-dashoffset: -1.05; } }
+.pm-nodo {
+  position: absolute; width: 74px; margin-left: -37px; margin-top: -23px; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  opacity: 0; transform: scale(0.5);
+  animation: pmNodoEntra 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, pmNodoSale 1.5s ease-in forwards;
+  animation-delay: calc(1.75s + var(--i) * 0.1s), calc(4.4s + var(--i) * 0.12s);
+}
+.pm-nodo-icono {
+  width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: #FFB74D;
+  background: rgba(245, 124, 0, 0.1); border: 1px solid rgba(245, 124, 0, 0.35); box-shadow: 0 0 18px rgba(245, 124, 0, 0.15);
+}
+.pm-nodo-texto { font-size: 0.7rem; letter-spacing: 0.04em; color: #8888a8; }
+@keyframes pmNodoEntra { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: none; } }
+/* Se desvanece y se va replegando hacia el logo, como si la energía volviera a él */
+@keyframes pmNodoSale {
+  from { opacity: 1; transform: none; filter: blur(0); visibility: visible; }
+  to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.7); filter: blur(4px); visibility: hidden; }
+}
+@media (max-width: 1100px) { .pm-red { display: none; } }
+
+/* ─── Chisporroteo ocasional alrededor del logo ─── */
+.pm-arco { position: absolute; z-index: 3; overflow: visible; opacity: 0; pointer-events: none; width: calc(var(--t) * 0.34); height: calc(var(--t) * 0.34); filter: drop-shadow(0 0 4px #FFB74D); }
+.pm-arco polyline { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pm-arco-1 { right: calc(var(--t) * -0.1); top: calc(var(--t) * 0.06); animation: pmArco 7s linear 4s infinite; }
+.pm-arco-2 { left: calc(var(--t) * -0.12); bottom: calc(var(--t) * 0.1); transform: scaleX(-1); animation: pmArco 9.5s linear 6s infinite; }
+@keyframes pmArco { 0%, 93%, 100% { opacity: 0; } 94% { opacity: 1; } 95.5% { opacity: 0.15; } 97% { opacity: 1; } 98.5% { opacity: 0; } }
+
+/* ─── Texto de marca ─── */
+.pm-marca {
+  display: flex; justify-content: center; margin: 0 0 0.5rem; font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.8rem; font-weight: 700; color: #fff; letter-spacing: -0.5px;
+}
+.pm-letra { display: inline-block; }
+.pm-letra-flash { color: #F57C00; }
+.pm-anima .pm-letra { opacity: 0; animation: pmLetra 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3) forwards; animation-delay: calc(1.4s + var(--i) * 0.045s); }
+@keyframes pmLetra {
+  from { opacity: 0; transform: translateY(14px) scale(0.8); text-shadow: 0 0 22px #fff; }
+  to { opacity: 1; transform: none; text-shadow: 0 0 0 transparent; }
+}
+.pm-lema { margin: 0 0 2.2rem; color: #8888a8; font-size: 0.9rem; line-height: 1.6; }
+.pm-anima .pm-lema { opacity: 0; animation: pmSube 0.5s ease-out 1.9s forwards; }
+@keyframes pmSube { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+.pm-pills { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.pm-pill {
+  display: flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 50px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); color: #b0b0c8; font-size: 0.85rem;
+}
+.pm-anima .pm-pill { opacity: 0; animation: pmPill 0.5s ease-out forwards; animation-delay: calc(2.15s + var(--i) * 0.14s); }
+@keyframes pmPill { from { opacity: 0; transform: translateX(-15px); } to { opacity: 1; transform: none; } }
+
+/* ─── Mascota: un secreto. Chica, asomada por la esquina; al pasar el mouse sale a saludar y con un clic llama al rayo ─── */
+.pm-mascota-wrap {
+  position: absolute; right: 5%; bottom: 0; z-index: 3; width: clamp(64px, 6vw, 88px); cursor: pointer;
+  translate: 0 44%; transform-origin: 50% 100%; transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.pm-mascota-wrap:hover { transform: translateY(-38%) rotate(-4deg); }
+.pm-mascota { display: block; width: 100%; height: auto; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4)); animation: pmAsoma 12s ease-in-out infinite; }
+/* De vez en cuando se estira un poco, curiosa, y se vuelve a esconder */
+@keyframes pmAsoma {
+  0%, 88%, 100% { transform: translateY(0) rotate(0); }
+  91%, 94% { transform: translateY(-16%) rotate(-3deg); }
+  97% { transform: translateY(-3%) rotate(1deg); }
+}
+/* Solo en la primera carga: llega a escondidas cuando ya pasó todo lo demás */
+.pm-mascota-llega { translate: 0 118%; animation: pmMascotaLlega 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) 6.2s forwards; }
+@keyframes pmMascotaLlega { to { translate: 0 44%; } }
+
+/* ─── Celular: el panel se oculta y arriba del formulario queda una franja de marca ─── */
+@media (max-width: 768px) {
+  .pm-panel { display: none; }
+  .pm-movil { display: block; padding: 2.4rem 1rem 3.6rem; }
+  .pm-movil .pm-escena { position: relative; inset: auto; padding: 0; }
+  .pm-movil .pm-marca { font-size: 1.5rem; margin-bottom: 0.25rem; }
+  .pm-movil .pm-lema { margin: 0; font-size: 0.8rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm *, .pm *::before { animation: none !important; }
+  .pm-arco { display: none; }
+  .pm-mascota-wrap { transition: none; }
+}

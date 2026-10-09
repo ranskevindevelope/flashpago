@@ -401,7 +401,7 @@ function Registro({ onBack, datosGoogle }) {
     <div style={s.container} className="registro-container">
       {/* ─── LADO IZQUIERDO ────────────────────── */}
       <div style={s.left} className="registro-left">
-        <div style={s.logo}><img src="/logo.png" alt="FlashPago" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8 }} /></div>
+        <div style={s.logo}><img src="/logo-96.webp" alt="FlashPago" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8 }} /></div>
         <div style={s.brand}>Flash<span style={s.brandSpan}>Pago</span></div>
         <div style={s.sub}>Verifica comprobantes de pago en segundos con inteligencia artificial</div>
 
