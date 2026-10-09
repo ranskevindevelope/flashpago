@@ -94,7 +94,7 @@ export default function DocumentoInterno({ onVolver }) {
           <section>
             <h2 style={h2}><span style={num}>03</span> Cómo funciona</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-              <Paso n={1} titulo="El cliente paga y manda la captura">Por cualquiera de los 8 bancos/billeteras soportados — el empleado la reenvía al WhatsApp de FlashPago.</Paso>
+              <Paso n={1} titulo="El cliente paga y manda la captura">Por Nequi, Bancolombia o BBVA — el empleado la reenvía al WhatsApp de FlashPago.</Paso>
               <Paso n={2} titulo="La IA lee el comprobante">Extrae banco, monto, referencia y fecha de la imagen automáticamente.</Paso>
               <Paso n={3} titulo="Se cruza contra el banco real">FlashPago revisa el correo de notificaciones del negocio y confirma que la plata sí entró — no confía en la imagen, confía en el banco.</Paso>
               <Paso n={4} titulo="Respuesta en segundos">"Pago confirmado" o una alerta clara si algo no cuadra.</Paso>
@@ -174,7 +174,7 @@ export default function DocumentoInterno({ onVolver }) {
               <li style={{ marginBottom: '0.4rem' }}><strong>No confía en la imagen, confía en el banco.</strong> Cruza contra la notificación real por correo, no solo "lee" la foto.</li>
               <li style={{ marginBottom: '0.4rem' }}><strong>No depende de que el push llegue rápido.</strong> Si la notificación del banco al celular se demora o falla, FlashPago igual confirma porque lee el correo directamente.</li>
               <li style={{ marginBottom: '0.4rem' }}><strong>Cero fricción de adopción.</strong> El canal (WhatsApp) ya lo usan el dueño, los empleados y los clientes.</li>
-              <li><strong>Pensado para el mercado colombiano</strong>, no una adaptación genérica: reconoce los 8 bancos/billeteras más usados del país.</li>
+              <li><strong>Pensado para el mercado colombiano</strong>, no una adaptación genérica: hoy funciona con Nequi, Bancolombia y BBVA.</li>
             </ul>
           </section>
 

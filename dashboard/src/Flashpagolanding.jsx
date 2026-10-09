@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import {
   Zap, MessageCircle, Lock, Camera, Bot, CheckCircle2, Shield, BarChart3,
-  Search, RefreshCw, Clock, AlertTriangle, Building2, Database,
+  Search, RefreshCw, Clock, AlertTriangle, Building2,
   FileText, Landmark, Smartphone, TrendingUp, Users, FileSpreadsheet,
   Headphones, Star, Check, Minus, Hourglass, Volume2, Rocket,
   // Nuevos íconos para las secciones agregadas
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { PREGUNTAS } from "./preguntasFrecuentes.js";
 import Marca from "./components/Marca";
+import FlujoPagos3D from "./components/FlujoPagos3D";
 
 const COLORS = {
   naranja: "#F57C00",
@@ -191,52 +192,6 @@ function HeroVideo() {
       <div className="hero-video-card hero-video-card--movil"><VideoLoop src="/hero-celular-movil.mp4" /></div>
       <figcaption className="hero-video-nota"><Zap size={14} /> Verificado en 6 segundos — Ahorra 3 min por pago</figcaption>
     </figure>
-  );
-}
-
-// ─── HUB SVG DIAGRAM ─────────────────────
-function HubDiagram() {
-  const nodos = [
-    { x: 100, y: 80, Icon: MessageCircle, label: "WhatsApp" },
-    { x: 500, y: 80, Icon: Landmark, label: "Banco" },
-    { x: 80, y: 240, Icon: Camera, label: "Comprobante" },
-    { x: 520, y: 240, Icon: Shield, label: "Anti-fraude" },
-    { x: 160, y: 350, Icon: BarChart3, label: "Reportes" },
-    { x: 440, y: 350, Icon: Database, label: "Registro" },
-  ];
-
-  return (
-    <div style={{ display: "flex", justifyContent: "center", margin: "2rem 0 3rem" }}>
-      <svg viewBox="0 0 600 400" width="100%" style={{ maxWidth: 650 }} xmlns="http://www.w3.org/2000/svg">
-        {nodos.map((n, i) => (
-          <g key={`line-${i}`}>
-            <line x1="300" y1="200" x2={n.x} y2={n.y} stroke="#F57C00" strokeWidth="2" strokeDasharray="8,4" opacity="0.3">
-              <animate attributeName="opacity" values="0.1;0.5;0.1" dur="3s" begin={`${i * 0.5}s`} repeatCount="indefinite" />
-            </line>
-            <circle r="4" fill="#FFB74D">
-              <animateMotion dur="2s" begin={`${i * 0.5}s`} repeatCount="indefinite" path={`M300,200 L${n.x},${n.y}`} />
-            </circle>
-          </g>
-        ))}
-        {nodos.map((n, i) => (
-          <g key={n.label}>
-            <rect x={n.x - 28} y={n.y - 28} width="56" height="56" rx="14" fill="rgba(255,255,255,0.06)" stroke="rgba(245,124,0,0.4)" strokeWidth="1.5" />
-            <foreignObject x={n.x - 14} y={n.y - 14} width="28" height="28">
-              <n.Icon size={28} color="#FFB74D" strokeWidth={1.8} />
-            </foreignObject>
-            <text x={n.x} y={n.y + 45} textAnchor="middle" fill="#b0b0c8" fontSize="11" fontFamily="Inter,sans-serif">{n.label}</text>
-          </g>
-        ))}
-        <circle cx="300" cy="200" r="55" fill="none" stroke="#F57C00" strokeWidth="1" opacity="0.2">
-          <animate attributeName="r" values="55;65;55" dur="2s" repeatCount="indefinite" />
-        </circle>
-        <rect x="258" y="158" width="84" height="84" rx="20" fill="#F57C00" />
-        <foreignObject x="284" y="172" width="32" height="32">
-          <Zap size={32} color="white" fill="white" />
-        </foreignObject>
-        <text x="300" y="226" textAnchor="middle" fontSize="11" fill="rgba(255,255,255,0.9)" fontFamily="Space Grotesk,sans-serif" fontWeight="600">FlashPago</text>
-      </svg>
-    </div>
   );
 }
 
@@ -678,7 +633,7 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
 
   const stats = [
     ["<8s", "Verificación"],
-    ["5", "Bancos soportados"],
+    ["3", "Bancos soportados"],
     ["24/7", "Disponible"],
   ];
 
@@ -1028,7 +983,7 @@ export default function FlashPagoLanding({ onLogin, onRegistro, onTerminos, onPr
           <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "0.85rem", fontWeight: 600, color: COLORS.naranja, textTransform: "uppercase", letterSpacing: 2, marginBottom: "1rem" }}>La solución</div>
           <h2 style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "2.5rem", fontWeight: 700, color: COLORS.blanco, marginBottom: "1.5rem", lineHeight: 1.2, marginTop: 0 }}>Así de fácil funciona</h2>
           <p style={{ fontSize: "1.1rem", color: "#b0b0c8", maxWidth: 650, marginBottom: "1rem" }}>Tu empleado envía el comprobante al bot por WhatsApp. FlashPago hace el resto.</p>
-          <HubDiagram />
+          <FlujoPagos3D />
           <div className="grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "2rem", marginTop: "1rem" }}>
             {pasos.map((p, i) => (
               <div key={p.title} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "2.5rem 2rem", textAlign: "center", position: "relative" }}>
